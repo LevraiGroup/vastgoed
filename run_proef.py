@@ -1,6 +1,7 @@
 """
 Levrai Group - Pandenselectiesysteem
-Stap 3: proefresultaat van 20 panden + totale technische voorraad per categorie.
+Stap 3: proefresultaat van 20 panden + totale technische voorraad per categorie
++ de maandelijkse werklijst (hoogstens drempels.werklijst_max panden).
 
 Beantwoordt de controlevraag uit de briefing:
 "Kun je eerst een proefresultaat van twintig panden laten zien, inclusief
@@ -16,7 +17,10 @@ import sys
 from pathlib import Path
 
 from gebieden import resolve, slug
-from selectie import DATA, kies_snapshots, load_config, verwerk
+from selectie import (
+    DATA, kies_snapshots, load_config, mastervolgorde, verwerk, werklijst,
+    werklijst_maand, werklijst_waarschuwing,
+)
 from snapshots import SnapshotFout
 
 BASE = Path(__file__).parent
@@ -80,7 +84,7 @@ def main() -> int:
         print(f"  {n:>7,}  {r}")
 
     # Proefresultaat: 20 hoogst scorende panden binnen een categorie.
-    top = sorted(in_cat, key=lambda p: (-p["leadscore"], p["bag_pand_id"]))[:20]
+    top = sorted(in_cat, key=mastervolgorde)[:20]
 
     print(f"\n{'=' * 78}")
     print("PROEFRESULTAAT - 20 PANDEN")
@@ -129,7 +133,17 @@ def main() -> int:
     with open(master_csv, "w", newline="", encoding="utf-8-sig") as fh:
         w = csv.DictWriter(fh, fieldnames=kolommen + ["bag_viewer_url"], delimiter=";")
         w.writeheader()
-        for p in sorted(in_cat, key=lambda p: (-p["leadscore"], p["bag_pand_id"])):
+        for p in sorted(in_cat, key=mastervolgorde):
+            w.writerow(_rij(p))
+
+    # Maandelijkse werklijst (VA-5): de hoogst scorende panden boven de werklijstdrempel,
+    # hoogstens drempels.werklijst_max. De maand in de naam is die van de snapshot.
+    lijst, n_geschikt = werklijst(panden, cfg)
+    werklijst_csv = UIT / f"werklijst_{sl}_{werklijst_maand(gekozen)}.csv"
+    with open(werklijst_csv, "w", newline="", encoding="utf-8-sig") as fh:
+        w = csv.DictWriter(fh, fieldnames=kolommen + ["bag_viewer_url"], delimiter=";")
+        w.writeheader()
+        for p in lijst:
             w.writerow(_rij(p))
 
     with open(DATA / f"panden_{sl}.json", "w", encoding="utf-8") as fh:
@@ -147,8 +161,15 @@ def main() -> int:
     print(f"\n{'=' * 78}")
     print(f"Proefresultaat  -> {proef_csv.relative_to(BASE)}  (20 panden)")
     print(f"Mastervoorraad  -> {master_csv.relative_to(BASE)}  ({len(in_cat):,} panden)")
+    print(
+        f"Werklijst       -> {werklijst_csv.relative_to(BASE)}  ({len(lijst):,} van "
+        f"{n_geschikt:,} panden met leadscore >= {cfg['drempels']['score_min_voor_werklijst']})"
+    )
     for s in gekozen:
         print(f"Snapshot        -> {s.omschrijving()}")
+    waarschuwing = werklijst_waarschuwing(n_geschikt, cfg)
+    if waarschuwing:
+        print(f"\n{waarschuwing}", file=sys.stderr)
     return 0
 
 

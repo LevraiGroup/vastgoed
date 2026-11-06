@@ -24,3 +24,7 @@ struck through with the reason, never deleted.
   from it says "Peildatum onbekend" until `run_proef.py` has run. That is correct, not a
   regression.** Since VA-12 `nl_datum()` returns hard spaces (` `); tests comparing a date
   string must use `bd.NBSP`. *(2026-11-06, Vera, VA-12)*
+- **On this Windows checkout (`core.autocrlf=true`) a plain Python text-mode rewrite keeps
+  CRLF; it turns to LF only if the write passes `newline='\n'`, or `newline=''` after a
+  default read.** Check a rewritten file with `git diff --stat`: a whole-file diff means the
+  line endings changed. *(2026-11-06, Rex, corrected by Vera, VA-5)*

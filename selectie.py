@@ -486,3 +486,59 @@ def verwerk(
         pand["laatst_beoordeeld"] = ""
 
     return panden
+
+
+def mastervolgorde(pand: dict) -> tuple[int, str]:
+    """Sorteersleutel van mastervoorraad en werklijst: hoogste leadscore eerst, dan BAG-pand-ID."""
+    return (-pand["leadscore"], pand["bag_pand_id"])
+
+
+def werklijst(panden: list[dict], cfg: dict) -> tuple[list[dict], int]:
+    """Kies de maandelijkse werklijst uit de gescoorde panden (VA-5).
+
+    In aanmerking komt een pand dat niet is uitgesloten, in minstens één categorie A-E
+    valt en een leadscore heeft van minstens drempels.score_min_voor_werklijst. Die
+    panden staan in de volgorde van de mastervoorraad; de werklijst is het begin
+    daarvan, hoogstens drempels.werklijst_max panden.
+
+    Geeft (werklijst, aantal panden dat in aanmerking kwam) terug.
+    """
+    drempels = cfg["drempels"]
+    score_min = drempels["score_min_voor_werklijst"]
+    maximum = drempels["werklijst_max"]
+    geschikt = sorted(
+        (
+            p for p in panden
+            if not p["uitgesloten"] and p["categorieen"] and p["leadscore"] >= score_min
+        ),
+        key=mastervolgorde,
+    )
+    return geschikt[:maximum], len(geschikt)
+
+
+def werklijst_waarschuwing(aantal_geschikt: int, cfg: dict) -> str | None:
+    """Nederlandse waarschuwing als er minder dan drempels.werklijst_min panden in aanmerking komen."""
+    drempels = cfg["drempels"]
+    minimum = drempels["werklijst_min"]
+    if aantal_geschikt >= minimum:
+        return None
+    return (
+        f"WAARSCHUWING: slechts {_nl(aantal_geschikt)} panden komen in aanmerking voor de "
+        f"werklijst (leadscore >= {drempels['score_min_voor_werklijst']}), minder dan het "
+        f"minimum van {_nl(minimum)} (drempels.werklijst_min). De werklijst is toch geschreven."
+    )
+
+
+def _nl(n: int) -> str:
+    """Geheel getal met punt als duizendtalscheiding: 1668 -> '1.668'."""
+    return f"{n:,}".replace(",", ".")
+
+
+def werklijst_maand(gekozen: list[snapshots.Snapshot]) -> str:
+    """De maand (JJJJ-MM) van de werklijst: die van de nieuwste ophaaldatum, niet van vandaag.
+
+    Bij één woonplaats is dat de maand van zijn snapshot. verwerk() heeft al gestopt
+    als een snapshot geen ophaaldatum heeft.
+    """
+    eis_ophaaldatum(gekozen)
+    return max(s.ophaaldatum for s in gekozen)[:7]
