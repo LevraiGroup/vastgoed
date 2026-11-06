@@ -1,0 +1,118 @@
+# Levrai Group - Pandenselectiesysteem
+# Alle grenswaarden en scoregewichten zijn hier configureerbaar (briefing sectie 4).
+
+bron:
+  wfs_url: "https://service.pdok.nl/lv/bag/wfs/v2_0"
+  laag_vbo: "bag:verblijfsobject"
+  paginagrootte: 1000
+  # LET OP: deze WFS negeert 'cql_filter' stilzwijgend en levert dan heel NL.
+  # Uitsluitend OGC Filter XML (parameter 'filter') wordt gehonoreerd.
+
+# === DOELGEBIED — KIES HIER je stad of provincie ===================================
+# Vul 'steden' met woonplaatsnamen, OF 'provincies' met provincienamen. Bij een
+# provincie worden automatisch alle woonplaatsen opgehaald (PDOK Locatieserver).
+# Laat de andere lijst leeg. Na wijzigen: python ingest.py && python run_proef.py
+# && python build_dashboard.py
+doelgebied:
+  steden: ["Delft"]           # bv. ["Delft"] of ["Delft", "'s-Gravenhage", "Rotterdam"]
+  provincies: []              # bv. ["Zuid-Holland"]  — LET OP: hele provincie is zeer groot
+# Geldige provincienamen: Groningen, Friesland, Drenthe, Overijssel, Flevoland,
+# Gelderland, Utrecht, Noord-Holland, Zuid-Holland, Zeeland, Noord-Brabant, Limburg
+
+# --- Sectie 2: primaire pandcategorieen ---
+categorieen:
+  A_winkel_wonen:
+    min_winkel: 1
+    min_woon: 1
+    min_vbo: 2
+    opp_min: 150
+    opp_max: 1000
+    bouwjaar_voor: 2000
+  B_bedrijf_kantoor_wonen:
+    min_woon: 1
+    min_overig_bedrijfsmatig: 1
+    min_vbo_of_adressen: 2
+    opp_min: 200
+    opp_max: 1500
+    bouwjaar_voor: 2000
+  C_klein_wooncomplex:
+    woon_vbo_min: 3
+    woon_vbo_max: 15
+    opp_min: 150
+    opp_max: 1500
+    bouwjaar_voor: 2000
+  D_groot_oud_pand:
+    bouwjaar_voor: 1940
+    opp_min: 250
+    vbo_min: 1
+    vbo_max: 2
+  E_afwijkend:
+    groot_opp_weinig_eenheden_opp: 400
+    groot_opp_weinig_eenheden_vbo: 2
+    min_adressen: 3
+
+# --- Sectie 3: uitsluitingen ---
+uitsluitingen:
+  bouwjaar_vanaf: 2000          # tenzij ander sterk kanssignaal
+  opp_groter_dan: 2000
+  # Gebruiksdoelen die op zichzelf uitsluiten (alleen als het pand niets anders bevat)
+  enkel_gebruiksdoel_uitsluiten:
+    - "industriefunctie"
+    - "logiesfunctie"
+    - "onderwijsfunctie"
+    - "gezondheidszorgfunctie"
+    - "bijeenkomstfunctie"
+    - "celfunctie"
+    - "sportfunctie"
+  # Pandstatussen die uitsluiten.
+  # LET OP: "Pand buiten gebruik" staat hier NIET meer bij — leegstand is juist een
+  # kans (zie score.niet_in_gebruik_bag), geen reden tot uitsluiten.
+  status_uitsluiten:
+    - "Pand gesloopt"
+    - "Niet gerealiseerd pand"
+    - "Bouwvergunning verleend"
+  # Grote moderne appartementencomplexen
+  modern_complex_vbo_min: 16
+  modern_complex_bouwjaar_vanaf: 1990
+
+# --- Sectie 4: instelbare leadscore ---
+score:
+  winkel_plus_wonen: 5
+  bedrijf_kantoor_plus_wonen: 4
+  vbo_3_tot_10: 3
+  bouwjaar_voor_1940: 3
+  opp_200_800: 3
+  min_3_adressen: 2
+  groot_opp_1_2_eenheden: 3
+  opvallende_functiecombinatie: 2
+  # Kwalificatie-signalen (staat / leegstand / verkoophistorie)
+  # Buiten gebruik en verbouwing zijn APARTE BAG-statussen met verschillende betekenis:
+  # leegstaand = duidelijke kans; verbouwing = mogelijk al in ontwikkeling. Vandaar
+  # twee losse signalen met eigen gewicht.
+  buiten_gebruik_bag: 4                  # GRATIS uit BAG: leegstaand / buiten gebruik
+  verbouwing_bag: 2                      # GRATIS uit BAG: in verbouwing
+  slecht_of_ontbrekend_energielabel: 2   # RVO EP-online (gratis, wel key)
+  recent_gebouwd_of_vernieuwd: -4
+  groot_appartementencomplex: -5
+  # Som van alle positieve signalen (A/B onderling uitsluitend; vbo_3_tot_10 en
+  # groot_opp_1_2_eenheden onderling uitsluitend). Rauwe leadscore -> /100-index.
+  schaal_max: 26
+
+drempels:
+  score_min_voor_werklijst: 8
+  werklijst_min: 200
+  werklijst_max: 500
+
+# --- Sectie 8: externe verrijkingsbronnen ---
+# Voeden de 'wacht'-signalen in de leadscore. Standaard UIT: zonder sleutel blijft het
+# signaal inactief en telt de score exact zoals nu. Zet 'actief: true' zodra de sleutel
+# is ingevuld en draai dan: python verrijk.py
+# KVK-leegstand en Kadaster-koopsom zijn (nog) niet gekoppeld — zie TOEKOMSTVERBETERINGEN.md
+bronnen:
+  energielabel:                 # RVO EP-online — GRATIS data, wel persoonlijke API-key
+    actief: false
+    api_url: "https://public.ep-online.nl/api/v5"
+    api_key: ""                 # aanvragen via https://apikey.ep-online.nl (5 min later bruikbaar)
+    bulk_csv: ""                # optioneel: pad naar maand-CSV; aanrader i.p.v. per-adres API
+    slechte_labels: ["E", "F", "G"]
+    max_bevragingen: 2000       # veiligheidsplafond per run in API-modus
