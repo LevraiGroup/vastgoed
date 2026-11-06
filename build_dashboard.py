@@ -34,7 +34,9 @@ def bouw_payload() -> dict:
 
     tot_vbo = sum(p["aantal_vbo"] for p in panden)
     uitgesloten = sum(1 for p in panden if p["uitgesloten"])
-    werklijst = sum(1 for p in act if p["leadscore"] >= 8)
+    # Drempel uit config.yaml (briefing sectie 4): geen magisch getal in de code.
+    drempel = cfg["drempels"]["score_min_voor_werklijst"]
+    werklijst = sum(1 for p in act if p["leadscore"] >= drempel)
 
     kpi = [
         {"v": f"{tot_vbo:,}".replace(",", "."), "l": "Verblijfsobjecten ingelezen",
@@ -43,7 +45,7 @@ def bouw_payload() -> dict:
          "h": f"{uitgesloten:,}".replace(",", ".") + " uitgesloten", "c": "var(--s3)"},
         {"v": f"{len(act):,}".replace(",", "."), "l": "Binnen categorie A–E",
          "h": "de mastervoorraad", "c": "var(--s2)"},
-        {"v": f"{werklijst:,}".replace(",", "."), "l": "Werklijst · score ≥ 8",
+        {"v": f"{werklijst:,}".replace(",", "."), "l": f"Werklijst · score ≥ {drempel}",
          "h": "ruim meerdere maanden voorraad", "c": "var(--s5)"},
     ]
 
