@@ -4,7 +4,9 @@ Regressiesuite voor de Delft-cijfers van het goedgekeurde proefresultaat (august
 Een wijziging die een Delft-cijfer verschuift, laat hier een test falen. De suite
 roept selectie.verwerk() direct aan en vergelijkt het resultaat in het geheugen; hij
 draait run_proef.py NIET en schrijft dus niets in output/ of data/. Dat wordt ook
-gecontroleerd: de wijzigingstijden van alle bestanden daarin zijn voor en na gelijk.
+gecontroleerd: de wijzigingstijden en groottes van de bestanden die de pijplijn kan
+schrijven of nooit mag aanraken (BEWAAKTE_PATRONEN) zijn voor en na gelijk. Andere
+bestanden, zoals de GeoPackage-download in data/bron/, tellen niet mee (VA-44).
 
 De suite leest expliciet de augustus-snapshot data/vbo_delft.json en niet de
 nieuwste (de standaard sinds VA-3), zodat een latere ingest de vastgepinde cijfers
@@ -16,8 +18,8 @@ Alleen standaardbibliotheek plus de eigen modules van het project.
 from __future__ import annotations
 
 import csv
-import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -30,7 +32,17 @@ import selectie  # noqa: E402
 AUGUSTUS_SNAPSHOT = "vbo_delft.json"  # ongedateerd bestand, opgehaald 2026-08-04
 VBO_DELFT = PROJECT / "data" / AUGUSTUS_SNAPSHOT
 MASTER_CSV = PROJECT / "output" / "mastervoorraad_delft.csv"
-BEWAAKTE_MAPPEN = (PROJECT / "output", PROJECT / "data")
+# Wat de pijplijn kan schrijven of nooit mag aanraken (VA-44). Patronen zijn niet
+# recursief: data/bron/ (de GeoPackage-download) en andere bestanden vallen erbuiten.
+# data/vbo_*.json dekt ook vbo_*.meta.json; panden_*.json ook panden_*.bron.json.
+BEWAAKTE_PATRONEN = (
+    "output/*.csv",
+    "data/vbo_*.json",
+    "data/vbo_*.meta.json",
+    "data/panden_*.json",
+    "data/verrijking_*.json",
+    "data/*.bron.json",
+)
 
 # Vastgepinde cijfers (README "Resultaat Delft", PROJECT.md "Tests").
 # Werklijst: 1.668 is wat de code, de gecommitte mastervoorraad_delft.csv en het
@@ -48,17 +60,14 @@ VERWACHT = {
 }
 
 
-def momentopname(mappen) -> dict[str, tuple[int, int]]:
-    """Pad -> (mtime_ns, grootte) voor elk bestand onder de gegeven mappen."""
+def momentopname(basis: Path = PROJECT, patronen=BEWAAKTE_PATRONEN) -> dict[str, tuple[int, int]]:
+    """Pad -> (mtime_ns, grootte) voor elk bestand onder basis dat op een patroon past."""
     stand: dict[str, tuple[int, int]] = {}
-    for map_ in mappen:
-        if not map_.exists():
-            continue
-        for wortel, _dirs, bestanden in os.walk(map_):
-            for naam in bestanden:
-                pad = Path(wortel) / naam
+    for patroon in patronen:
+        for pad in basis.glob(patroon):
+            if pad.is_file():
                 st = pad.stat()
-                stand[str(pad.relative_to(PROJECT))] = (st.st_mtime_ns, st.st_size)
+                stand[pad.relative_to(basis).as_posix()] = (st.st_mtime_ns, st.st_size)
     return stand
 
 
@@ -77,7 +86,7 @@ class TestDelftCijfers(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.voor = momentopname(BEWAAKTE_MAPPEN)
+        cls.voor = momentopname()
         cls.cfg = selectie.load_config()
         cls.panden = selectie.verwerk(
             ["Delft"], cls.cfg, "Delft", snapshot=AUGUSTUS_SNAPSHOT
@@ -87,7 +96,7 @@ class TestDelftCijfers(unittest.TestCase):
         # Zelfde volgorde als run_proef.py voor de mastervoorraad.
         cls.master = sorted(cls.in_cat, key=lambda p: (-p["leadscore"], p["bag_pand_id"]))
         cls.csv_rijen = lees_master_csv() if MASTER_CSV.exists() else None
-        cls.na = momentopname(BEWAAKTE_MAPPEN)
+        cls.na = momentopname()
 
     def test_aantal_vbo(self):
         self.assertEqual(sum(p["aantal_vbo"] for p in self.panden), VERWACHT["vbo"])
@@ -144,7 +153,37 @@ class TestDelftCijfers(unittest.TestCase):
         )
 
     def test_output_en_data_onaangeroerd(self):
+        self.assertTrue(self.voor, "momentopname ziet geen enkel bewaakt bestand")
         self.assertEqual(self.voor, self.na)
+
+
+class TestMomentopnameBewaakt(unittest.TestCase):
+    """Welke bestanden de onaangeroerd-controle bewaakt (VA-44); zonder data."""
+
+    def test_bewaakt_pijplijnbestanden_en_negeert_de_rest(self):
+        bewaakt = {
+            "output/mastervoorraad_delft.csv",
+            "output/werklijst_delft_2026-08.csv",
+            "data/vbo_delft.json",
+            "data/vbo_delft_2026-11-06.json",
+            "data/vbo_delft_2026-11-06.meta.json",
+            "data/panden_delft.json",
+            "data/panden_delft.bron.json",
+            "data/verrijking_delft.json",
+        }
+        genegeerd = {
+            "data/bron/bag-light_2026-11-01.gpkg",
+            "data/bron/vbo_delft.json",
+            "data/notitie.txt",
+            "output/dashboard.html",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            basis = Path(tmp)
+            for rel in bewaakt | genegeerd:
+                pad = basis / rel
+                pad.parent.mkdir(parents=True, exist_ok=True)
+                pad.write_text("x", encoding="utf-8")
+            self.assertEqual(set(momentopname(basis)), bewaakt)
 
 
 if __name__ == "__main__":

@@ -28,3 +28,6 @@ struck through with the reason, never deleted.
   CRLF; it turns to LF only if the write passes `newline='\n'`, or `newline=''` after a
   default read.** Check a rewritten file with `git diff --stat`: a whole-file diff means the
   line endings changed. *(2026-11-06, Rex, corrected by Vera, VA-5)*
+- **A safety check lists the files it protects, not everything in a folder that other
+  processes also write to.** The read-only test watched all of `data/` and went red while the
+  GeoPackage downloaded into `data/bron/`. *(2026-11-06, Vera, VA-44)*
