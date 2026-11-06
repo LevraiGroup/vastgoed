@@ -20,3 +20,7 @@ struck through with the reason, never deleted.
 - **This repo has `core.autocrlf=true`.** `git show HEAD:output/*.csv` is LF; the checked-out
   CSVs and `run_proef.py`'s output are CRLF. Compare a regenerated CSV against the checked-out
   file (or with `git diff`), never against `git show`. *(2026-11-06, Vera, VA-4)*
+- **The real `data/` has no `panden_delft.bron.json` (it predates VA-3), so a dashboard built
+  from it says "Peildatum onbekend" until `run_proef.py` has run. That is correct, not a
+  regression.** Since VA-12 `nl_datum()` returns hard spaces (` `); tests comparing a date
+  string must use `bd.NBSP`. *(2026-11-06, Vera, VA-12)*

@@ -12,6 +12,7 @@ het bestand, dan staat er dat de bron onbekend is.
 from __future__ import annotations
 
 import json
+from datetime import date
 from html import escape
 from pathlib import Path
 
@@ -25,15 +26,60 @@ OUT = BASE / "design" / "index.html"
 MAANDEN = ("jan", "feb", "mrt", "apr", "mei", "jun",
            "jul", "aug", "sep", "okt", "nov", "dec")
 BRON_ONBEKEND = "bron onbekend — draai run_proef.py opnieuw"
+PEILDATUM_ONBEKEND = "Peildatum onbekend"
+NBSP = "\u00a0"  # harde spatie: een datum breekt nooit over twee regels
+
+
+def lees_datum(iso: str | None) -> date | None:
+    """'JJJJ-MM-DD' -> date; None, leeg of onleesbaar (ook een niet-bestaande dag) -> None."""
+    try:
+        j, m, d = (int(x) for x in str(iso).split("-"))
+        return date(j, m, d)
+    except (ValueError, TypeError):
+        return None
+
+
+def _nl(dag: date, met_jaar: bool = True) -> str:
+    tekst = f"{dag.day}{NBSP}{MAANDEN[dag.month - 1]}"
+    return f"{tekst}{NBSP}{dag.year}" if met_jaar else tekst
 
 
 def nl_datum(iso: str | None) -> str:
-    """'2026-08-04' -> '4 aug 2026'; None of onleesbaar -> 'ophaaldatum onbekend'."""
-    try:
-        j, m, d = (int(x) for x in str(iso).split("-"))
-        return f"{d} {MAANDEN[m - 1]} {j}"
-    except (ValueError, IndexError):
-        return "ophaaldatum onbekend"
+    """'JJJJ-MM-DD' -> 'D mmm JJJJ' (harde spaties); onleesbaar -> 'ophaaldatum onbekend'."""
+    dag = lees_datum(iso)
+    return _nl(dag) if dag else "ophaaldatum onbekend"
+
+
+def peildatum(bron: list[dict] | None) -> str:
+    """
+    De peildatum in de kop, uit de ophaaldatum van de bron-snapshot(s) (VA-12).
+
+    Eén datum voor alle woonplaatsen -> 'Peildatum D mmm JJJJ'.
+    Verschillende datums -> 'Peildatum <vroegste> – <laatste>', zodat geen enkele datum
+    lijkt te gelden voor het hele gebied.
+    Bron onbekend, of een snapshot zonder leesbare datum -> 'Peildatum onbekend';
+    nooit een vaste datum of die van vandaag.
+    """
+    if not bron:
+        return PEILDATUM_ONBEKEND
+    datums = [lees_datum(b.get("ophaaldatum")) for b in bron]
+    if any(d is None for d in datums):
+        return PEILDATUM_ONBEKEND
+    vroegst, laatst = min(datums), max(datums)
+    if vroegst == laatst:
+        return f"Peildatum {_nl(vroegst)}"
+    if vroegst.year == laatst.year:
+        return f"Peildatum {_nl(vroegst, met_jaar=False)} – {_nl(laatst)}"
+    return f"Peildatum {_nl(vroegst)} – {_nl(laatst)}"
+
+
+def peildatum_tip(bron: list[dict] | None, reden: str = "") -> str:
+    """Tooltip bij de peildatum: per woonplaats, als één datum niet alles zegt."""
+    if bron is None:
+        return f"{BRON_ONBEKEND} ({reden})" if reden else BRON_ONBEKEND
+    if len(bron) == 1 and peildatum(bron) != PEILDATUM_ONBEKEND:
+        return ""
+    return " · ".join(bron_regels(bron))
 
 
 def lees_bron(panden_pad: Path) -> tuple[list[dict] | None, str]:
@@ -164,7 +210,8 @@ def bouw_payload() -> dict:
     budget = cfg["score"].get("schaal_max", 26)
     return {"kpi": kpi, "cats": cats, "facts": facts, "leads": leads,
             "budget": budget, "gebied": label,
-            "bron": bron, "bron_regels": bron_regels(bron), "bron_reden": bron_reden}
+            "bron": bron, "bron_regels": bron_regels(bron), "bron_reden": bron_reden,
+            "peildatum": peildatum(bron), "peildatum_tip": peildatum_tip(bron, bron_reden)}
 
 
 TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboard" subtitle="__LABEL__ · 20-pand proefresultaat met score-opbouw" -->
@@ -341,7 +388,7 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     <div class="sub">Pandenselectie&nbsp;·&nbsp;__LABEL__</div>
     <div class="spacer"></div>
     <div class="pill">Bron: PDOK BAG WFS v2_0</div>
-    <div class="pill">Peildatum 4 aug 2026</div>
+    <div class="pill"__PEILTIP__>__PEILDATUM__</div>
     <button class="toggle" id="themeBtn" type="button">◐ Thema</button>
   </header>
 
@@ -490,12 +537,19 @@ document.getElementById("themeBtn").addEventListener("click",()=>{
 """
 
 
+def render(payload: dict) -> str:
+    """Vul het sjabloon. De payload als laatste, zodat zijn inhoud niet wordt vervangen."""
+    tip = payload["peildatum_tip"]
+    return (TEMPLATE
+            .replace("__LABEL__", payload["gebied"])
+            .replace("__PEILDATUM__", escape(payload["peildatum"]))
+            .replace("__PEILTIP__", f' data-tip="{escape(tip)}"' if tip else "")
+            .replace("__PAYLOAD__", json.dumps(payload, ensure_ascii=False)))
+
+
 def main() -> int:
     payload = bouw_payload()
-    html = (TEMPLATE
-            .replace("__LABEL__", payload["gebied"])
-            .replace("__PAYLOAD__", json.dumps(payload, ensure_ascii=False)))
-    OUT.write_text(html, encoding="utf-8")
+    OUT.write_text(render(payload), encoding="utf-8")
     print(f"dashboard geschreven -> {OUT.relative_to(BASE)} ({OUT.stat().st_size/1024:.1f} KB)")
     if payload["bron"] is None:
         print(f"Snapshot: {BRON_ONBEKEND} ({payload['bron_reden']})")

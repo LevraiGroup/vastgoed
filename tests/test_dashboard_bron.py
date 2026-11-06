@@ -16,14 +16,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import build_dashboard as bd  # noqa: E402
 
 
+def hard(datum: str) -> str:
+    """'4 aug 2026' zoals nl_datum hem geeft: met harde spaties (VA-12)."""
+    return datum.replace(" ", bd.NBSP)
+
+
 class NlDatum(unittest.TestCase):
     def test_iso_naar_nederlands(self):
-        self.assertEqual(bd.nl_datum("2026-08-04"), "4 aug 2026")
-        self.assertEqual(bd.nl_datum("2026-03-15"), "15 mrt 2026")
-        self.assertEqual(bd.nl_datum("2026-10-01"), "1 okt 2026")
+        self.assertEqual(bd.nl_datum("2026-08-04"), hard("4 aug 2026"))
+        self.assertEqual(bd.nl_datum("2026-03-15"), hard("15 mrt 2026"))
+        self.assertEqual(bd.nl_datum("2026-10-01"), hard("1 okt 2026"))
+        self.assertNotIn(" ", bd.nl_datum("2026-08-04"))
 
     def test_onbekend(self):
-        for waarde in (None, "", "augustus", "2026-13-01"):
+        for waarde in (None, "", "augustus", "2026-13-01", "2026-02-31"):
             self.assertEqual(bd.nl_datum(waarde), "ophaaldatum onbekend", waarde)
 
 
@@ -56,7 +62,7 @@ class LeesBron(unittest.TestCase):
         bron, reden = bd.lees_bron(self.panden)
         self.assertEqual(bron, inhoud)
         self.assertEqual(reden, "")
-        self.assertEqual(bd.bron_regels(bron), ["Delft: vbo_delft.json (opgehaald 4 aug 2026)"])
+        self.assertEqual(bd.bron_regels(bron), [f"Delft: vbo_delft.json (opgehaald {hard('4 aug 2026')})"])
 
     def test_meerdere_woonplaatsen_en_onbekende_datum(self):
         inhoud = [
@@ -66,7 +72,7 @@ class LeesBron(unittest.TestCase):
         self._schrijf_bron(inhoud)
         bron, _ = bd.lees_bron(self.panden)
         self.assertEqual(bd.bron_regels(bron), [
-            "Delft: vbo_delft.json (opgehaald 4 aug 2026)",
+            f"Delft: vbo_delft.json (opgehaald {hard('4 aug 2026')})",
             "Rijswijk: vbo_rijswijk.json (opgehaald ophaaldatum onbekend)",
         ])
 
