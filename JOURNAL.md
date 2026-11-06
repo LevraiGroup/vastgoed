@@ -20,3 +20,18 @@ did not know this morning.
   `TOEKOMSTVERBETERINGEN.md` (blocks VA-1).
 - **Noticed, not on the board yet:** `selectie.py` (~line 387) and `build_dashboard.py`
   (line 24) open JSON files without closing them (ResourceWarning in every test run).
+
+### Later on 2026-11-06
+
+- **Done and committed:** VA-3 `9852c9f`, VA-2 `252e6dc`, VA-4 `f0c3a80`, VA-12 `95101f3`,
+  VA-5 `6eac130`. VA-1: KVK key removed from the file in `2bef49f`; the history rewrite of
+  `ea91e7f` was refused by the permission system and waits on Ayman running a script.
+- **Scope is now all of the Netherlands** (Ayman). Rex's spike chose the PDOK GeoPackage; Ayman
+  approved the 7,8 GB download, which is running into `data/bron/` (ignored by git).
+- **Red test during the download, not a code defect:** `test_output_en_data_onaangeroerd`
+  compares every file under `data/`, so the growing `data/bron/bag-light_2026-11-01.gpkg` fails
+  it. The VA-5 commit `6eac130` was made while it failed, because my command did not stop on
+  the failure; the other 49 tests pass. Fix: the test should watch only what the pipeline can
+  write (Vera, small story).
+- **Pixel office (VA-30/VA-31)** for the dashboard, at Ayman's request; Lumi is designing it.
+- GitHub remote `LevraiGroup/vastgoed` (public, empty) is set as origin; nothing pushed yet.
