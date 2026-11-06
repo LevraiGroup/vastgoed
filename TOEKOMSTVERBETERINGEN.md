@@ -34,7 +34,7 @@ neemt 605 panden onder de loep vs 2 bij BAG (~300× breder).
 - Zoeken v2: `GET {basis}/zoeken?postcode=&huisnummer=`
 - Header: `apikey: <sleutel>`
 - Antwoord: `{ totaal, resultaten:[ { kvkNummer, naam, adres:{binnenlandsAdres:{...}}, type } ] }`
-- Test: `https://api.kvk.nl/test/api/v2` + publieke sleutel `l7xx1f2691f2520d487b902f4e0b57a0b197` (gratis, fictieve data)
+- Test: `https://api.kvk.nl/test/api/v2` + de publieke testsleutel van het KVK-ontwikkelaarsportaal (https://developers.kvk.nl) (gratis, fictieve data)
 - Productie: `https://api.kvk.nl/api/v2` — **EUR 6,40/mnd per key + EUR 0,02/query**
 
 ### Wat nodig is om te activeren
