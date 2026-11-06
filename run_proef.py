@@ -9,12 +9,15 @@ BAG-koppelingen en selectiereden, voordat je het volledige systeem bouwt?"
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
+import sys
 from pathlib import Path
 
 from gebieden import resolve, slug
-from selectie import DATA, load_config, verwerk
+from selectie import DATA, kies_snapshots, load_config, verwerk
+from snapshots import SnapshotFout
 
 BASE = Path(__file__).parent
 UIT = BASE / "output"
@@ -24,10 +27,21 @@ BAG_VIEWER = "https://bagviewer.kadaster.nl/lvbag/bag-viewer/index.html#?searchQ
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Proefresultaat en mastervoorraad.")
+    parser.add_argument(
+        "--snapshot", default=None,
+        help="welke ingest: ophaaldatum JJJJ-MM-DD of bestandsnaam (standaard de nieuwste)",
+    )
+    args = parser.parse_args()
     cfg = load_config()
     label, woonplaatsen = resolve(cfg)
     sl = slug(label)
-    panden = verwerk(woonplaatsen, cfg, label)
+    try:
+        gekozen = kies_snapshots(woonplaatsen, cfg, args.snapshot)
+    except SnapshotFout as fout:
+        print(f"FOUT: {fout}", file=sys.stderr)
+        return 1
+    panden = verwerk(woonplaatsen, cfg, label, gekozen=gekozen)
 
     actief = [p for p in panden if not p["uitgesloten"]]
     in_cat = [p for p in actief if p["categorieen"]]
@@ -118,10 +132,21 @@ def main() -> int:
 
     with open(DATA / f"panden_{sl}.json", "w", encoding="utf-8") as fh:
         json.dump(panden, fh, ensure_ascii=False)
+    # Welke snapshots dit resultaat voeden, zodat het dashboard het kan tonen.
+    with open(DATA / f"panden_{sl}.bron.json", "w", encoding="utf-8") as fh:
+        json.dump(
+            [
+                {"woonplaats": s.woonplaats, "bestand": s.pad.name, "ophaaldatum": s.ophaaldatum}
+                for s in gekozen
+            ],
+            fh, ensure_ascii=False, indent=2,
+        )
 
     print(f"\n{'=' * 78}")
     print(f"Proefresultaat  -> {proef_csv.relative_to(BASE)}  (20 panden)")
     print(f"Mastervoorraad  -> {master_csv.relative_to(BASE)}  ({len(in_cat):,} panden)")
+    for s in gekozen:
+        print(f"Snapshot        -> {s.omschrijving()}")
     return 0
 
 

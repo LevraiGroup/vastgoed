@@ -20,6 +20,7 @@ from pathlib import Path
 
 import yaml
 
+import snapshots
 from gebieden import slug
 
 BASE = Path(__file__).parent
@@ -388,21 +389,52 @@ def laad_verrijking(label: str) -> dict[str, dict]:
     return {}
 
 
-def verwerk(woonplaatsen, cfg: dict, label: str | None = None) -> list[dict]:
+def kies_snapshots(
+    woonplaatsen, cfg: dict, keuze: str | None = None
+) -> list[snapshots.Snapshot]:
+    """Kies per woonplaats de snapshot (standaard de nieuwste) en meld welke op scherm.
+
+    'keuze' is None (nieuwste), een ophaaldatum 'JJJJ-MM-DD' of een bestandsnaam.
+    """
+    if isinstance(woonplaatsen, str):
+        woonplaatsen = [woonplaatsen]
+    gekozen = []
+    for w in woonplaatsen:
+        snap = snapshots.kies(w, slug(w), DATA, cfg, keuze)
+        print(f"Snapshot {w}: {snap.omschrijving()}")
+        gekozen.append(snap)
+    return gekozen
+
+
+def lees_snapshots(gekozen: list[snapshots.Snapshot]) -> list[dict]:
+    rows: list[dict] = []
+    for snap in gekozen:
+        rows += snapshots.lees(snap)
+    return rows
+
+
+def verwerk(
+    woonplaatsen,
+    cfg: dict,
+    label: str | None = None,
+    snapshot: str | None = None,
+    gekozen: list[snapshots.Snapshot] | None = None,
+) -> list[dict]:
     """Verwerk één of meer woonplaatsen tot gescoorde panden voor het doelgebied.
 
     'woonplaatsen' mag een enkele naam (str) of een lijst zijn. 'label' is de
     leesbare gebiedsnaam (stad of provincie) voor bestandsnamen en lead-id's.
+    'snapshot' kiest welke ingest gelezen wordt (zie kies_snapshots); standaard de
+    nieuwste. 'gekozen' geeft de snapshots direct mee als ze al gekozen zijn.
     """
     if isinstance(woonplaatsen, str):
         woonplaatsen = [woonplaatsen]
     if label is None:
         label = woonplaatsen[0]
 
-    rows: list[dict] = []
-    for w in woonplaatsen:
-        bestand = DATA / f"vbo_{slug(w)}.json"
-        rows += json.load(open(bestand, encoding="utf-8"))
+    if gekozen is None:
+        gekozen = kies_snapshots(woonplaatsen, cfg, snapshot)
+    rows = lees_snapshots(gekozen)
     panden = aggregeer(rows)
     peildatum = date.today().isoformat()
     verrijking = laad_verrijking(label)

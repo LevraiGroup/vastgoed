@@ -4,10 +4,15 @@ Bouwt het dashboard (design/index.html) data-gedreven uit panden_delft.json.
 
 Draai na run_proef.py. Genereert een zelfstandige HTML met ingesloten payload,
 zodat de pagina ook als statische snapshot (Claude Design) werkt zonder fetch.
+
+Welke BAG-snapshot(s) het resultaat voeden staat in data/panden_<gebied>.bron.json,
+geschreven door run_proef.py. Het dashboard meldt die op scherm en in de pagina; ontbreekt
+het bestand, dan staat er dat de bron onbekend is.
 """
 from __future__ import annotations
 
 import json
+from html import escape
 from pathlib import Path
 
 from gebieden import resolve, slug
@@ -17,11 +22,59 @@ BASE = Path(__file__).parent
 DATA = BASE / "data"
 OUT = BASE / "design" / "index.html"
 
+MAANDEN = ("jan", "feb", "mrt", "apr", "mei", "jun",
+           "jul", "aug", "sep", "okt", "nov", "dec")
+BRON_ONBEKEND = "bron onbekend — draai run_proef.py opnieuw"
+
+
+def nl_datum(iso: str | None) -> str:
+    """'2026-08-04' -> '4 aug 2026'; None of onleesbaar -> 'ophaaldatum onbekend'."""
+    try:
+        j, m, d = (int(x) for x in str(iso).split("-"))
+        return f"{d} {MAANDEN[m - 1]} {j}"
+    except (ValueError, IndexError):
+        return "ophaaldatum onbekend"
+
+
+def lees_bron(panden_pad: Path) -> tuple[list[dict] | None, str]:
+    """
+    Lees panden_<gebied>.bron.json naast panden_<gebied>.json.
+
+    Geeft (snapshots, reden): snapshots is een lijst van
+    {'woonplaats', 'bestand', 'ophaaldatum'}, of None als de bron niet vaststaat;
+    reden zegt dan waarom.
+    """
+    bron_pad = panden_pad.with_name(panden_pad.stem + ".bron.json")
+    if not bron_pad.is_file():
+        return None, f"{bron_pad.name} ontbreekt"
+    # run_proef.py schrijft eerst panden_*.json en daarna de .bron.json; is panden
+    # nieuwer, dan komt de .bron.json van een eerdere run en klopt hij niet meer.
+    if panden_pad.stat().st_mtime > bron_pad.stat().st_mtime:
+        return None, f"{bron_pad.name} is ouder dan {panden_pad.name}"
+    try:
+        bron = json.loads(bron_pad.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as fout:
+        return None, f"{bron_pad.name} is niet leesbaar ({fout})"
+    if (not isinstance(bron, list) or not bron
+            or not all(isinstance(b, dict) and b.get("bestand") for b in bron)):
+        return None, f"{bron_pad.name} heeft geen geldige snapshotlijst"
+    return bron, ""
+
+
+def bron_regels(bron: list[dict] | None) -> list[str]:
+    """Eén regel per woonplaats, voor scherm en pagina."""
+    if bron is None:
+        return [BRON_ONBEKEND]
+    return [f"{b.get('woonplaats', '?')}: {b['bestand']} (opgehaald {nl_datum(b.get('ophaaldatum'))})"
+            for b in bron]
+
 
 def bouw_payload() -> dict:
     cfg = load_config()
     label, _ = resolve(cfg)
-    panden = json.load(open(DATA / f"panden_{slug(label)}.json", encoding="utf-8"))
+    panden_pad = DATA / f"panden_{slug(label)}.json"
+    panden = json.load(open(panden_pad, encoding="utf-8"))
+    bron, bron_reden = lees_bron(panden_pad)
     act = [p for p in panden if not p["uitgesloten"] and p["categorieen"]]
     # Binnen gelijke score een zinnige volgorde: meer woningen, dan ouder, dan groter.
     top = sorted(act, key=lambda p: (
@@ -66,6 +119,16 @@ def bouw_payload() -> dict:
         {"k": "Gem. oppervlakte", "val": f"{gem_opp} m²"},
         {"k": "Doelgebied", "val": label},
     ]
+    # Welke ingest dit resultaat voedt (VA-3): bestand en ophaaldatum per woonplaats.
+    if bron is None:
+        facts.append({"k": "Bron-snapshot", "val": "onbekend",
+                      "tip": escape(bron_reden)})
+    else:
+        for b in bron:
+            k = "Bron-snapshot" if len(bron) == 1 else f"Bron-snapshot {b.get('woonplaats', '')}"
+            facts.append({"k": escape(k),
+                          "val": escape(f"{b['bestand']} · {nl_datum(b.get('ophaaldatum'))}"),
+                          "tip": escape(bron_regels([b])[0])})
 
     # Korte tags voor de kwalificatie-signalen die de gebruiker belangrijk vindt.
     # 'kind' stuurt de kleur: leeg = opvallend (amber), rest = groen.
@@ -100,7 +163,8 @@ def bouw_payload() -> dict:
 
     budget = cfg["score"].get("schaal_max", 26)
     return {"kpi": kpi, "cats": cats, "facts": facts, "leads": leads,
-            "budget": budget, "gebied": label}
+            "budget": budget, "gebied": label,
+            "bron": bron, "bron_regels": bron_regels(bron), "bron_reden": bron_reden}
 
 
 TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboard" subtitle="__LABEL__ · 20-pand proefresultaat met score-opbouw" -->
@@ -340,7 +404,11 @@ CATS.forEach(c=>{
 });
 
 const fb=document.getElementById("facts");
-FACTS.forEach(f=>fb.appendChild(el("div","fact",`<span class="k">${f.k}</span><span class="val">${f.val}</span>`)));
+FACTS.forEach(f=>fb.appendChild(el("div","fact",`<span class="k">${f.k}</span><span class="val"${f.tip?` data-tip="${f.tip}"`:""}>${f.val}</span>`)));
+if(PAYLOAD.bron===null){
+  fb.parentNode.insertBefore(el("p","note",`<b>Bron-snapshot onbekend</b> — draai <code>run_proef.py</code> opnieuw,
+    dan legt het vast uit welke BAG-ingest deze cijfers komen.`),fb.nextSibling);
+}
 
 function opbouwHTML(d){
   const cls={behaald:"ok",niet:"miss",aftrek:"neg",inactief:"off"};
@@ -429,6 +497,11 @@ def main() -> int:
             .replace("__PAYLOAD__", json.dumps(payload, ensure_ascii=False)))
     OUT.write_text(html, encoding="utf-8")
     print(f"dashboard geschreven -> {OUT.relative_to(BASE)} ({OUT.stat().st_size/1024:.1f} KB)")
+    if payload["bron"] is None:
+        print(f"Snapshot: {BRON_ONBEKEND} ({payload['bron_reden']})")
+    else:
+        for regel in payload["bron_regels"]:
+            print(f"Snapshot {regel}")
     print(f"leads: {len(payload['leads'])}, score-index "
           f"{min(l['s100'] for l in payload['leads'])}–{max(l['s100'] for l in payload['leads'])}")
     return 0

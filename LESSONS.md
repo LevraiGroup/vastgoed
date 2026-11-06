@@ -10,3 +10,6 @@ struck through with the reason, never deleted.
 - **`data/vbo_delft.json` is the only copy of the August data and is not in git.** Read it,
   never move, rename or overwrite it; test pipeline changes on a copy of the folder.
   *(2026-11-06, Nova's seed backlog, VA-3)*
+- **Since VA-3 the pipeline reads the newest snapshot by default.** Anything meant to
+  reproduce August Delft must pass `snapshot="vbo_delft.json"` (the file name, not the date)
+  explicitly. *(2026-11-06, Vera, VA-2/VA-3)*

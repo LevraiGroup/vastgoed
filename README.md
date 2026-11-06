@@ -74,10 +74,18 @@ doelgebied:
 
 ```bash
 pip install requests pyyaml
-python ingest.py            # haalt VBO's op voor het doelgebied -> data/vbo_<plaats>.json
+python ingest.py            # haalt VBO's op -> data/vbo_<plaats>_<JJJJ-MM-DD>.json (+ .meta.json)
 python run_proef.py         # aggregeert, scoort -> output/*.csv + data/panden_<gebied>.json
 python build_dashboard.py   # bouwt het dashboard voor het gekozen gebied
 ```
+
+Elke ingest bewaart een eigen, gedateerde snapshot en overschrijft nooit een eerdere;
+twee keer op één dag geeft `..._<datum>_2.json`. De ophaaldatum staat in de bestandsnaam
+en in het bijbehorende `.meta.json`. `run_proef.py` en `verrijk.py` lezen standaard de
+nieuwste snapshot en melden op scherm welke; een eerdere kies je met
+`python run_proef.py --snapshot 2026-08-04`. Het oude `data/vbo_delft.json` (augustus
+2026) blijft ongewijzigd staan; de ophaaldatum ervan staat in `config.yaml` onder
+`snapshots.ongedateerd`.
 
 Alle grenswaarden en scoregewichten staan ook in `config.yaml` en zijn configureerbaar,
 zoals de briefing vereist. Bestandsnamen en dashboard-titel volgen automatisch het

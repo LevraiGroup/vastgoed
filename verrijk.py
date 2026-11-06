@@ -7,29 +7,32 @@ config.yaml op 'actief: true' hebt gezet (met de bijbehorende sleutel). Het
 resultaat komt in data/verrijking_<woonplaats>.json; run_proef.py leest dat
 automatisch in en activeert de bijbehorende scoresignalen.
 
-    python verrijk.py            # alle gebieden uit config
-    python verrijk.py Delft      # specifiek gebied
+    python verrijk.py                        # doelgebied uit config, nieuwste snapshot
+    python verrijk.py --snapshot 2026-08-04  # een eerdere ingest
 
 Bronnen die uit staan of geen sleutel hebben, worden netjes overgeslagen — de
 scoring blijft dan werken met de gratis signalen (BAG-status telt altijd mee).
 """
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
 
 import bronnen
 from gebieden import resolve, slug
-from selectie import DATA, aggregeer, categoriseer, load_config, scoor, uitsluiten
+from selectie import (
+    DATA, aggregeer, categoriseer, kies_snapshots, lees_snapshots, load_config, scoor,
+    uitsluiten,
+)
+from snapshots import SnapshotFout
 
 BASE = Path(__file__).parent
 
 
-def _kandidaten(woonplaatsen: list[str], cfg: dict) -> list[dict]:
-    rows: list[dict] = []
-    for w in woonplaatsen:
-        rows += json.load(open(DATA / f"vbo_{slug(w)}.json", encoding="utf-8"))
+def _kandidaten(woonplaatsen: list[str], cfg: dict, snapshot: str | None = None) -> list[dict]:
+    rows = lees_snapshots(kies_snapshots(woonplaatsen, cfg, snapshot))
     panden = aggregeer(rows)
     # Basisscore zonder verrijking, alleen om te bepalen wie kandidaat is.
     kand = []
@@ -44,8 +47,10 @@ def _kandidaten(woonplaatsen: list[str], cfg: dict) -> list[dict]:
     return kand
 
 
-def verrijk_gebied(label: str, woonplaatsen: list[str], cfg: dict) -> None:
-    kand = _kandidaten(woonplaatsen, cfg)
+def verrijk_gebied(
+    label: str, woonplaatsen: list[str], cfg: dict, snapshot: str | None = None
+) -> None:
+    kand = _kandidaten(woonplaatsen, cfg, snapshot)
     print(f"[{label}] {len(kand):,} kandidaten voor verrijking")
 
     samen: dict[str, dict] = {}
@@ -66,9 +71,19 @@ def verrijk_gebied(label: str, woonplaatsen: list[str], cfg: dict) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Verrijk de panden van het doelgebied.")
+    parser.add_argument(
+        "--snapshot", default=None,
+        help="welke ingest: ophaaldatum JJJJ-MM-DD of bestandsnaam (standaard de nieuwste)",
+    )
+    args = parser.parse_args()
     cfg = load_config()
     label, woonplaatsen = resolve(cfg)
-    verrijk_gebied(label, woonplaatsen, cfg)
+    try:
+        verrijk_gebied(label, woonplaatsen, cfg, args.snapshot)
+    except SnapshotFout as fout:
+        print(f"FOUT: {fout}", file=sys.stderr)
+        return 1
     return 0
 
 

@@ -19,6 +19,19 @@ doelgebied:
 # Geldige provincienamen: Groningen, Friesland, Drenthe, Overijssel, Flevoland,
 # Gelderland, Utrecht, Noord-Holland, Zuid-Holland, Zeeland, Noord-Brabant, Limburg
 
+# === SNAPSHOTS VAN DE INGEST ======================================================
+# Elke ingest schrijft data/vbo_<plaats>_<JJJJ-MM-DD>.json plus een .meta.json en
+# overschrijft nooit een eerder bestand. run_proef.py en verrijk.py lezen standaard de
+# nieuwste; een eerdere kies je met --snapshot JJJJ-MM-DD (of --snapshot <bestandsnaam>).
+# Oude bestanden zonder datum in de naam blijven staan zoals ze zijn; hun ophaaldatum
+# staat hieronder.
+snapshots:
+  ongedateerd:
+    # Augustus-data achter het goedgekeurde proefresultaat. Bronnen: README "peildatum
+    # augustus 2026", de gecommitte CSV (2026-08-04 op alle 2.346 rijen), dashboard
+    # "Peildatum 4 aug 2026", wijzigingstijd van het bestand 2026-08-04 12:22.
+    vbo_delft.json: "2026-08-04"
+
 # --- Sectie 2: primaire pandcategorieen ---
 categorieen:
   A_winkel_wonen:

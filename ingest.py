@@ -17,14 +17,15 @@ Daarom valideert dit script de hit-count altijd voor het pagineren begint.
 
 from __future__ import annotations
 
-import json
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 import requests
 import yaml
 
+import snapshots
 from gebieden import resolve, slug
 
 BASE = Path(__file__).parent
@@ -257,12 +258,16 @@ def main() -> int:
     print(f"Doelgebied: {label} ({len(woonplaatsen)} woonplaats(en))")
 
     for woonplaats in woonplaatsen:
+        opgehaald_vanaf = datetime.now().astimezone()
         rows = fetch_woonplaats(woonplaats, cfg)
-        uit = CACHE / f"vbo_{slug(woonplaats)}.json"
-        with open(uit, "w", encoding="utf-8") as fh:
-            json.dump(rows, fh, ensure_ascii=False)
-        mb = uit.stat().st_size / 1e6
-        print(f"[{woonplaats}] opgeslagen -> {uit.name} ({mb:.1f} MB)")
+        # Elke ingest krijgt een eigen, gedateerde snapshot; eerdere bestanden
+        # (ook het oude vbo_<plaats>.json) blijven onaangeroerd. Zie snapshots.py.
+        snap = snapshots.schrijf(
+            woonplaats, slug(woonplaats), rows, CACHE, opgehaald_vanaf,
+            {"bron": cfg["bron"]["wfs_url"], "laag": cfg["bron"]["laag_vbo"]},
+        )
+        mb = snap.pad.stat().st_size / 1e6
+        print(f"[{woonplaats}] opgeslagen -> {snap.omschrijving()} ({mb:.1f} MB)")
 
     return 0
 
