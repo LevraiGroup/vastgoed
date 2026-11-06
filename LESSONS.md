@@ -13,3 +13,10 @@ struck through with the reason, never deleted.
 - **Since VA-3 the pipeline reads the newest snapshot by default.** Anything meant to
   reproduce August Delft must pass `snapshot="vbo_delft.json"` (the file name, not the date)
   explicitly. *(2026-11-06, Vera, VA-2/VA-3)*
+- **`datapeildatum` comes from the snapshot; `vbo_delft.json`'s date exists only in
+  `config.yaml` (`snapshots.ongedateerd`).** Remove that line and every run on the August data
+  stops with FOUT. Fix it by restoring the date, never by falling back to today.
+  *(2026-11-06, Rex, VA-4)*
+- **This repo has `core.autocrlf=true`.** `git show HEAD:output/*.csv` is LF; the checked-out
+  CSVs and `run_proef.py`'s output are CRLF. Compare a regenerated CSV against the checked-out
+  file (or with `git diff`), never against `git show`. *(2026-11-06, Vera, VA-4)*

@@ -38,10 +38,12 @@ def main() -> int:
     sl = slug(label)
     try:
         gekozen = kies_snapshots(woonplaatsen, cfg, args.snapshot)
+        # Stopt ook als een snapshot geen ophaaldatum heeft (VA-4): de datapeildatum
+        # komt uit de snapshot, nooit uit de datum van vandaag.
+        panden = verwerk(woonplaatsen, cfg, label, gekozen=gekozen)
     except SnapshotFout as fout:
         print(f"FOUT: {fout}", file=sys.stderr)
         return 1
-    panden = verwerk(woonplaatsen, cfg, label, gekozen=gekozen)
 
     actief = [p for p in panden if not p["uitgesloten"]]
     in_cat = [p for p in actief if p["categorieen"]]

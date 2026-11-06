@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from datetime import date
 from pathlib import Path
 
 import yaml
@@ -413,6 +412,22 @@ def lees_snapshots(gekozen: list[snapshots.Snapshot]) -> list[dict]:
     return rows
 
 
+def eis_ophaaldatum(gekozen: list[snapshots.Snapshot]) -> None:
+    """Stop als een snapshot geen vastgelegde ophaaldatum heeft.
+
+    De datapeildatum van een lead is de ophaaldatum van zijn data. Zonder die datum
+    valt er niets te stempelen, en de datum van vandaag is het juist niet.
+    """
+    for snap in gekozen:
+        if not snap.ophaaldatum:
+            raise snapshots.SnapshotFout(
+                f"Snapshot {snap.pad.name} ({snap.woonplaats}) heeft geen vastgelegde "
+                "ophaaldatum, dus de datapeildatum is onbekend. Leg de ophaaldatum vast in "
+                f"config.yaml onder snapshots.ongedateerd (\"{snap.pad.name}: JJJJ-MM-DD\") "
+                "of draai een nieuwe ingest: python ingest.py"
+            )
+
+
 def verwerk(
     woonplaatsen,
     cfg: dict,
@@ -434,9 +449,18 @@ def verwerk(
 
     if gekozen is None:
         gekozen = kies_snapshots(woonplaatsen, cfg, snapshot)
-    rows = lees_snapshots(gekozen)
+    eis_ophaaldatum(gekozen)
+    rows: list[dict] = []
+    peildatum: dict[str, str] = {}  # BAG-pand-ID -> ophaaldatum van zijn snapshot
+    for snap in gekozen:
+        snap_rows = snapshots.lees(snap)
+        for rij in snap_rows:
+            pand_id = rij.get("pandidentificatie")
+            if pand_id:
+                # Eerste VBO wint, net als de woonplaats in aggregeer().
+                peildatum.setdefault(pand_id, snap.ophaaldatum)
+        rows += snap_rows
     panden = aggregeer(rows)
-    peildatum = date.today().isoformat()
     verrijking = laad_verrijking(label)
     kort = ("".join(c for c in label if c.isalnum())[:2] or "NL").upper()
 
@@ -455,7 +479,7 @@ def verwerk(
         pand["selectiereden"] = "; ".join(redenen)
         pand["lead_id"] = f"LEV-{kort}-{pand['bag_pand_id'][-8:]}"
         pand["bron"] = "PDOK BAG WFS v2_0"
-        pand["datapeildatum"] = peildatum
+        pand["datapeildatum"] = peildatum[pand["bag_pand_id"]]
         pand["visuele_controle"] = False
         pand["beoordeling"] = ""
         pand["eerder_geselecteerd"] = False

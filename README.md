@@ -87,6 +87,12 @@ nieuwste snapshot en melden op scherm welke; een eerdere kies je met
 2026) blijft ongewijzigd staan; de ophaaldatum ervan staat in `config.yaml` onder
 `snapshots.ongedateerd`.
 
+De kolom `datapeildatum` in de CSV's is de ophaaldatum van de snapshot waaruit het pand
+komt, niet de datum waarop `run_proef.py` draaide. Combineert een gebied meerdere
+woonplaatsen, dan draagt elk pand de datum van zijn eigen woonplaats. Heeft een snapshot
+geen vastgelegde ophaaldatum, dan stopt `run_proef.py` met een melding die het bestand
+noemt; het valt nooit terug op de datum van vandaag.
+
 Alle grenswaarden en scoregewichten staan ook in `config.yaml` en zijn configureerbaar,
 zoals de briefing vereist. Bestandsnamen en dashboard-titel volgen automatisch het
 gekozen gebied.
