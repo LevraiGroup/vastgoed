@@ -35,3 +35,8 @@ struck through with the reason, never deleted.
   sides), and count "rows moved" by position, not by diff lines.** Scratch copies under Temp
   lost files twice on 11-06/07; a diff's 411 changed lines were 491 moved rows.
   *(2026-11-07, Vera, VA-32)*
+- **Every push deploys to Railway, and the deploy serves everything in `design/`.** Stage
+  files by name; never `git add -A` (an untracked design page would go live). Railway's
+  `railway.json` is closed to new services (hard cutoff 2026-12-01): configure the build in
+  `railpack.json`. The deploy serves the committed LF blob, so compare its hash with
+  `git show HEAD:<file>`, not the CRLF checkout. *(2026-11-07, Rex and Vera, VA-46)*

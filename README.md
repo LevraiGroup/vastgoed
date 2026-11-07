@@ -73,11 +73,16 @@ doelgebied:
 ## Gebruik
 
 ```bash
-pip install requests pyyaml
+pip install -r requirements.txt
 python ingest.py            # haalt VBO's op -> data/vbo_<plaats>_<JJJJ-MM-DD>.json (+ .meta.json)
 python run_proef.py         # aggregeert, scoort -> output/*.csv + data/panden_<gebied>.json
 python build_dashboard.py   # bouwt het dashboard voor het gekozen gebied
 ```
+
+Online staat alleen het dashboard (`design/index.html`): Railway bouwt elke push naar `main`
+met Railpack (`railpack.json`) en serveert `design/` met de standaardbibliotheek van Python.
+Lokaal hetzelfde: `python -m http.server 8000 --directory design --bind 0.0.0.0`, dan
+http://localhost:8000/. De pipeline zelf draait niet op Railway.
 
 Elke ingest bewaart een eigen, gedateerde snapshot en overschrijft nooit een eerdere;
 twee keer op één dag geeft `..._<datum>_2.json`. De ophaaldatum staat in de bestandsnaam
