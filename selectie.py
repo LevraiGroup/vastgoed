@@ -13,7 +13,9 @@ essentieel, anders missen we juist de gemengde panden die deze opdracht zoekt.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -489,17 +491,44 @@ def verwerk(
 
 
 def mastervolgorde(pand: dict) -> tuple[int, str]:
-    """Sorteersleutel van mastervoorraad en werklijst: hoogste leadscore eerst, dan BAG-pand-ID."""
+    """Sorteersleutel van mastervoorraad en proef: hoogste leadscore eerst, dan BAG-pand-ID."""
     return (-pand["leadscore"], pand["bag_pand_id"])
 
 
-def werklijst(panden: list[dict], cfg: dict) -> tuple[list[dict], int]:
-    """Kies de maandelijkse werklijst uit de gescoorde panden (VA-5).
+def maandloting(maand: str, pand_id: str) -> str:
+    """Lotnummer van een pand voor de werklijst van een maand (VA-32).
+
+    De SHA-256 (hex) van "<JJJJ-MM>:<bag_pand_id>". Het hangt alleen af van de maand en
+    het BAG-pand-ID, dus niet van PYTHONHASHSEED, de invoervolgorde of het aantal panden,
+    en iedereen kan het narekenen.
+    """
+    return hashlib.sha256(f"{maand}:{pand_id}".encode("utf-8")).hexdigest()
+
+
+def werklijstvolgorde(maand: str):
+    """Sorteersleutel van de werklijst van een maand (VA-32).
+
+    Hoogste leadscore eerst; bij gelijke score beslist het lotnummer van de maand
+    (maandloting), en het BAG-pand-ID alleen als twee lotnummers gelijk zouden zijn.
+    """
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", maand or ""):
+        raise ValueError(f"werklijstmaand moet JJJJ-MM zijn, niet {maand!r}")
+
+    def sleutel(pand: dict) -> tuple[int, str, str]:
+        return (-pand["leadscore"], maandloting(maand, pand["bag_pand_id"]), pand["bag_pand_id"])
+
+    return sleutel
+
+
+def werklijst(panden: list[dict], cfg: dict, maand: str) -> tuple[list[dict], int]:
+    """Kies de maandelijkse werklijst uit de gescoorde panden (VA-5, VA-32).
 
     In aanmerking komt een pand dat niet is uitgesloten, in minstens één categorie A-E
     valt en een leadscore heeft van minstens drempels.score_min_voor_werklijst. Die
-    panden staan in de volgorde van de mastervoorraad; de werklijst is het begin
-    daarvan, hoogstens drempels.werklijst_max panden.
+    panden staan op leadscore, hoogste eerst; panden met dezelfde score staan in een
+    volgorde die vastligt voor de maand (JJJJ-MM, zie werklijstvolgorde). De werklijst
+    is het begin daarvan, hoogstens drempels.werklijst_max panden. Wie op de grensscore
+    meedoet, hangt dus af van de maand, niet van het BAG-pand-ID.
 
     Geeft (werklijst, aantal panden dat in aanmerking kwam) terug.
     """
@@ -511,7 +540,7 @@ def werklijst(panden: list[dict], cfg: dict) -> tuple[list[dict], int]:
             p for p in panden
             if not p["uitgesloten"] and p["categorieen"] and p["leadscore"] >= score_min
         ),
-        key=mastervolgorde,
+        key=werklijstvolgorde(maand),
     )
     return geschikt[:maximum], len(geschikt)
 

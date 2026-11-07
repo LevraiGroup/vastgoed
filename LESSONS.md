@@ -31,3 +31,7 @@ struck through with the reason, never deleted.
 - **A safety check lists the files it protects, not everything in a folder that other
   processes also write to.** The read-only test watched all of `data/` and went red while the
   GeoPackage downloaded into `data/bron/`. *(2026-11-06, Vera, VA-44)*
+- **Check a scratch copy is complete before trusting it (sha256 of every file on both
+  sides), and count "rows moved" by position, not by diff lines.** Scratch copies under Temp
+  lost files twice on 11-06/07; a diff's 411 changed lines were 491 moved rows.
+  *(2026-11-07, Vera, VA-32)*

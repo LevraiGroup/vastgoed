@@ -137,9 +137,11 @@ def main() -> int:
             w.writerow(_rij(p))
 
     # Maandelijkse werklijst (VA-5): de hoogst scorende panden boven de werklijstdrempel,
-    # hoogstens drempels.werklijst_max. De maand in de naam is die van de snapshot.
-    lijst, n_geschikt = werklijst(panden, cfg)
-    werklijst_csv = UIT / f"werklijst_{sl}_{werklijst_maand(gekozen)}.csv"
+    # hoogstens drempels.werklijst_max. De maand in de naam is die van de snapshot; bij
+    # gelijke score bepaalt die maand ook de volgorde (VA-32).
+    maand = werklijst_maand(gekozen)
+    lijst, n_geschikt = werklijst(panden, cfg, maand)
+    werklijst_csv = UIT / f"werklijst_{sl}_{maand}.csv"
     with open(werklijst_csv, "w", newline="", encoding="utf-8-sig") as fh:
         w = csv.DictWriter(fh, fieldnames=kolommen + ["bag_viewer_url"], delimiter=";")
         w.writeheader()

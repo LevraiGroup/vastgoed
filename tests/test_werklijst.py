@@ -1,5 +1,6 @@
 """
 VA-5: de maandelijkse werklijst, hoogstens drempels.werklijst_max panden, op leadscore.
+VA-32: bij gelijke score een volgorde die vastligt per maand (maandloting).
 
 De eenheidstests werken op kleine nep-panden en een kopie van de config in het geheugen,
 dus ze lezen en schrijven niets in data/ of output/. De Delft-tests lezen de
@@ -14,7 +15,11 @@ from __future__ import annotations
 import contextlib
 import copy
 import csv
+import hashlib
 import io
+import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -31,6 +36,9 @@ from snapshots import Snapshot  # noqa: E402
 AUGUSTUS_SNAPSHOT = "vbo_delft.json"
 VBO_DELFT = PROJECT / "data" / AUGUSTUS_SNAPSHOT
 MASTER_CSV = PROJECT / "output" / "mastervoorraad_delft.csv"
+PROEF_CSV = PROJECT / "output" / "proefresultaat_20_delft.csv"
+WERKLIJST_CSV = PROJECT / "output" / "werklijst_delft_2026-08.csv"
+MAAND = "2026-08"
 
 
 def pand(pand_id: str, score: int, cats=("A",), uitgesloten: bool = False) -> dict:
@@ -48,6 +56,24 @@ def cfg_met(**drempels) -> dict:
     return cfg
 
 
+def ids(lijst: list[dict]) -> list[str]:
+    return [p["bag_pand_id"] for p in lijst]
+
+
+def zonder_cr(pad: Path) -> bytes:
+    """Bestandsinhoud met CRLF als LF: de checkout (core.autocrlf) mag beide hebben."""
+    return pad.read_bytes().replace(b"\r\n", b"\n")
+
+
+def gelijkspel(aantal: int = 40) -> list[dict]:
+    """Drie panden boven de grens, `aantal` op de grensscore 11, en twee eronder."""
+    boven = [pand("0503100000000901", 14), pand("0503100000000902", 13),
+             pand("0503100000000903", 12)]
+    grens = [pand(f"05031000000{i:05d}", 11) for i in range(aantal)]
+    onder = [pand("0503100000000801", 7), pand("0503100000000802", 6)]
+    return boven + grens + onder
+
+
 def snap(datum: str | None, naam: str = "vbo_x.json", woonplaats: str = "X") -> Snapshot:
     return Snapshot(woonplaats, Path(naam), datum, 1, "meta" if datum else "onbekend")
 
@@ -62,31 +88,124 @@ class TestWerklijstKeuze(unittest.TestCase):
             pand("P04", 12, cats=()),             # geen categorie
             pand("P05", 12, uitgesloten=True),    # uitgesloten
         ]
-        lijst, n = selectie.werklijst(panden, cfg_met(score_min_voor_werklijst=8, werklijst_max=10))
+        lijst, n = selectie.werklijst(panden, cfg_met(score_min_voor_werklijst=8, werklijst_max=10), MAAND)
         self.assertEqual([p["bag_pand_id"] for p in lijst], ["P01", "P02"])
         self.assertEqual(n, 2)
 
-    def test_volgorde_is_score_aflopend_dan_bag_pand_id(self):
+    def test_volgorde_is_score_aflopend_dan_maandloting(self):
+        # VA-32 vervangt VA-5's laagste-BAG-ID-eerst bij gelijke score.
         panden = [pand("P3", 9), pand("P1", 9), pand("P2", 11), pand("P0", 8)]
-        lijst, _ = selectie.werklijst(panden, cfg_met(score_min_voor_werklijst=8, werklijst_max=10))
-        self.assertEqual([p["bag_pand_id"] for p in lijst], ["P2", "P1", "P3", "P0"])
+        lijst, _ = selectie.werklijst(panden, cfg_met(score_min_voor_werklijst=8, werklijst_max=10), MAAND)
+        negen = sorted(["P1", "P3"], key=lambda i: selectie.maandloting(MAAND, i))
+        self.assertEqual(ids(lijst), ["P2", *negen, "P0"])
 
     def test_hoogstens_werklijst_max_en_dan_de_hoogst_scorende(self):
         panden = [pand(f"P{i:02d}", 8 + i) for i in range(10)]
-        lijst, n = selectie.werklijst(panden, cfg_met(score_min_voor_werklijst=8, werklijst_max=3))
+        lijst, n = selectie.werklijst(panden, cfg_met(score_min_voor_werklijst=8, werklijst_max=3), MAAND)
         self.assertEqual([p["leadscore"] for p in lijst], [17, 16, 15])
         self.assertEqual(n, 10)
 
     def test_minder_geschikt_dan_max_geeft_alle_geschikte(self):
         panden = [pand("P1", 9), pand("P2", 10)]
-        lijst, n = selectie.werklijst(panden, cfg_met(score_min_voor_werklijst=8, werklijst_max=500))
+        lijst, n = selectie.werklijst(panden, cfg_met(score_min_voor_werklijst=8, werklijst_max=500), MAAND)
         self.assertEqual((len(lijst), n), (2, 2))
 
     def test_drempel_komt_uit_de_config(self):
         panden = [pand("P1", 9), pand("P2", 10), pand("P3", 11)]
-        lijst, n = selectie.werklijst(panden, cfg_met(score_min_voor_werklijst=10, werklijst_max=500))
+        lijst, n = selectie.werklijst(panden, cfg_met(score_min_voor_werklijst=10, werklijst_max=500), MAAND)
         self.assertEqual([p["bag_pand_id"] for p in lijst], ["P3", "P2"])
         self.assertEqual(n, 2)
+
+
+class TestWerklijstMaandvolgorde(unittest.TestCase):
+    """VA-32: bij gelijke score beslist een volgorde die vastligt voor de maand."""
+
+    def setUp(self):
+        # 3 boven de grens + 10 van de 40 op de grensscore 11.
+        self.cfg = cfg_met(score_min_voor_werklijst=8, werklijst_max=13)
+
+    def test_dezelfde_maand_geeft_dezelfde_lijst(self):
+        a, _ = selectie.werklijst(gelijkspel(), self.cfg, "2026-08")
+        b, _ = selectie.werklijst(gelijkspel(), self.cfg, "2026-08")
+        self.assertEqual(ids(a), ids(b))
+
+    def test_omgekeerde_invoervolgorde_geeft_dezelfde_lijst(self):
+        a, _ = selectie.werklijst(gelijkspel(), self.cfg, "2026-08")
+        b, _ = selectie.werklijst(list(reversed(gelijkspel())), self.cfg, "2026-08")
+        self.assertEqual(ids(a), ids(b))
+
+    def test_een_andere_maand_geeft_een_andere_volgorde_binnen_de_gelijke_score(self):
+        cfg = cfg_met(score_min_voor_werklijst=8, werklijst_max=500)       # iedereen past
+        a, _ = selectie.werklijst(gelijkspel(), cfg, "2026-08")
+        b, _ = selectie.werklijst(gelijkspel(), cfg, "2026-09")
+        elf_a = [p["bag_pand_id"] for p in a if p["leadscore"] == 11]
+        elf_b = [p["bag_pand_id"] for p in b if p["leadscore"] == 11]
+        self.assertEqual(sorted(elf_a), sorted(elf_b))
+        self.assertNotEqual(elf_a, elf_b)
+
+    def test_een_andere_maand_kiest_andere_panden_op_de_grensscore(self):
+        a, _ = selectie.werklijst(gelijkspel(), self.cfg, "2026-08")
+        b, _ = selectie.werklijst(gelijkspel(), self.cfg, "2026-09")
+        elf_a = {p["bag_pand_id"] for p in a if p["leadscore"] == 11}
+        elf_b = {p["bag_pand_id"] for p in b if p["leadscore"] == 11}
+        self.assertEqual((len(elf_a), len(elf_b)), (10, 10))
+        self.assertNotEqual(elf_a, elf_b)
+
+    def test_scores_boven_de_grens_veranderen_niet(self):
+        for maand in ("2026-08", "2026-09", "2027-01"):
+            lijst, _ = selectie.werklijst(gelijkspel(), self.cfg, maand)
+            self.assertEqual(
+                ids(lijst[:3]), ["0503100000000901", "0503100000000902", "0503100000000903"],
+                maand)
+            self.assertEqual([p["leadscore"] for p in lijst], [14, 13, 12] + [11] * 10, maand)
+
+    def test_buiten_de_snede_verandert_niets(self):
+        # Wie niet in aanmerking komt, komt er in geen maand in; de panden zelf wijzigen niet.
+        panden = gelijkspel() + [
+            pand("0503100000000701", 15, cats=()),
+            pand("0503100000000702", 15, uitgesloten=True),
+        ]
+        voor = copy.deepcopy(panden)
+        nooit = {"0503100000000701", "0503100000000702", "0503100000000801", "0503100000000802"}
+        for maand in ("2026-08", "2026-09"):
+            lijst, n = selectie.werklijst(panden, self.cfg, maand)
+            self.assertEqual((len(lijst), n), (13, 43), maand)
+            self.assertFalse(nooit & set(ids(lijst)), maand)
+        self.assertEqual(panden, voor, "werklijst() mag de panden niet wijzigen")
+
+    def test_de_mastervolgorde_blijft_score_dan_bag_pand_id(self):
+        panden = [pand("P3", 9), pand("P1", 9), pand("P2", 11)]
+        self.assertEqual(ids(sorted(panden, key=selectie.mastervolgorde)), ["P2", "P1", "P3"])
+
+    def test_lotnummer_is_sha256_van_maand_dubbelepunt_pand_id(self):
+        self.assertEqual(
+            selectie.maandloting("2026-08", "0503100000000001"),
+            hashlib.sha256(b"2026-08:0503100000000001").hexdigest(),
+        )
+
+    def test_onafhankelijk_van_pythonhashseed(self):
+        code = (
+            "import json, sys; sys.path.insert(0, sys.argv[1]); import selectie; "
+            "cfg = selectie.load_config(); "
+            "cfg['drempels'].update(score_min_voor_werklijst=8, werklijst_max=13); "
+            "lijst, _ = selectie.werklijst(json.loads(sys.argv[2]), cfg, '2026-08'); "
+            "print(json.dumps([p['bag_pand_id'] for p in lijst]))"
+        )
+        uitkomsten = []
+        for seed in ("0", "12345"):
+            env = dict(os.environ, PYTHONHASHSEED=seed)
+            r = subprocess.run(
+                [sys.executable, "-c", code, str(PROJECT), json.dumps(gelijkspel())],
+                cwd=PROJECT, env=env, capture_output=True, text=True, check=True,
+            )
+            uitkomsten.append(json.loads(r.stdout))
+        lijst, _ = selectie.werklijst(gelijkspel(), self.cfg, "2026-08")
+        self.assertEqual(uitkomsten, [ids(lijst), ids(lijst)])
+
+    def test_een_maand_die_geen_jjjj_mm_is_stopt(self):
+        for fout in ("2026-08-04", "2026-13", "augustus", "", None):
+            with self.assertRaises(ValueError, msg=repr(fout)):
+                selectie.werklijst(gelijkspel(), self.cfg, fout)
 
 
 class TestWerklijstWaarschuwing(unittest.TestCase):
@@ -133,22 +252,48 @@ class TestWerklijstDelft(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             cls.panden = selectie.verwerk(["Delft"], cls.cfg, "Delft", snapshot=AUGUSTUS_SNAPSHOT)
 
-    def test_500_van_1668_en_gelijk_aan_het_begin_van_de_mastervoorraad(self):
-        lijst, n = selectie.werklijst(self.panden, self.cfg)
+    def test_500_van_1668_met_243_boven_en_257_op_de_grensscore(self):
+        lijst, n = selectie.werklijst(self.panden, self.cfg, MAAND)
         self.assertEqual(n, 1_668)
         self.assertEqual(len(lijst), 500)
-        drempel = self.cfg["drempels"]["score_min_voor_werklijst"]
+        self.assertEqual(sum(p["leadscore"] >= 12 for p in lijst), 243)
+        self.assertEqual(sum(p["leadscore"] == 11 for p in lijst), 257)
+        self.assertEqual(min(p["leadscore"] for p in lijst), 11)
+
+    def test_augustus_en_september_delen_de_243_en_verschillen_op_score_11(self):
+        aug, _ = selectie.werklijst(self.panden, self.cfg, "2026-08")
+        sep, _ = selectie.werklijst(self.panden, self.cfg, "2026-09")
         with open(MASTER_CSV, encoding="utf-8-sig", newline="") as fh:
-            master = [r for r in csv.DictReader(fh, delimiter=";") if int(r["leadscore"]) >= drempel]
-        self.assertEqual(
-            [p["bag_pand_id"] for p in lijst],
-            [r["bag_pand_id"] for r in master[:500]],
-        )
+            boven = {r["bag_pand_id"] for r in csv.DictReader(fh, delimiter=";")
+                     if int(r["leadscore"]) >= 12}
+        self.assertEqual(len(boven), 243)
+        for lijst in (aug, sep):
+            self.assertEqual({p["bag_pand_id"] for p in lijst if p["leadscore"] >= 12}, boven)
+        elf_aug = {p["bag_pand_id"] for p in aug if p["leadscore"] == 11}
+        elf_sep = {p["bag_pand_id"] for p in sep if p["leadscore"] == 11}
+        self.assertEqual((len(elf_aug), len(elf_sep)), (257, 257))
+        self.assertNotEqual(elf_aug, elf_sep)
+
+    def test_omgekeerde_invoer_geeft_dezelfde_delft_werklijst(self):
+        a, _ = selectie.werklijst(self.panden, self.cfg, MAAND)
+        b, _ = selectie.werklijst(list(reversed(self.panden)), self.cfg, MAAND)
+        self.assertEqual(ids(a), ids(b))
+
+    def test_de_vastgelegde_werklijst_van_augustus(self):
+        # Vastgelegd in VA-32: 500 rijen, 243 boven de grensscore 11 en 257 erop, in de
+        # volgorde van de maandloting van 2026-08.
+        lijst, _ = selectie.werklijst(self.panden, self.cfg, MAAND)
+        with open(WERKLIJST_CSV, encoding="utf-8-sig", newline="") as fh:
+            rijen = list(csv.DictReader(fh, delimiter=";"))
+        self.assertEqual(len(rijen), 500)
+        self.assertEqual(sum(int(r["leadscore"]) >= 12 for r in rijen), 243)
+        self.assertEqual(sum(int(r["leadscore"]) == 11 for r in rijen), 257)
+        self.assertEqual([r["bag_pand_id"] for r in rijen], ids(lijst))
 
     def test_werklijst_max_uit_de_config_verandert_de_lijst(self):
-        lijst, n = selectie.werklijst(self.panden, cfg_met(werklijst_max=50))
+        lijst, n = selectie.werklijst(self.panden, cfg_met(werklijst_max=50), MAAND)
         self.assertEqual((len(lijst), n), (50, 1_668))
-        lijst, n = selectie.werklijst(self.panden, cfg_met(werklijst_max=5_000))
+        lijst, n = selectie.werklijst(self.panden, cfg_met(werklijst_max=5_000), MAAND)
         self.assertEqual((len(lijst), n), (1_668, 1_668))
 
     def test_geen_waarschuwing_bij_1668_geschikte_panden(self):
@@ -187,9 +332,17 @@ class TestWerklijstDelft(unittest.TestCase):
                 self.assertEqual(kolommen, lezer.fieldnames)
             self.assertEqual(len(rijen), 500)
             self.assertEqual({r["datapeildatum"] for r in rijen}, {"2026-08-04"})
-            # Elke werklijstrij is letterlijk de rij uit de mastervoorraad.
-            drempel = self.cfg["drempels"]["score_min_voor_werklijst"]
-            self.assertEqual(rijen, [r for r in master if int(r["leadscore"]) >= drempel][:500])
+            # Elke werklijstrij is letterlijk een rij uit de mastervoorraad.
+            master_rijen = {tuple(r.items()) for r in master}
+            for r in rijen:
+                self.assertIn(tuple(r.items()), master_rijen)
+            # Byte voor byte de vastgelegde bestanden (op de regeleinden na, die
+            # core.autocrlf bepaalt): de werklijst sinds VA-32, de mastervoorraad en het
+            # proefresultaat ongewijzigd.
+            for naam, vastgelegd in (("werklijst_delft_2026-08.csv", WERKLIJST_CSV),
+                                     ("mastervoorraad_delft.csv", MASTER_CSV),
+                                     ("proefresultaat_20_delft.csv", PROEF_CSV)):
+                self.assertEqual(zonder_cr(uit / naam), zonder_cr(vastgelegd), naam)
 
         self.assertEqual(sorted(p.name for p in (PROJECT / "output").iterdir()), echte_output)
 

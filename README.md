@@ -97,10 +97,13 @@ Naast het proefresultaat en de mastervoorraad schrijft `run_proef.py` de maandel
 werklijst: `output/werklijst_<gebied>_<JJJJ-MM>.csv`, met dezelfde kolommen en hetzelfde
 formaat als de mastervoorraad. Daarin staan de panden die niet zijn uitgesloten, in
 minstens één categorie A-E vallen en een leadscore hebben van minstens
-`drempels.score_min_voor_werklijst`, in de volgorde van de mastervoorraad (hoogste score
-eerst, dan BAG-pand-ID), hoogstens `drempels.werklijst_max` stuks. De maand in de naam is
-die van de ophaaldatum van de snapshot (bij meerdere woonplaatsen de nieuwste), niet die
-van vandaag. Komen er minder dan `drempels.werklijst_min` panden in aanmerking, dan meldt
+`drempels.score_min_voor_werklijst`, hoogste score eerst, hoogstens
+`drempels.werklijst_max` stuks. De maand in de naam is die van de ophaaldatum van de
+snapshot (bij meerdere woonplaatsen de nieuwste), niet die van vandaag. Panden met dezelfde
+score staan op hun lotnummer van die maand, de SHA-256 (hexadecimaal, oplopend) van de
+tekst `<JJJJ-MM>:<bag_pand_id>`, bijvoorbeeld `2026-08:0503100000000001`, zodat dezelfde
+maand altijd dezelfde lijst geeft en een andere maand op de grensscore andere panden kiest.
+Komen er minder dan `drempels.werklijst_min` panden in aanmerking, dan meldt
 `run_proef.py` hoeveel het er zijn en schrijft het bestand toch.
 
 Alle grenswaarden en scoregewichten staan ook in `config.yaml` en zijn configureerbaar,
