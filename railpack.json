@@ -2,9 +2,9 @@
   "$schema": "https://schema.railpack.com",
   "provider": "python",
   "packages": {
-    "python": "3.12.7"
+    "python": "3.12"
   },
   "deploy": {
-    "startCommand": "python -m http.server $PORT --directory design --bind 0.0.0.0"
+    "startCommand": "python serve.py"
   }
 }

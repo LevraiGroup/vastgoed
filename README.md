@@ -80,9 +80,15 @@ python build_dashboard.py   # bouwt het dashboard voor het gekozen gebied
 ```
 
 Online staat alleen het dashboard (`design/index.html`): Railway bouwt elke push naar `main`
-met Railpack (`railpack.json`) en serveert `design/` met de standaardbibliotheek van Python.
-Lokaal hetzelfde: `python -m http.server 8000 --directory design --bind 0.0.0.0`, dan
-http://localhost:8000/. De pipeline zelf draait niet op Railway.
+met Railpack (`railpack.json`) en start `serve.py`, dat alleen `design/` serveert met de
+standaardbibliotheek van Python, op de poort uit de variabele `PORT`. Lokaal hetzelfde:
+`python serve.py`, dan http://localhost:8000/. De pipeline zelf draait niet op Railway.
+
+Elke maand, na `run_proef.py`: draai `build_dashboard.py` en commit `design/index.html` in
+dezelfde commit als de nieuwe `output/*.csv`. Railway bouwt de pagina niet zelf (daar is geen
+`data/`), dus alleen zo toont de online versie dezelfde cijfers als de geleverde CSV's. Elke
+commit die `build_dashboard.py` of `output/*.csv` wijzigt, neemt de herbouwde
+`design/index.html` mee.
 
 Elke ingest bewaart een eigen, gedateerde snapshot en overschrijft nooit een eerdere;
 twee keer op één dag geeft `..._<datum>_2.json`. De ophaaldatum staat in de bestandsnaam
