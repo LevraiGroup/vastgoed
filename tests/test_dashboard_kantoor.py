@@ -1,0 +1,395 @@
+"""
+VA-31: het blok PAYLOAD.kantoor dat het pixelkantoor bovenaan het dashboard voedt.
+build_dashboard.kantoor() geeft ruwe getallen en ISO-datums; onbekend is None, nooit een
+verzonnen of vast getal. bouw_payload() overleeft een ontbrekend panden-bestand en nul
+leads. Geen data nodig, behalve de ene test die de echte Delft-cijfers controleert (die
+wordt overgeslagen zonder data/panden_delft.json).
+"""
+import json
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import build_dashboard as bd  # noqa: E402
+
+DELFT_PANDEN = bd.DATA / "panden_delft.json"
+
+
+def cfg(energielabel=False, werklijst_min=200, werklijst_max=500, drempel=8):
+    """Het deel van config.yaml dat het kantoor leest."""
+    return {
+        "doelgebied": {"steden": ["Delft"], "provincies": []},
+        "drempels": {"score_min_voor_werklijst": drempel,
+                     "werklijst_min": werklijst_min, "werklijst_max": werklijst_max},
+        "score": {"schaal_max": 26},
+        "bronnen": {"energielabel": {"actief": energielabel, "api_key": ""}},
+    }
+
+
+def pand(i, leadscore=8, uitgesloten=False, categorieen=("C",), vbo=3, **extra):
+    """Een pand met de velden die bouw_payload() leest."""
+    p = {"bag_pand_id": f"0503100000{i:06d}", "uitgesloten": uitgesloten,
+         "categorieen": list(categorieen), "leadscore": leadscore,
+         "score100": round(leadscore / 26 * 100), "aantal_vbo": vbo,
+         "aantal_per_functie": {"woon": vbo}, "bouwjaar": 1900 + i,
+         "totale_oppervlakte": 200.0 + i, "opp_per_functie": {"woon": 200.0 + i},
+         "score_opbouw": [], "hoofdadres": f"Straat {i}, Delft", "postcode": "2611AA",
+         "aantal_adressen": vbo, "woonplaats": "Delft"}
+    p.update(extra)
+    return p
+
+
+def snap(woonplaats, datum):
+    return {"woonplaats": woonplaats, "bestand": f"vbo_{woonplaats.lower()}.json",
+            "ophaaldatum": datum}
+
+
+class Kantoor(unittest.TestCase):
+    def setUp(self):
+        self.panden = [pand(1, 12), pand(2, 8), pand(3, 5),
+                       pand(4, 9, uitgesloten=True), pand(5, 10, categorieen=())]
+
+    def test_delft_augustus(self):
+        bron = [snap("Delft", "2026-08-04")]
+        k = bd.kantoor("Delft", bron, self.panden, 2, cfg())
+        self.assertEqual(k["gebied"], "Delft")
+        # Ingest krijgt de snapshotlijst zelf: het script maakt er '4 aug 2026' van.
+        self.assertEqual(k["ingest"], {"bron": bron, "vbo": 15, "verouderd": False})
+        self.assertEqual(k["selectie"], {"panden": 5, "a_e": 3, "werklijst": 2, "drempel": 8,
+                                         "werklijst_min": 200, "werklijst_max": 500})
+        self.assertEqual(k["verrijking"], {"panden": 3, "actief": [], "verrijkt": None})
+        self.assertEqual(k["controle"], {"totaal": 2, "te_controleren": 2, "gecontroleerd": None})
+
+    def test_bron_ontbreekt(self):
+        k = bd.kantoor("Delft", None, self.panden, 2, cfg())
+        # 'Bron onbekend' is de toestand van het script; de payload zegt alleen null,
+        # en zet er nooit de rundatum of een vaste datum voor in de plaats.
+        self.assertIsNone(k["ingest"]["bron"])
+        self.assertEqual(k["ingest"]["vbo"], 15)
+
+    def test_meerdere_woonplaatsen_verschillende_datums(self):
+        bron = [snap("Delft", "2026-08-04"), snap("Den Haag", "2026-11-06"),
+                snap("Rijswijk", "2026-09-15")]
+        k = bd.kantoor("Haaglanden", bron, self.panden, 2, cfg())
+        # Alle datums gaan mee; het script toont het bereik, zoals de peildatum-pil (VA-12).
+        self.assertEqual([b["ophaaldatum"] for b in k["ingest"]["bron"]],
+                         ["2026-08-04", "2026-11-06", "2026-09-15"])
+        N = bd.NBSP
+        self.assertEqual(bd.peildatum(k["ingest"]["bron"]), f"Peildatum 4{N}aug – 6{N}nov{N}2026")
+
+    def test_energielabel_uit(self):
+        k = bd.kantoor("Delft", None, self.panden, 2, cfg(energielabel=False))
+        self.assertEqual(k["verrijking"]["actief"], [])
+        self.assertIsNone(k["verrijking"]["verrijkt"])
+
+    def test_energielabel_aan_nog_niet_verrijkt(self):
+        k = bd.kantoor("Delft", None, self.panden, 2, cfg(energielabel=True))
+        self.assertEqual(k["verrijking"]["actief"], ["Energielabel"])
+        self.assertEqual(k["verrijking"]["verrijkt"], 0)
+
+    def test_energielabel_aan_en_verrijkt(self):
+        panden = self.panden + [pand(6, 9, energielabel_status="gevonden", energielabel="F"),
+                                pand(7, 4, energielabel_status="geen"),
+                                pand(8, 9, uitgesloten=True, energielabel_status="gevonden")]
+        k = bd.kantoor("Delft", None, panden, 2, cfg(energielabel=True))
+        # Alleen panden binnen A–E tellen; het uitgesloten pand niet.
+        self.assertEqual(k["verrijking"]["verrijkt"], 2)
+        self.assertEqual(k["verrijking"]["panden"], 5)
+
+    def test_actief_alleen_bij_true(self):
+        c = cfg()
+        c["bronnen"]["energielabel"]["actief"] = "false"
+        self.assertEqual(bd.actieve_bronnen(c), [])
+        self.assertEqual(bd.actieve_bronnen({}), [])
+
+    def test_nul_leads(self):
+        k = bd.kantoor("Delft", None, [pand(1, 9, uitgesloten=True)], 0, cfg())
+        self.assertEqual(k["controle"], {"totaal": 0, "te_controleren": 0, "gecontroleerd": None})
+        self.assertEqual(k["selectie"]["a_e"], 0)
+        self.assertEqual(k["selectie"]["werklijst"], 0)
+
+    def test_controle_volgt_het_aantal_leads(self):
+        # Geen vaste 20: het getal is wat de payload aan leads heeft.
+        self.assertEqual(bd.kantoor("Delft", None, self.panden, 7, cfg())["controle"]["totaal"], 7)
+
+    def test_geen_data(self):
+        k = bd.kantoor("Delft", None, None, None, cfg())
+        self.assertEqual(k["ingest"], {"bron": None, "vbo": None, "verouderd": False})
+        self.assertEqual(k["selectie"], {"panden": None, "a_e": None, "werklijst": None,
+                                         "drempel": 8, "werklijst_min": 200, "werklijst_max": 500})
+        self.assertEqual(k["verrijking"], {"panden": None, "actief": [], "verrijkt": None})
+        self.assertEqual(k["controle"], {"totaal": None, "te_controleren": None,
+                                         "gecontroleerd": None})
+
+    def test_drempels_uit_config(self):
+        k = bd.kantoor("Delft", None, self.panden, 2,
+                       cfg(werklijst_min=300, werklijst_max=700, drempel=10))
+        self.assertEqual(k["selectie"]["drempel"], 10)
+        self.assertEqual(k["selectie"]["werklijst"], 1)
+        self.assertEqual((k["selectie"]["werklijst_min"], k["selectie"]["werklijst_max"]), (300, 700))
+
+    def test_ontbrekende_drempels_worden_null(self):
+        c = cfg()
+        del c["drempels"]
+        k = bd.kantoor("Delft", None, self.panden, 2, c)
+        self.assertIsNone(k["selectie"]["drempel"])
+        self.assertIsNone(k["selectie"]["werklijst"])
+        self.assertIsNone(k["selectie"]["werklijst_min"])
+
+
+class BouwPayload(unittest.TestCase):
+    """bouw_payload() op een tijdelijke data-map: overleeft geen data en nul leads."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.map = Path(self._tmp.name)
+        self._p = [mock.patch.object(bd, "DATA", self.map),
+                   mock.patch.object(bd, "load_config", lambda: cfg())]
+        for p in self._p:
+            p.start()
+
+    def tearDown(self):
+        for p in self._p:
+            p.stop()
+        self._tmp.cleanup()
+
+    def _schrijf(self, panden, bron=None):
+        pad = self.map / "panden_delft.json"
+        pad.write_text(json.dumps(panden), encoding="utf-8")
+        if bron is not None:
+            b = self.map / "panden_delft.bron.json"
+            b.write_text(json.dumps(bron), encoding="utf-8")
+            later = pad.stat().st_mtime + 1
+            os.utime(b, (later, later))
+
+    def test_geen_panden_bestand(self):
+        payload = bd.bouw_payload()
+        k = payload["kantoor"]
+        self.assertIsNone(k["ingest"]["vbo"])
+        self.assertIsNone(k["selectie"]["panden"])
+        self.assertIsNone(k["controle"]["totaal"])
+        self.assertEqual(payload["leads"], [])
+        self.assertIsNone(payload["bron"])
+        self.assertIn("panden_delft.json ontbreekt", payload["bron_reden"])
+        # Geen verzonnen nullen in de KPI's: onbekend is onbekend.
+        self.assertEqual([x["v"] for x in payload["kpi"]], ["onbekend"] * 4)
+        self.assertIn("onbekend", [f["val"] for f in payload["facts"]])
+        html = bd.render(payload)
+        self.assertIn('"kantoor":', html)
+
+    def test_onleesbaar_panden_bestand(self):
+        (self.map / "panden_delft.json").write_text("{kapot", encoding="utf-8")
+        payload = bd.bouw_payload()
+        self.assertIsNone(payload["kantoor"]["selectie"]["panden"])
+        self.assertIn("niet leesbaar", payload["bron_reden"])
+
+    def test_nul_leads(self):
+        self._schrijf([pand(1, 9, uitgesloten=True), pand(2, 9, categorieen=())])
+        payload = bd.bouw_payload()
+        self.assertEqual(payload["leads"], [])
+        self.assertEqual(payload["kantoor"]["controle"]["totaal"], 0)
+        self.assertEqual(payload["kantoor"]["selectie"]["panden"], 2)
+        feiten = {f["k"]: f["val"] for f in payload["facts"]}
+        self.assertEqual(feiten["Panden in proefselectie"], "0")
+        self.assertEqual(feiten["Score-index (/100)"], "onbekend")
+        self.assertEqual(feiten["Gem. oppervlakte"], "onbekend")
+        bd.render(payload)
+
+    def test_kantoor_en_kpi_tonen_dezelfde_werklijst(self):
+        self._schrijf([pand(i, 6 + i % 5) for i in range(30)],
+                      bron=[snap("Delft", "2026-08-04")])
+        payload = bd.bouw_payload()
+        kpi = int(payload["kpi"][3]["v"].replace(".", ""))
+        self.assertEqual(payload["kantoor"]["selectie"]["werklijst"], kpi)
+        self.assertEqual(payload["kantoor"]["controle"]["totaal"], len(payload["leads"]))
+        self.assertEqual(payload["kantoor"]["ingest"]["bron"], payload["bron"])
+
+
+class Landelijk(unittest.TestCase):
+    """Criterium 5: een handgeschreven landelijk blok gaat ongewijzigd en ongeformatteerd door."""
+
+    def test_nederland(self):
+        bron = [snap(f"Plaats{i:04d}", f"2026-{10 + i % 2:02d}-{1 + i % 28:02d}") for i in range(2500)]
+        k = {"gebied": "Nederland",
+             "ingest": {"bron": bron, "vbo": 9978773, "verouderd": False},
+             "selectie": {"panden": 3912408, "a_e": 387215, "werklijst": 1234567, "drempel": 8,
+                          "werklijst_min": 200, "werklijst_max": 500},
+             "verrijking": {"panden": 387215, "actief": [], "verrijkt": None},
+             "controle": {"totaal": 20, "te_controleren": 20, "gecontroleerd": None}}
+        payload = {"gebied": "Nederland", "bron": bron, "peildatum": bd.peildatum(bron),
+                   "peildatum_tip": "", "kantoor": k}
+        html = bd.render(payload)
+        # Ruwe getallen: de punten zet het script, met dezelfde regel als de KPI's.
+        self.assertIn('"werklijst": 1234567', html)
+        # De bron staat twee keer in de pagina: PAYLOAD.bron en PAYLOAD.kantoor.ingest.bron.
+        self.assertEqual(html.count('"ophaaldatum"'), 2 * 2500)
+
+
+class Pagina(unittest.TestCase):
+    """Het kantoor staat bovenaan, haakt in op PAYLOAD.kantoor en laadt niets van buiten."""
+
+    def test_plaats_en_aanhaakpunt(self):
+        t = bd.TEMPLATE
+        self.assertLess(t.index('<section class="pk" id="pk"'), t.index('<section class="kpis"'))
+        self.assertLess(t.index('</header>'), t.index('<section class="pk" id="pk"'))
+        self.assertIn('PK.start(document.getElementById("pk"), PAYLOAD.kantoor)', t)
+        self.assertIn("<canvas", t)
+
+    def test_kantoor_altijd_zichtbaar(self):
+        # Ayman bij de review: geen knop 'verberg kantoor', het kantoor staat er altijd.
+        t = bd.TEMPLATE
+        for weg in ('id="pkKnop"', "Verberg kantoor", "Toon kantoor", "aria-pressed",
+                    ".pk[hidden]", "toon(aan)", "root.hidden = "):
+            self.assertNotIn(weg, t)
+        sectie = t[t.index('<section class="pk"'):]
+        self.assertNotIn("hidden", sectie[:sectie.index(">")])
+
+    def test_niets_van_buiten(self):
+        t = bd.TEMPLATE.lower()
+        for verboden in ("<script src", "<link", "@import", "url(", "@font-face"):
+            self.assertNotIn(verboden, t)
+
+    def test_script_maakt_geen_zinnen(self):
+        # Nova, VA-31 criteria 2 en 4: de zinnen komen uit kantoor_teksten() in Python en
+        # staan op één plek. Het script toont PAYLOAD.kantoor.tekst en maakt zelf niets op.
+        t = bd.TEMPLATE
+        for weg in ("panden op de werklijst", "BAG opgehaald", "Geen extra bron actief",
+                    "wachten op visuele controle", "const REGELS", "const TEKST", "const UITLEG"):
+            self.assertNotIn(weg, t)
+        self.assertIn("data.tekst[id]", t)
+
+    def test_een_kantoorscript_zonder_ontwerppagina(self):
+        # Alleen het blok tussen BEGIN en het einde van PK, niet de 'Voor Ada'-notities of
+        # de voorbeeldcijfers (ECHT) van de ontwerppagina.
+        t = bd.TEMPLATE
+        self.assertEqual(t.count("BEGIN PIXELKANTOOR"), 1)
+        self.assertEqual(t.count("const PK = (() => {"), 1)
+        self.assertNotIn("const ECHT", t)
+        self.assertNotIn("<li>", t)
+        self.assertNotIn("Voor Ada", t)
+
+    def test_escape_sluit_de_uitleg(self):
+        self.assertIn('e.key === "Escape"', bd.TEMPLATE)
+
+
+def hard(tekst):
+    """Datums zoals _nl() ze geeft: harde spaties (VA-12)."""
+    return tekst.replace(" ", bd.NBSP)
+
+
+class Teksten(unittest.TestCase):
+    """VA-31 criteria 2, 3, 4 en 5: de exacte regel die elke medewerker toont."""
+
+    def setUp(self):
+        self.panden = [pand(1, 12), pand(2, 8), pand(3, 5),
+                       pand(4, 9, uitgesloten=True), pand(5, 10, categorieen=())]
+
+    def bel(self, k):
+        return {wie: (r["s"], r["bel"]) for wie, r in k["tekst"].items()}
+
+    def test_delft_augustus(self):
+        k = bd.kantoor("Delft", [snap("Delft", "2026-08-04")], self.panden, 20, cfg(werklijst_min=1))
+        self.assertEqual(self.bel(k), {
+            "ingest": ("werkt", "BAG opgehaald " + hard("4 aug 2026")),
+            "selectie": ("werkt", "2 panden op de werklijst"),
+            "verrijking": ("slaapt", "Geen extra bron actief"),
+            "controle": ("aandacht", "20 panden wachten op visuele controle"),
+        })
+        self.assertEqual(k["tekst"]["ingest"]["zin"],
+                         "Ingest heeft de BAG van Delft opgehaald op " + hard("4 aug 2026") + ": 15 verblijfsobjecten.")
+
+    def test_bron_ontbreekt(self):
+        k = bd.kantoor("Delft", None, self.panden, 2, cfg())
+        self.assertEqual(self.bel(k)["ingest"], ("aandacht", "Bron onbekend"))
+        self.assertNotIn("opgehaald op", k["tekst"]["ingest"]["zin"])
+
+    def test_onleesbare_datum(self):
+        k = bd.kantoor("Delft", [snap("Delft", "gisteren")], self.panden, 2, cfg())
+        self.assertEqual(self.bel(k)["ingest"], ("aandacht", "Ophaaldatum onbekend"))
+
+    def test_meerdere_woonplaatsen_verschillende_datums(self):
+        bron = [snap("Delft", "2026-08-04"), snap("Den Haag", "2026-11-06"),
+                snap("Rijswijk", "2026-09-15")]
+        k = bd.kantoor("Haaglanden", bron, self.panden, 2, cfg())
+        bel = k["tekst"]["ingest"]["bel"]
+        self.assertEqual(bel, f"BAG opgehaald 4{bd.NBSP}aug{bd.NBSP}–{bd.WJ}{bd.NBSP}6{bd.NBSP}nov{bd.NBSP}2026")
+        self.assertIn("tussen " + hard("4 aug") + " en " + hard("6 nov 2026"), k["tekst"]["ingest"]["zin"])
+
+    def test_bereik_over_een_jaargrens(self):
+        k = bd.kantoor("NL", [snap("A", "2025-12-30"), snap("B", "2026-01-02")], self.panden, 2, cfg())
+        self.assertIn(hard("30 dec 2025"), k["tekst"]["ingest"]["bel"])
+
+    def test_energielabel_uit_en_aan(self):
+        uit = bd.kantoor("Delft", None, self.panden, 2, cfg(energielabel=False))
+        self.assertEqual(self.bel(uit)["verrijking"], ("slaapt", "Geen extra bron actief"))
+        aan = bd.kantoor("Delft", None, self.panden, 2, cfg(energielabel=True))
+        self.assertEqual(self.bel(aan)["verrijking"], ("aandacht", "Energielabel nog niet opgehaald"))
+        verrijkt = [pand(1, 12, energielabel_status="ontbreekt"), pand(2, 8, energielabel_status="G"), pand(3, 5)]
+        k = bd.kantoor("Delft", None, verrijkt, 2, cfg(energielabel=True))
+        self.assertEqual(self.bel(k)["verrijking"], ("werkt", "Energielabel bij 2 panden"))
+
+    def test_nul_leads(self):
+        k = bd.kantoor("Delft", None, self.panden, 0, cfg())
+        self.assertEqual(self.bel(k)["controle"], ("leeg", "Geen panden om te controleren"))
+
+    def test_werklijst_onder_de_gebruikelijke(self):
+        k = bd.kantoor("Delft", None, self.panden, 2, cfg())
+        self.assertEqual(self.bel(k)["selectie"], ("aandacht", "2 op de werklijst: onder de gebruikelijke 200–500"))
+        self.assertIn("De werklijst wordt wel gemaakt", k["tekst"]["selectie"]["zin"])
+        self.assertNotIn("ondergrens", json.dumps(k["tekst"], ensure_ascii=False))
+
+    def test_geen_data(self):
+        k = bd.kantoor("Delft", None, None, None, cfg())
+        self.assertEqual({w: s for w, (s, _) in self.bel(k).items()},
+                         {"ingest": "leeg", "selectie": "leeg", "verrijking": "leeg", "controle": "leeg"})
+        self.assertEqual(k["tekst"]["ingest"]["bel"], "Nog geen BAG opgehaald")
+
+    def test_onbekend_getal_is_onbekend(self):
+        self.assertEqual(bd.nl_getal(None), "onbekend")
+        self.assertEqual(bd.nl_getal(1234567), "1.234.567")
+        self.assertEqual(bd.nl_getal(0), "0")
+
+    def test_nederland(self):
+        bron = [snap(f"Plaats{i:04d}", f"2026-{10 + i % 2:02d}-{1 + i % 28:02d}") for i in range(2500)]
+        k = {"gebied": "Nederland",
+             "ingest": {"bron": bron, "vbo": 9999826, "verouderd": False},
+             "selectie": {"panden": 3912408, "a_e": 387215, "werklijst": 1234567, "drempel": 8,
+                          "werklijst_min": 200, "werklijst_max": 500},
+             "verrijking": {"panden": 387215, "actief": [], "verrijkt": None},
+             "controle": {"totaal": 500, "te_controleren": 500, "gecontroleerd": None}}
+        t = bd.kantoor_teksten(k)
+        # Eén datumregel voor 2.500 woonplaatsen, en getallen met duizendtallenpunten.
+        self.assertEqual(t["ingest"]["bel"], f"BAG opgehaald 1{bd.NBSP}okt{bd.NBSP}–{bd.WJ}{bd.NBSP}28{bd.NBSP}nov{bd.NBSP}2026")
+        self.assertIn("9.999.826 verblijfsobjecten", t["ingest"]["zin"])
+        self.assertEqual(t["selectie"]["bel"], "1.234.567 panden op de werklijst")
+        self.assertEqual(t["controle"]["bel"], "500 panden wachten op visuele controle")
+        self.assertIn("Nederland", t["selectie"]["uitleg"])
+
+
+@unittest.skipUnless(DELFT_PANDEN.is_file(), f"{DELFT_PANDEN} ontbreekt; echte Delft-cijfers overgeslagen")
+class EchteDelftCijfers(unittest.TestCase):
+    def test_kantoor_uit_de_echte_payload(self):
+        payload = bd.bouw_payload()
+        k = payload["kantoor"]
+        self.assertEqual(k["gebied"], "Delft")
+        self.assertEqual(k["ingest"]["vbo"], 61993)
+        self.assertEqual(k["selectie"]["panden"], 24008)
+        self.assertEqual(k["selectie"]["a_e"], 2346)
+        self.assertEqual(k["selectie"]["werklijst"], 1668)
+        self.assertEqual(k["selectie"]["werklijst"], int(payload["kpi"][3]["v"].replace(".", "")))
+        self.assertEqual(k["controle"]["totaal"], len(payload["leads"]))
+        self.assertEqual(k["ingest"]["bron"], payload["bron"])
+        # De regels zoals Levrai ze op de pagina leest.
+        self.assertEqual(k["tekst"]["selectie"]["bel"], "1.668 panden op de werklijst")
+        self.assertEqual(k["tekst"]["verrijking"]["bel"], "Geen extra bron actief")
+        self.assertEqual(k["tekst"]["controle"]["bel"],
+                         f"{len(payload['leads'])} panden wachten op visuele controle")
+
+
+if __name__ == "__main__":
+    unittest.main()
