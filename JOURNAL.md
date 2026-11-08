@@ -34,4 +34,16 @@ did not know this morning.
   the failure; the other 49 tests pass. Fix: the test should watch only what the pipeline can
   write (Vera, small story).
 - **Pixel office (VA-30/VA-31)** for the dashboard, at Ayman's request; Lumi is designing it.
-- GitHub remote `LevraiGroup/vastgoed` (public, empty) is set as origin; nothing pushed yet.
+- GitHub remote `LevraiGroup/vastgoed` is set as origin; first push was `16490c9`.
+
+## 2026-11-07 and 11-08
+
+- **Committed and pushed:** VA-44 `61f21cc`, VA-32 `15552d0`, VA-46 + VA-10 `9efe917`. The
+  Railway deploy still fails; the log is in an account this laptop's CLI cannot see.
+- **Downloaded:** the GeoPackage (7,8 GB); VA-33's schema note is in `docs/gpkg_schema.md`, not
+  yet checked or committed.
+- **Decided by Ayman:** 500 leads a month, the 25 largest CBS municipalities, one shared login,
+  the repo to go private, the office always visible, a 3D office in the Fortuna HQ style, and
+  KVK / EP-online / Kadaster lookups by a button per pand, capped at EUR 2,00 a day in total.
+- **Got in the way:** drive C: filled to 100%, ending several sessions and stopping every agent.
+- **Handover:** the full state is in `projects/VASTGOED/HANDOFF.md` in the HQ.
