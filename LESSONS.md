@@ -40,3 +40,11 @@ struck through with the reason, never deleted.
   `railway.json` is closed to new services (hard cutoff 2026-12-01): configure the build in
   `railpack.json`. The deploy serves the committed LF blob, so compare its hash with
   `git show HEAD:<file>`, not the CRLF checkout. *(2026-11-07, Rex and Vera, VA-46)*
+- **A line the page shows is built and tested in Python, never formatted in template
+  JavaScript.** A second date or number formatter in the script drifts from `nl_datum()` with
+  no test turning red; `kantoor_teksten()` returns the finished line and the script only places
+  it. Check a ported copy table mechanically (run the old JS table and the new Python on the same
+  inputs, every state), not by eye. *(2026-11-08, Vera, VA-31)*
+- **A WFS figure in the record has a date; compare only figures of the same date.** The older
+  9.978.773 was labelled as checked on 11-06, and VA-33 reported a 19.683 "unexplained" gap
+  that was really 1.370. *(2026-11-08, Vera, VA-33)*
