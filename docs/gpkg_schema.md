@@ -84,6 +84,7 @@ snapshot against this file on the 61.946 Delft VBO's present in both (all of the
 | `postcode` | `postcode` | 0 | NULL where the WFS has `""` (1.649 rows) |
 | `woonplaats` | `woonplaats_naam` | 0 | **Name differs** |
 | `_x`, `_y` | parsed from `geom` | 0 | Largest difference 0,0 m |
+| `gemeentecode` | `bronhouder_identificatie` | n/a | The CBS gemeentecode without `GM`, 4 digits; 342 codes in the 2026-11-01 file, the same set as CBS 03759ned (VA-34, VA-65) |
 
 The "Differ" counts exclude NULL against `""`. `selectie.py` reads those fields with `or ""`, so
 NULL is harmless there. VA-34 should still store `""` so a snapshot has the WFS's shape.

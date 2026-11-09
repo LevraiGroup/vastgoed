@@ -79,3 +79,9 @@ struck through with the reason, never deleted.
 - **Refetching from CBS into scratch and comparing byte for byte proves "fetched, not typed".**
   CBS names keep their own suffixes ("Utrecht (gemeente)"); stripping them would be typing.
   *(2026-11-09, Vera, VA-65)*
+- **Measure memory on Windows with `K32GetProcessMemoryInfo` and declare its `argtypes`; without
+  them the call quietly returns nothing.** The national ingest of 9.998.456 VBO's then measured
+  26 MB peak. *(2026-11-09, Vera, VA-34)*
+- **A test that writes its own expected value proves nothing.** VA-34's Delft-gemeente test fed
+  0503 in itself; a real-data test that skips without `bag_nl_*.sqlite` checks the real file.
+  *(2026-11-09, Vera, VA-34)*
