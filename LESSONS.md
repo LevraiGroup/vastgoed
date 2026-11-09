@@ -85,3 +85,7 @@ struck through with the reason, never deleted.
 - **A test that writes its own expected value proves nothing.** VA-34's Delft-gemeente test fed
   0503 in itself; a real-data test that skips without `bag_nl_*.sqlite` checks the real file.
   *(2026-11-09, Vera, VA-34)*
+- **A streaming rewrite must match the in-memory route for every input that route took, not only
+  the one being measured.** Several snapshots that share a pand merged in memory, and the first
+  stream dropped them; it now merges per pand-ID in snapshot order. National run: 9.998.456 VBO's,
+  6.568.913 panden, peak 174 MB, 832 s. *(2026-11-09, Vera, VA-36)*

@@ -459,44 +459,103 @@ def stroom(
         return
 
     with closing(_open_alleen_lezen(snapshot.pad)) as conn:
-        indeling = _kolomindeling(conn, snapshot, kolommen)
+        indeling, sql, parameters, filterwaarde = _vraag(conn, snapshot, kolommen, woonplaats_id)
         velden = tuple(indeling)
-        selectie = ", ".join(_quote(k) for k in indeling.values())
-        sql = f"SELECT {selectie} FROM vbo"
-        parameters: tuple = ()
-        filterveld, filterwaarde = None, None
-        if woonplaats_id is not None:
-            filterveld, filterwaarde = "woonplaats_identificatie", woonplaats_id
-        elif snapshot.landelijk and snapshot.woonplaats != NEDERLAND:
-            filterveld, filterwaarde = "woonplaats", snapshot.woonplaats
-        filteren = filterveld is not None
-        if filteren:
-            if filterveld not in indeling:
-                raise SnapshotFout(f"{snapshot.pad.name}: geen kolom voor het veld {filterveld}.")
-            voorwaarde = f" WHERE {_quote(indeling[filterveld])} = ?"
-            parameters = (filterwaarde,)
-            if filterveld == "woonplaats" and "woonplaats_identificatie" in indeling:
-                id_kolom = _quote(indeling["woonplaats_identificatie"])
-                ids = [
-                    r[0]
-                    for r in conn.execute(
-                        f"SELECT DISTINCT {id_kolom} FROM vbo{voorwaarde}", parameters
-                    )
-                ]
-                if len(ids) > 1:
-                    raise SnapshotFout(
-                        f"{snapshot.pad.name}: de naam {filterwaarde!r} hoort bij meer dan één "
-                        f"woonplaats ({', '.join(sorted(map(str, ids)))}). Kies met woonplaats_id."
-                    )
-            sql += voorwaarde
         sql += " ORDER BY rowid"  # kost geen sortering: tabel en index liggen al op rowid
 
         gevonden = False
         for rij in conn.execute(sql, parameters):
             gevonden = True
             yield dict(zip(velden, rij))
-    if filteren and not gevonden:
+    if filterwaarde is not None and not gevonden:
         raise SnapshotFout(f"{snapshot.pad.name} bevat geen rijen voor {filterwaarde!r}.")
+
+
+def _vraag(
+    conn: sqlite3.Connection,
+    snapshot: Snapshot,
+    kolommen: Mapping[str, str] | None,
+    woonplaats_id: str | None,
+) -> tuple[dict[str, str], str, tuple, str | None]:
+    """(indeling, SELECT zonder ORDER BY, parameters, filterwaarde of None) voor een snapshot."""
+    indeling = _kolomindeling(conn, snapshot, kolommen)
+    selectie = ", ".join(_quote(k) for k in indeling.values())
+    sql = f"SELECT {selectie} FROM vbo"
+    parameters: tuple = ()
+    filterveld, filterwaarde = None, None
+    if woonplaats_id is not None:
+        filterveld, filterwaarde = "woonplaats_identificatie", woonplaats_id
+    elif snapshot.landelijk and snapshot.woonplaats != NEDERLAND:
+        filterveld, filterwaarde = "woonplaats", snapshot.woonplaats
+    filteren = filterveld is not None
+    if filteren:
+        if filterveld not in indeling:
+            raise SnapshotFout(f"{snapshot.pad.name}: geen kolom voor het veld {filterveld}.")
+        voorwaarde = f" WHERE {_quote(indeling[filterveld])} = ?"
+        parameters = (filterwaarde,)
+        if filterveld == "woonplaats" and "woonplaats_identificatie" in indeling:
+            id_kolom = _quote(indeling["woonplaats_identificatie"])
+            ids = [
+                r[0]
+                for r in conn.execute(
+                    f"SELECT DISTINCT {id_kolom} FROM vbo{voorwaarde}", parameters
+                )
+            ]
+            if len(ids) > 1:
+                raise SnapshotFout(
+                    f"{snapshot.pad.name}: de naam {filterwaarde!r} hoort bij meer dan één "
+                    f"woonplaats ({', '.join(sorted(map(str, ids)))}). Kies met woonplaats_id."
+                )
+        sql += voorwaarde
+    return indeling, sql, parameters, (filterwaarde if filteren else None)
+
+
+# Een landelijke snapshot (2,9 GB) sorteren op pand kost tijdelijke ruimte van dezelfde orde.
+# Die gaat naar VASTGOED_SQLITE_TMP (of de map van de snapshot), nooit naar de systeem-TEMP op C:.
+VAR_TMP = "VASTGOED_SQLITE_TMP"
+
+
+def stroom_per_pand(
+    snapshot: Snapshot,
+    kolommen: Mapping[str, str] | None = None,
+    woonplaats_id: str | None = None,
+    tmp_map: Path | None = None,
+) -> Iterator[list[dict]]:
+    """
+    Geef de VBO's van een SQLite-snapshot pand voor pand (VA-36): telkens de lijst rijen van
+    één pandidentificatie, binnen het pand in de volgorde van de ingest (de eerste VBO is
+    dezelfde als in aggregeer()). De panden komen op volgorde van hun ID. Er staat nooit
+    meer dan één pand tegelijk in het geheugen.
+    """
+    if snapshot.soort != "sqlite":
+        raise SnapshotFout(f"{snapshot.pad.name}: alleen een SQLite-snapshot kan per pand stromen.")
+    tmp = Path(tmp_map or os.environ.get(VAR_TMP) or snapshot.pad.parent)
+    with closing(_open_alleen_lezen(snapshot.pad)) as conn:
+        conn.execute("PRAGMA temp_store = FILE")
+        pad_sql = tmp.resolve().as_posix().replace("'", "''")  # een ' in het pad breekt de PRAGMA niet
+        conn.execute(f"PRAGMA temp_store_directory = '{pad_sql}'")
+        conn.execute("PRAGMA cache_size = -65536")  # 64 MB paginacache
+        indeling, sql, parameters, filterwaarde = _vraag(conn, snapshot, kolommen, woonplaats_id)
+        if "pandidentificatie" not in indeling:
+            raise SnapshotFout(f"{snapshot.pad.name}: geen kolom voor pandidentificatie.")
+        velden = tuple(indeling)
+        pand_kolom = _quote(indeling["pandidentificatie"])
+        sql += f" ORDER BY {pand_kolom}, rowid"
+        huidig, rijen = None, []
+        for waarden in conn.execute(sql, parameters):
+            rij = dict(zip(velden, waarden))
+            pand = rij["pandidentificatie"]
+            if not pand:
+                continue  # een VBO zonder pand hoort bij geen lead (zoals in aggregeer())
+            if pand != huidig and rijen:
+                yield rijen
+                rijen = []
+            huidig = pand
+            rijen.append(rij)
+        if rijen:
+            yield rijen
+        elif filterwaarde is not None:
+            raise SnapshotFout(f"{snapshot.pad.name} bevat geen rijen voor {filterwaarde!r}.")
 
 
 def lees(snapshot: Snapshot) -> list[dict]:

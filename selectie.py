@@ -14,6 +14,7 @@ essentieel, anders missen we juist de gemengde panden die deze opdracht zoekt.
 from __future__ import annotations
 
 import hashlib
+import heapq
 import json
 import re
 from collections import defaultdict
@@ -453,6 +454,9 @@ def verwerk(
     if gekozen is None:
         gekozen = kies_snapshots(woonplaatsen, cfg, snapshot)
     eis_ophaaldatum(gekozen)
+    if all(s.soort == "sqlite" for s in gekozen):
+        # VA-36: een SQLite-snapshot gaat pand voor pand; het geheugen houdt alleen de uitkomst.
+        return list(stroom_panden(gekozen, cfg, label))
     rows: list[dict] = []
     peildatum: dict[str, str] = {}  # BAG-pand-ID -> ophaaldatum van zijn snapshot
     for snap in gekozen:
@@ -465,30 +469,78 @@ def verwerk(
         rows += snap_rows
     panden = aggregeer(rows)
     verrijking = laad_verrijking(label)
-    kort = ("".join(c for c in label if c.isalnum())[:2] or "NL").upper()
-
+    kort = lead_kort(label)
     for pand in panden:
-        v = verrijking.get(pand["bag_pand_id"])
-        if v:
-            pand.update(v)  # energielabel/koopsom/kvk-velden voor scoring
-        pand["uitsluitredenen"] = uitsluiten(pand, cfg)
-        pand["uitgesloten"] = bool(pand["uitsluitredenen"])
-        pand["categorieen"] = categoriseer(pand, cfg)
-        pand["pandcategorie"] = pand["categorieen"][0] if pand["categorieen"] else ""
-        score, redenen = scoor(pand, pand["categorieen"], cfg)
-        pand["leadscore"] = score
-        pand["score100"] = naar_100(score, cfg)
-        pand["score_opbouw"] = score_opbouw(pand, cfg)
-        pand["selectiereden"] = "; ".join(redenen)
-        pand["lead_id"] = f"LEV-{kort}-{pand['bag_pand_id'][-8:]}"
-        pand["bron"] = "PDOK BAG WFS v2_0"
-        pand["datapeildatum"] = peildatum[pand["bag_pand_id"]]
-        pand["visuele_controle"] = False
-        pand["beoordeling"] = ""
-        pand["eerder_geselecteerd"] = False
-        pand["laatst_beoordeeld"] = ""
-
+        verwerk_pand(pand, cfg, verrijking, kort, peildatum[pand["bag_pand_id"]])
     return panden
+
+
+def lead_kort(label: str) -> str:
+    """De twee letters in het lead-ID: 'DE' voor Delft."""
+    return ("".join(c for c in label if c.isalnum())[:2] or "NL").upper()
+
+
+def verwerk_pand(pand: dict, cfg: dict, verrijking: dict, kort: str, datapeildatum: str) -> dict:
+    """Uitsluiten, categoriseren en scoren van één geaggregeerd pand (beide routes, VA-36)."""
+    v = verrijking.get(pand["bag_pand_id"])
+    if v:
+        pand.update(v)  # energielabel/koopsom/kvk-velden voor scoring
+    pand["uitsluitredenen"] = uitsluiten(pand, cfg)
+    pand["uitgesloten"] = bool(pand["uitsluitredenen"])
+    pand["categorieen"] = categoriseer(pand, cfg)
+    pand["pandcategorie"] = pand["categorieen"][0] if pand["categorieen"] else ""
+    score, redenen = scoor(pand, pand["categorieen"], cfg)
+    pand["leadscore"] = score
+    pand["score100"] = naar_100(score, cfg)
+    pand["score_opbouw"] = score_opbouw(pand, cfg)
+    pand["selectiereden"] = "; ".join(redenen)
+    pand["lead_id"] = f"LEV-{kort}-{pand['bag_pand_id'][-8:]}"
+    pand["bron"] = "PDOK BAG WFS v2_0"
+    pand["datapeildatum"] = datapeildatum
+    pand["visuele_controle"] = False
+    pand["beoordeling"] = ""
+    pand["eerder_geselecteerd"] = False
+    pand["laatst_beoordeeld"] = ""
+    return pand
+
+
+def stroom_panden(
+    gekozen: list[snapshots.Snapshot],
+    cfg: dict,
+    label: str,
+    woonplaats_id: str | None = None,
+    kort: str | None = None,
+):
+    """
+    Gescoorde panden uit SQLite-snapshots, één voor één (VA-36). Er staat nooit meer dan één
+    pand aan VBO's in het geheugen; de uitkomst is per pand dezelfde als bij verwerk() op JSON.
+    De panden komen op volgorde van hun BAG-ID.
+
+    Bij meer snapshots (een provincie, of de landelijke snapshot per woonplaats) kan één pand
+    in meer snapshots VBO's hebben. Die worden samengevoegd in de volgorde van 'gekozen', net
+    als de JSON-route de rijen achter elkaar zet: de eerste VBO en de datapeildatum komen uit de
+    eerste snapshot waarin het pand voorkomt.
+    """
+    eis_ophaaldatum(gekozen)
+    verrijking = laad_verrijking(label)
+    kort = kort or lead_kort(label)
+
+    def per_snapshot(i: int, snap: snapshots.Snapshot):
+        for vbos in snapshots.stroom_per_pand(snap, woonplaats_id=woonplaats_id):
+            yield vbos[0]["pandidentificatie"], i, vbos
+
+    stromen = [per_snapshot(i, s) for i, s in enumerate(gekozen)]
+    huidig, eerste_i, vbos = None, None, []
+    # Gesorteerd op (pand-ID, snapshotnummer): gelijke panden komen achter elkaar, eerste snapshot eerst.
+    for pand_id, i, rijen in heapq.merge(*stromen, key=lambda x: (x[0], x[1])):
+        if pand_id != huidig and vbos:
+            yield verwerk_pand(aggregeer(vbos)[0], cfg, verrijking, kort, gekozen[eerste_i].ophaaldatum)
+            vbos = []
+        if pand_id != huidig:
+            huidig, eerste_i = pand_id, i
+        vbos.extend(rijen)
+    if vbos:
+        yield verwerk_pand(aggregeer(vbos)[0], cfg, verrijking, kort, gekozen[eerste_i].ophaaldatum)
 
 
 def mastervolgorde(pand: dict) -> tuple[int, str]:
