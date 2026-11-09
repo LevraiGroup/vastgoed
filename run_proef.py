@@ -21,6 +21,7 @@ from selectie import (
     DATA, kies_snapshots, load_config, mastervolgorde, verwerk, werklijst,
     werklijst_maand, werklijst_waarschuwing,
 )
+from selectie import controleer_drempels, nl_tal
 from snapshots import SnapshotFout
 
 BASE = Path(__file__).parent
@@ -38,6 +39,12 @@ def main() -> int:
     )
     args = parser.parse_args()
     cfg = load_config()
+    # VA-41: een onmogelijke drempel stopt de run voordat er iets wordt geschreven.
+    fouten = controleer_drempels(cfg)
+    if fouten:
+        for fout in fouten:
+            print(f"FOUT in config.yaml: {fout}", file=sys.stderr)
+        return 2
     label, woonplaatsen = resolve(cfg)
     sl = slug(label)
     try:
@@ -55,10 +62,10 @@ def main() -> int:
     print(f"\n{'=' * 78}")
     print(f"TECHNISCHE VOORRAAD - {label.upper()}")
     print(f"{'=' * 78}")
-    print(f"Verblijfsobjecten ingelezen : {sum(p['aantal_vbo'] for p in panden):,}")
-    print(f"Unieke BAG-panden           : {len(panden):,}")
-    print(f"Uitgesloten                 : {len(panden) - len(actief):,}")
-    print(f"Binnen categorie A-E        : {len(in_cat):,}")
+    print(f"Verblijfsobjecten ingelezen : {nl_tal(sum(p['aantal_vbo'] for p in panden))}")
+    print(f"Unieke BAG-panden           : {nl_tal(len(panden))}")
+    print(f"Uitgesloten                 : {nl_tal(len(panden) - len(actief))}")
+    print(f"Binnen categorie A-E        : {nl_tal(len(in_cat))}")
 
     print(f"\n{'Categorie':<12} {'Aantal':>8}   Omschrijving")
     print("-" * 78)
@@ -71,7 +78,7 @@ def main() -> int:
     }
     for cat, label in labels.items():
         n = sum(1 for p in actief if cat in p["categorieen"])
-        print(f"{cat:<12} {n:>8,}   {label}")
+        print(f"{cat:<12} {nl_tal(n):>8}   {label}")
 
     print("\nUitsluitingen naar reden:")
     redenen: dict[str, int] = {}
@@ -81,7 +88,7 @@ def main() -> int:
             sleutel = " ".join(sleutel.split()[:4])
             redenen[sleutel] = redenen.get(sleutel, 0) + 1
     for r, n in sorted(redenen.items(), key=lambda kv: -kv[1]):
-        print(f"  {n:>7,}  {r}")
+        print(f"  {nl_tal(n):>7}  {r}")
 
     # Proefresultaat: 20 hoogst scorende panden binnen een categorie.
     top = sorted(in_cat, key=mastervolgorde)[:20]
@@ -92,9 +99,9 @@ def main() -> int:
     for i, p in enumerate(top, 1):
         print(f"\n{i:>2}. {p['hoofdadres']}   [score {p['leadscore']}, cat {'+'.join(p['categorieen'])}]")
         print(f"    BAG-pand-ID : {p['bag_pand_id']}   bouwjaar {p['bouwjaar']}   {p['pandstatus']}")
-        print(f"    Omvang      : {p['aantal_vbo']} vbo, {p['aantal_adressen']} adressen, {p['totale_oppervlakte']:,.0f} m2")
+        print(f"    Omvang      : {p['aantal_vbo']} vbo, {p['aantal_adressen']} adressen, {nl_tal(p['totale_oppervlakte'])} m2")
         functies = ", ".join(
-            f"{g}: {n}x {p['opp_per_functie'].get(g, 0):,.0f} m2"
+            f"{g}: {n}x {nl_tal(p['opp_per_functie'].get(g, 0))} m2"
             for g, n in sorted(p["aantal_per_functie"].items())
         )
         print(f"    Functies    : {functies}")
@@ -162,10 +169,10 @@ def main() -> int:
 
     print(f"\n{'=' * 78}")
     print(f"Proefresultaat  -> {proef_csv.relative_to(BASE)}  (20 panden)")
-    print(f"Mastervoorraad  -> {master_csv.relative_to(BASE)}  ({len(in_cat):,} panden)")
+    print(f"Mastervoorraad  -> {master_csv.relative_to(BASE)}  ({nl_tal(len(in_cat))} panden)")
     print(
-        f"Werklijst       -> {werklijst_csv.relative_to(BASE)}  ({len(lijst):,} van "
-        f"{n_geschikt:,} panden met leadscore >= {cfg['drempels']['score_min_voor_werklijst']})"
+        f"Werklijst       -> {werklijst_csv.relative_to(BASE)}  ({nl_tal(len(lijst))} van "
+        f"{nl_tal(n_geschikt)} panden met leadscore >= {cfg['drempels']['score_min_voor_werklijst']})"
     )
     for s in gekozen:
         print(f"Snapshot        -> {s.omschrijving()}")

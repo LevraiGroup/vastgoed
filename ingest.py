@@ -27,6 +27,7 @@ import yaml
 
 import snapshots
 from gebieden import resolve, slug
+from selectie import nl_tal
 
 BASE = Path(__file__).parent
 CACHE = BASE / "data"
@@ -162,7 +163,7 @@ def _pagineer(
             features.append(props)
 
         start += len(batch)
-        print(f"    {label}: {start:,}/{total:,}", end="\r", flush=True)
+        print(f"    {label}: {nl_tal(start)}/{nl_tal(total)}", end="\r", flush=True)
 
     return features
 
@@ -184,16 +185,16 @@ def _partitioneer(
     if aantal >= PAGINATIE_PLAFOND:
         if len(prefix) >= 4:
             raise RuntimeError(
-                f"Postcode {prefix} heeft {aantal:,} objecten en kan niet verder "
+                f"Postcode {prefix} heeft {nl_tal(aantal)} objecten en kan niet verder "
                 "worden gesplitst. Gebruik de BAG GeoPackage voor dit gebied."
             )
-        print(f"  {'  ' * diepte}postcode {prefix}* = {aantal:,} -> splitsen")
+        print(f"  {'  ' * diepte}postcode {prefix}* = {nl_tal(aantal)} -> splitsen")
         uit: list[dict] = []
         for cijfer in "0123456789":
             uit += _partitioneer(session, cfg, woonplaats, prefix + cijfer, diepte + 1)
         return uit
 
-    print(f"  {'  ' * diepte}postcode {prefix}* = {aantal:,}")
+    print(f"  {'  ' * diepte}postcode {prefix}* = {nl_tal(aantal)}")
     return _pagineer(session, cfg, filter_xml, aantal, f"{prefix}*")
 
 
@@ -211,12 +212,12 @@ def fetch_woonplaats(woonplaats: str, cfg: dict) -> list[dict]:
     session.headers["User-Agent"] = "Levrai-Pandenselectie/1.0"
 
     verwacht = hit_count(session, wfs_url, laag, FILTER_TMPL.format(woonplaats=woonplaats))
-    print(f"[{woonplaats}] WFS meldt {verwacht:,} verblijfsobjecten")
+    print(f"[{woonplaats}] WFS meldt {nl_tal(verwacht)} verblijfsobjecten")
 
     # Veiligheidscontrole: filter genegeerd -> heel NL.
     if verwacht > NL_TOTAAL_INDICATIE:
         raise RuntimeError(
-            f"Filter lijkt genegeerd ({verwacht:,} treffers = heel NL). Ingest afgebroken."
+            f"Filter lijkt genegeerd ({nl_tal(verwacht)} treffers = heel NL). Ingest afgebroken."
         )
 
     features: list[dict] = []
@@ -228,7 +229,7 @@ def fetch_woonplaats(woonplaats: str, cfg: dict) -> list[dict]:
     try:
         n_geen_pc = hit_count(session, wfs_url, laag, geen_pc_filter)
         if n_geen_pc:
-            print(f"  zonder postcode = {n_geen_pc:,}")
+            print(f"  zonder postcode = {nl_tal(n_geen_pc)}")
             features += _pagineer(session, cfg, geen_pc_filter, n_geen_pc, "geen-pc")
     except requests.RequestException as exc:
         print(f"  ! partitie zonder postcode overgeslagen ({exc.__class__.__name__})")
@@ -242,7 +243,7 @@ def fetch_woonplaats(woonplaats: str, cfg: dict) -> list[dict]:
     features = list(uniek.values())
 
     dekking = len(features) / verwacht * 100 if verwacht else 0.0
-    print(f"\n[{woonplaats}] {len(features):,} unieke VBO's ({dekking:.1f}% van {verwacht:,})")
+    print(f"\n[{woonplaats}] {nl_tal(len(features))} unieke VBO's ({dekking:.1f}% van {nl_tal(verwacht)})")
     if dekking < 95.0:
         print(f"  ! LET OP: dekking onder 95%, controleer partitionering")
 

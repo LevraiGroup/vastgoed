@@ -112,8 +112,8 @@ def aggregeer(rows: list[dict]) -> list[dict]:
                 "vbo_ids": sorted(v.get("identificatie", "") for v in vbos),
                 "aantal_vbo": len(vbos),
                 "gebruiksdoelen": sorted(alle_doelen),
-                "opp_per_functie": {k: round(v, 1) for k, v in opp_per_functie.items()},
-                "aantal_per_functie": dict(aantal_per_functie),
+                "opp_per_functie": {k: round(opp_per_functie[k], 1) for k in sorted(opp_per_functie)},
+                "aantal_per_functie": {k: aantal_per_functie[k] for k in sorted(aantal_per_functie)},
                 "totale_oppervlakte": round(sum(float(v.get("oppervlakte") or 0) for v in vbos), 1),
                 "x": eerste.get("_x"),
                 "y": eerste.get("_y"),
@@ -386,7 +386,8 @@ def laad_verrijking(label: str) -> dict[str, dict]:
     """Lees de bron-verrijking (energielabel e.d.) van dit doelgebied uit, indien aanwezig."""
     f = DATA / f"verrijking_{slug(label)}.json"
     if f.exists():
-        return json.load(open(f, encoding="utf-8"))
+        with open(f, encoding="utf-8") as fh:
+            return json.load(fh)
     return {}
 
 
@@ -558,9 +559,44 @@ def werklijst_waarschuwing(aantal_geschikt: int, cfg: dict) -> str | None:
     )
 
 
-def _nl(n: int) -> str:
-    """Geheel getal met punt als duizendtalscheiding: 1668 -> '1.668'."""
-    return f"{n:,}".replace(",", ".")
+def _heel_getal(waarde) -> bool:
+    return isinstance(waarde, int) and not isinstance(waarde, bool)
+
+
+def controleer_drempels(cfg: dict) -> list[str]:
+    """
+    Fouten in drempels.* die een lege of onzinnige werklijst zouden geven (VA-41).
+    Een lege lijst betekent: in orde. Elke melding noemt de sleutel en zijn waarde.
+    """
+    drempels = cfg.get("drempels") or {}
+    schaal = (cfg.get("score") or {}).get("schaal_max")
+    mn, mx = drempels.get("werklijst_min"), drempels.get("werklijst_max")
+    score = drempels.get("score_min_voor_werklijst")
+    fouten = []
+    if not _heel_getal(mn):
+        fouten.append(f"drempels.werklijst_min = {mn!r} is geen heel getal")
+    elif mn < 0:
+        fouten.append(f"drempels.werklijst_min = {mn} is kleiner dan 0")
+    if not _heel_getal(mx):
+        fouten.append(f"drempels.werklijst_max = {mx!r} is geen heel getal")
+    elif mx < 1:
+        fouten.append(f"drempels.werklijst_max = {mx} is kleiner dan 1")
+    if _heel_getal(mn) and _heel_getal(mx) and mn > mx:
+        fouten.append(f"drempels.werklijst_min = {mn} is groter dan drempels.werklijst_max = {mx}")
+    if isinstance(score, bool) or not isinstance(score, (int, float)) or score != score:  # NaN != NaN
+        fouten.append(f"drempels.score_min_voor_werklijst = {score!r} is geen getal")
+    elif isinstance(schaal, (int, float)) and not isinstance(schaal, bool) and score > schaal:
+        fouten.append(f"drempels.score_min_voor_werklijst = {score} is hoger dan score.schaal_max = "
+                      f"{schaal}: geen pand kan die score halen")
+    return fouten
+
+
+def nl_tal(n: float) -> str:
+    """Getal met punt als duizendtalscheiding, afgerond op een heel getal: 1668 -> '1.668'."""
+    return f"{round(n):,}".replace(",", ".")
+
+
+_nl = nl_tal  # oude naam, blijft werken
 
 
 def werklijst_maand(gekozen: list[snapshots.Snapshot]) -> str:

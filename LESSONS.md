@@ -48,3 +48,12 @@ struck through with the reason, never deleted.
 - **A WFS figure in the record has a date; compare only figures of the same date.** The older
   9.978.773 was labelled as checked on 11-06, and VA-33 reported a 19.683 "unexplained" gap
   that was really 1.370. *(2026-11-08, Vera, VA-33)*
+- **Check "is it deterministic?" under two `PYTHONHASHSEED` values, not by running twice.** The
+  key order of a dict filled from a set varied per process: `panden_delft.json` had another
+  SHA-256 per seed while the CSVs stayed equal. *(2026-11-09, Vera, VA-42)*
+- **A scratch copy can carry other stories' uncommitted work.** Build the `design/index.html`
+  for a commit from HEAD plus only that commit's files, in a clean worktree, after
+  `run_proef.py`. *(2026-11-09, Vera, VA-42/VA-47)*
+- **A config check that names the key and its value stops a typo before anything is written.**
+  `NaN` passes `isinstance(x, float)`; compare `x != x`. *(2026-11-09, Vera, VA-41)*
+- VA-24 and VA-43 taught nothing new beyond their criteria (stated plainly, as the DoD asks).
