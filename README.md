@@ -121,6 +121,26 @@ Alle grenswaarden en scoregewichten staan ook in `config.yaml` en zijn configure
 zoals de briefing vereist. Bestandsnamen en dashboard-titel volgen automatisch het
 gekozen gebied.
 
+## De 25 grootste gemeenten (CBS)
+
+Welke gemeenten "de 25 grootste" zijn, staat in `referentie/gemeenten_cbs_<peiljaar>.csv`: alle
+gemeenten met hun inwonertal op 1 januari en hun rang, uit CBS-tabel `03759ned` ("Bevolking op 1
+januari en gemiddeld; geslacht, leeftijd en regio", open data). Naast het bestand staat
+`gemeenten_cbs_<peiljaar>.bron.json` met tabel, titel, peiljaar en ophaaldatum. De gemeentecode is
+dezelfde als `bronhouder_identificatie` in de BAG-GeoPackage.
+
+Eens per jaar vernieuwen, nadat CBS de cijfers van 1 januari heeft toegevoegd (in het tweede
+kwartaal):
+
+```bash
+python cbs_gemeenten.py
+```
+
+Dat schrijft een nieuw bestand naast het oude en overschrijft nooit iets. De pipeline gebruikt
+het nieuwste peiljaar dat er staat; `run_proef.py` haalt zelf niets op bij CBS en blijft offline.
+Is CBS onbereikbaar, of heeft de nieuwste periode geen gemeentecijfers, dan schrijft het script
+niets en meldt het waarom.
+
 ## Resultaat Delft (peildatum augustus 2026)
 
 | | Aantal |

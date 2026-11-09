@@ -1,0 +1,15 @@
+{
+  "tabel": "03759ned",
+  "titel": "Bevolking op 1 januari en gemiddeld; geslacht, leeftijd en regio",
+  "peiljaar": 2026,
+  "peildatum": "2026-01-01",
+  "onderwerp": "BevolkingOp1Januari_1",
+  "totalen": {
+    "Geslacht": "T001038",
+    "Leeftijd": "10000",
+    "BurgerlijkeStaat": "T001019"
+  },
+  "url": "https://opendata.cbs.nl/ODataApi/odata/03759ned",
+  "opgehaald": "2026-11-09",
+  "aantal_gemeenten": 342
+}
