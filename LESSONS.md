@@ -73,3 +73,9 @@ struck through with the reason, never deleted.
   Vera, VA-61)*
 - **A pand's x,y is not its hoofdadres point.** 11 of 20 Delft leads are 5,7–18,3 m off, because
   x,y, postcode and huisnummer come from another VBO of the pand. *(2026-11-09, Vera, VA-62)*
+- **A fixed `data-theme="light"` on `<html>` overrides `prefers-color-scheme`.** Ayman wants the
+  dashboard to open light on every computer; only the Thema button sets the theme. A design file
+  that follows the OS colour scheme quietly decides the default. *(2026-11-09, Vera, VA-66)*
+- **Refetching from CBS into scratch and comparing byte for byte proves "fetched, not typed".**
+  CBS names keep their own suffixes ("Utrecht (gemeente)"); stripping them would be typing.
+  *(2026-11-09, Vera, VA-65)*
