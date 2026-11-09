@@ -60,3 +60,16 @@ struck through with the reason, never deleted.
 - **A memory test has to be able to go red.** Holding all 1M rows still peaked at only 270 MB,
   under the 500 MB criterion, so the assert is 100 MB; checked by forcing the writer to hold
   every row (19,9 MB streaming). *(2026-11-09, Vera, VA-35)*
+- **Move a design file's text into Python as data, not as functions, and express any literal a
+  guard test bans (2048 as `1 << 11`) instead of loosening the test.** Test a blocked CDN and
+  WebGL off separately (headless Chrome `--disable-3d-apis`). *(2026-11-09, Vera, VA-60)*
+- **A third-party script must not hold up the page.** A plain `<script src>` to cdnjs that hangs
+  delays every card; the page now loads three.js itself and starts the 2D office after 4 s.
+  *(2026-11-09, Vera, VA-60)*
+- **Make a dialog with a header a flex column with `min-height:0` on its body.** Capping the body
+  with `calc(100dvh - N)` cut off 66 px at 375 px when the header wrapped; measure the scrolled
+  bottom, not only `scrollWidth`. *(2026-11-09, Vera, VA-61)*
+- **Headless Chrome cannot make a 375 px window; measure 375 inside an iframe.** *(2026-11-09,
+  Vera, VA-61)*
+- **A pand's x,y is not its hoofdadres point.** 11 of 20 Delft leads are 5,7–18,3 m off, because
+  x,y, postcode and huisnummer come from another VBO of the pand. *(2026-11-09, Vera, VA-62)*

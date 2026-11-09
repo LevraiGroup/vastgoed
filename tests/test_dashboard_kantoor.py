@@ -61,7 +61,8 @@ class Kantoor(unittest.TestCase):
         # Ingest krijgt de snapshotlijst zelf: het script maakt er '4 aug 2026' van.
         self.assertEqual(k["ingest"], {"bron": bron, "vbo": 15, "verouderd": False})
         self.assertEqual(k["selectie"], {"panden": 5, "a_e": 3, "werklijst": 2, "drempel": 8,
-                                         "werklijst_min": 200, "werklijst_max": 500})
+                                         "werklijst_min": 200, "werklijst_max": 500,
+                                         "categorieen": {"A": 0, "B": 0, "C": 3, "D": 0, "E": 0}})
         self.assertEqual(k["verrijking"], {"panden": 3, "actief": [], "verrijkt": None})
         self.assertEqual(k["controle"], {"totaal": 2, "te_controleren": 2, "gecontroleerd": None})
 
@@ -121,7 +122,8 @@ class Kantoor(unittest.TestCase):
         k = bd.kantoor("Delft", None, None, None, cfg())
         self.assertEqual(k["ingest"], {"bron": None, "vbo": None, "verouderd": False})
         self.assertEqual(k["selectie"], {"panden": None, "a_e": None, "werklijst": None,
-                                         "drempel": 8, "werklijst_min": 200, "werklijst_max": 500})
+                                         "drempel": 8, "werklijst_min": 200, "werklijst_max": 500,
+                                         "categorieen": None})
         self.assertEqual(k["verrijking"], {"panden": None, "actief": [], "verrijkt": None})
         self.assertEqual(k["controle"], {"totaal": None, "te_controleren": None,
                                          "gecontroleerd": None})
@@ -237,7 +239,7 @@ class Pagina(unittest.TestCase):
         t = bd.TEMPLATE
         self.assertLess(t.index('<section class="pk" id="pk"'), t.index('<section class="kpis"'))
         self.assertLess(t.index('</header>'), t.index('<section class="pk" id="pk"'))
-        self.assertIn('PK.start(document.getElementById("pk"), PAYLOAD.kantoor)', t)
+        self.assertIn("kantoorStart(pk, PAYLOAD.kantoor)", t)  # VA-60, na het laden van three.js
         self.assertIn("<canvas", t)
 
     def test_kantoor_altijd_zichtbaar(self):
@@ -251,15 +253,24 @@ class Pagina(unittest.TestCase):
 
     def test_niets_van_buiten(self):
         t = bd.TEMPLATE.lower()
-        for verboden in ("<script src", "<link", "@import", "url(", "@font-face"):
+        for verboden in ("<link", "@import", "url(", "@font-face"):
             self.assertNotIn(verboden, t)
+        # VA-60: de enige bron van buiten is three.js r128 van cdnjs, met integrity en crossorigin.
+        # De pagina laadt het zelf, zodat een hangende cdnjs de rest niet ophoudt.
+        self.assertNotIn("<script src", t)
+        self.assertEqual(t.count('s.src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";'), 1)
+        self.assertIn('s.integrity = "sha512-', t)
+        self.assertIn('s.crossorigin = "anonymous"', t)
+        self.assertIn("settimeout(start, 4000)", t)  # t is in kleine letters
+        self.assertEqual(t.count("https://") - t.count("https://bagviewer.kadaster.nl"), 1)
 
     def test_script_maakt_geen_zinnen(self):
         # Nova, VA-31 criteria 2 en 4: de zinnen komen uit kantoor_teksten() in Python en
         # staan op één plek. Het script toont PAYLOAD.kantoor.tekst en maakt zelf niets op.
         t = bd.TEMPLATE
         for weg in ("panden op de werklijst", "BAG opgehaald", "Geen extra bron actief",
-                    "wachten op visuele controle", "const REGELS", "const TEKST", "const UITLEG"):
+                    "wachten op visuele controle", "const REGELS", "const TEKST =", "const UITLEG",
+                    "Kijk even bij", "die je aandacht vra"):
             self.assertNotIn(weg, t)
         self.assertIn("data.tekst[id]", t)
 
@@ -290,7 +301,7 @@ class Teksten(unittest.TestCase):
                        pand(4, 9, uitgesloten=True), pand(5, 10, categorieen=())]
 
     def bel(self, k):
-        return {wie: (r["s"], r["bel"]) for wie, r in k["tekst"].items()}
+        return {wie: (r["s"], r["bel"]) for wie, r in k["tekst"].items() if wie != "chef"}
 
     def test_delft_augustus(self):
         k = bd.kantoor("Delft", [snap("Delft", "2026-08-04")], self.panden, 20, cfg(werklijst_min=1))
@@ -369,6 +380,53 @@ class Teksten(unittest.TestCase):
         self.assertEqual(t["selectie"]["bel"], "1.234.567 panden op de werklijst")
         self.assertEqual(t["controle"]["bel"], "500 panden wachten op visuele controle")
         self.assertIn("Nederland", t["selectie"]["uitleg"])
+
+
+class Kantoormanager(unittest.TestCase):
+    """VA-60 criterium 3: wat de kantoormanager zegt, exact (copy van VA-48)."""
+
+    def chef(self, **toestanden):
+        alle = {"ingest": "werkt", "selectie": "werkt", "verrijking": "slaapt", "controle": "werkt"}
+        alle.update(toestanden)
+        return bd.chef_teksten(alle)
+
+    def test_niemand(self):
+        self.assertEqual(self.chef()["zin"],
+                         "Niemand vraagt nu je aandacht. De kantoormanager loopt een ronde door het kantoor.")
+
+    def test_een(self):
+        self.assertEqual(self.chef(controle="aandacht")["zin"], "Loopt naar Controle, die je aandacht vraagt.")
+
+    def test_twee_en_drie(self):
+        self.assertEqual(self.chef(ingest="aandacht", controle="aandacht")["zin"],
+                         "Loopt langs Ingest en Controle, die je aandacht vragen.")
+        self.assertEqual(self.chef(ingest="aandacht", selectie="aandacht", controle="aandacht")["zin"],
+                         "Loopt langs Ingest, Selectie en Controle, die je aandacht vragen.")
+
+    def test_ballon_per_medewerker(self):
+        self.assertEqual(self.chef()["bel"], {"ingest": "Kijk even bij Ingest", "selectie": "Kijk even bij Selectie",
+                                              "verrijking": "Kijk even bij Verrijking",
+                                              "controle": "Kijk even bij Controle"})
+
+    def test_in_het_tekstblok(self):
+        k = bd.kantoor("Delft", [snap("Delft", "2026-08-04")], [pand(1, 12)], 20, cfg(werklijst_min=1))
+        self.assertEqual(k["tekst"]["chef"]["zin"], "Loopt naar Controle, die je aandacht vraagt.")
+
+
+class Pagina3D(unittest.TestCase):
+    """VA-60: de 3D-laag staat in de pagina, zonder de hulpmiddelen van de ontwerppagina."""
+
+    def test_3d_blok_en_terugval(self):
+        t = bd.TEMPLATE
+        self.assertEqual(t.count("const bouwPK3D = () => (() => {"), 1)  # pas na het laden gebouwd
+        self.assertEqual(t.count("function kantoorStart("), 1)
+        self.assertIn("PK.start(root, data, opties)", t)  # terugval op het 2D-kantoor van VA-31
+        self.assertIn("PK.lees(data, id)", t)
+
+    def test_geen_ontwerphulpmiddelen(self):
+        t = bd.TEMPLATE
+        for weg in ("stilKnop", "Stilstaand beeld", 'id="vel"', "const ECHT", "copyTabel", "<li>"):
+            self.assertNotIn(weg, t)
 
 
 @unittest.skipUnless(DELFT_PANDEN.is_file(), f"{DELFT_PANDEN} ontbreekt; echte Delft-cijfers overgeslagen")
