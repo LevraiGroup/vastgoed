@@ -57,3 +57,6 @@ struck through with the reason, never deleted.
 - **A config check that names the key and its value stops a typo before anything is written.**
   `NaN` passes `isinstance(x, float)`; compare `x != x`. *(2026-11-09, Vera, VA-41)*
 - VA-24 and VA-43 taught nothing new beyond their criteria (stated plainly, as the DoD asks).
+- **A memory test has to be able to go red.** Holding all 1M rows still peaked at only 270 MB,
+  under the 500 MB criterion, so the assert is 100 MB; checked by forcing the writer to hold
+  every row (19,9 MB streaming). *(2026-11-09, Vera, VA-35)*
