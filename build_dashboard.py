@@ -633,11 +633,91 @@ def bouw_payload() -> dict:
 
     budget = cfg["score"].get("schaal_max", 26)
     return {"kpi": kpi, "cats": cats, "facts": facts, "leads": leads,
-            "budget": budget, "gebied": label,
+            "budget": budget, "gebied": label, "koppen": koppen(label, drempel, len(leads)),
             "bron": bron, "bron_regels": bron_regels(bron), "bron_reden": bron_reden,
             "peildatum": peildatum(bron), "peildatum_tip": peildatum_tip(bron, bron_reden),
             "kantoor": kantoor(label, bron, gelezen, len(leads) if gelezen is not None else None,
                                cfg)}
+
+
+# --------------------------------------------------------------- menu en koppen (VA-63, VA-64)
+# Lumi's kopijtabel uit design/menu.html, als data. Elk menu-item wijst naar een section.deel op
+# de pagina; tests/test_dashboard_menu.py faalt als een href nergens naar wijst (VA-64 crit. 4).
+# Alleen wat de pagina nu heeft: Werklijst (VA-17), Nederland (VA-39) en Koppelingen (VA-56/58)
+# komen er pas bij als hun verhaal Done is.
+MENU = [
+    {"groep": "Overzicht", "id": "g-overzicht",
+     "items": [("kantoor", "Kantoor"), ("kerncijfers", "Kerncijfers")]},
+    {"groep": "Panden", "id": "g-panden",
+     "items": [("voorraad", "Voorraad"), ("proefresultaat", "Proefresultaat")]},
+]
+KANTOORMANAGER = "Kantoormanager"
+# {gebied}, {drempel} en {n} vult koppen() in; het script plaatst niets.
+KOP_TEKST = {
+    "kantoor.titel": "Zo loopt de pandenselectie",
+    "kantoor.zin": "Elke medewerker is een stap van de pandenselectie. Wat ze zeggen, komt uit de "
+                   "cijfers van dit dashboard.",
+    "kerncijfers.titel": "{gebied} in vier cijfers",
+    "kerncijfers.zin": "Van de ingelezen verblijfsobjecten tot de werklijst met score {drempel} of hoger.",
+    "voorraad.titel": "Voorraad en proefselectie",
+    "voorraad.zin": "Hoeveel panden in elke categorie A–E vallen, en wat de {n} panden van de proef "
+                    "kenmerkt.",
+    "proefresultaat.titel": "De {n} hoogst scorende panden",
+    "proefresultaat.zin": "De controlevraag uit de briefing. Open een pand voor de score-opbouw per "
+                          "criterium.",
+    "proefresultaat.meta": "{n} panden · {gebied} · gesorteerd op score-index",
+}
+
+
+def koppen(gebied: str, drempel: int | None, n: int | None) -> dict:
+    """De titel, de uitlegregel en de meta boven elk deel; onbekend blijft 'onbekend'."""
+    waarden = {"gebied": gebied, "drempel": nl_getal(drempel), "n": nl_getal(n)}
+    return {k: t.format(**waarden) for k, t in KOP_TEKST.items()}
+
+
+def menu_html() -> str:
+    """De groepen en items van de zijbalk. Het eerste item is actief tot het script het zet."""
+    eerste = MENU[0]["items"][0][0]
+    uit = []
+    for g in MENU:
+        uit.append(f'<p class="groep" id="{g["id"]}">{escape(g["groep"])}</p>')
+        items = []
+        for doel, naam in g["items"]:
+            actief = ' aria-current="location"' if doel == eerste else ""
+            items.append(f'<li><a href="#{doel}" data-doel="{doel}"{actief}>{escape(naam)}</a></li>')
+        uit.append(f'<ul aria-labelledby="{g["id"]}">{"".join(items)}</ul>')
+    return "".join(uit)
+
+
+def werkbalk_knoppen(tekst: dict | None) -> list[dict]:
+    """
+    De knoppen onder het kantoor (VA-63 crit. 4 en 14): 1 Ingest, 2 Selectie, 3 Verrijking,
+    4 Controle, en als laatste de Kantoormanager zonder nummer. Toestand en regel uit
+    kantoor_teksten(); zonder tekstblok 'leeg' en 'onbekend'.
+    """
+    tekst = tekst or {}
+    knoppen = []
+    for nr, wie in enumerate(_TEKST, 1):
+        r = tekst.get(wie) or {}
+        knoppen.append({"wie": wie, "nr": str(nr), "naam": NAMEN[wie],
+                        "s": r.get("s", "leeg"), "bel": r.get("bel", LEEG)})
+    knoppen.append({"wie": "chef", "nr": "", "naam": KANTOORMANAGER, "s": "chef",
+                    "bel": (tekst.get("chef") or {}).get("zin", LEEG)})
+    return knoppen
+
+
+def werkbalk_html(tekst: dict | None) -> str:
+    """De werkbalk als HTML; de Kantoormanager staat na de tussenruimte, als laatste."""
+    uit = []
+    for k in werkbalk_knoppen(tekst):
+        if k["wie"] == "chef":
+            uit.append('<span class="tussen"></span>')
+        nr = f'<span class="nr">{k["nr"]}</span>' if k["nr"] else '<span class="nr" aria-hidden="true"></span>'
+        uit.append(f'<button class="pk-knop {k["s"]}" type="button" data-wie="{k["wie"]}" '
+                   f'aria-expanded="false" aria-controls="pk-uitleg">{nr}<span class="tk">'
+                   f'<span class="nm">{escape(k["naam"])}</span><span class="bel">{escape(k["bel"])}</span>'
+                   '</span></button>')
+    return "".join(uit)
 
 
 TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboard" subtitle="__LABEL__ · 20-pand proefresultaat met score-opbouw" -->
@@ -681,25 +761,97 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     --brand:#0a1524;
   }
 
+  /* Menu-tinten: bestaande kleuren uit de vroegere kop (VA-63). */
+  :root{
+    --nav-tekst:#c6d3e4; --nav-label:#9fb3cc;
+    --nav-hover:rgba(255,255,255,.08); --nav-actief:rgba(255,255,255,.14); --nav-lijn:rgba(255,255,255,.10);
+  }
+
   *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  @media (prefers-reduced-motion: no-preference){ html{scroll-behavior:smooth} }
   body{margin:0;background:var(--plane);color:var(--ink);
     font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
     -webkit-font-smoothing:antialiased;line-height:1.45}
   a{color:inherit}
-  .wrap{max-width:1160px;margin:0 auto;padding:22px 22px 64px}
 
-  .top{display:flex;align-items:center;gap:16px;flex-wrap:wrap;
-    background:var(--brand);color:#fff;border-radius:16px;padding:20px 24px;box-shadow:var(--shadow)}
-  .mark{font-weight:800;letter-spacing:.16em;font-size:15px}
-  .mark small{display:block;letter-spacing:.28em;font-weight:600;font-size:10px;color:#9fb3cc;margin-top:3px}
-  .top .sub{font-size:13px;color:#c6d3e4}
-  .spacer{flex:1}
-  .pill{font-size:12px;color:#c6d3e4;border:1px solid rgba(255,255,255,.18);padding:5px 11px;border-radius:999px;white-space:nowrap}
+  /* =====================================================================
+     MENU (VA-63, Lumi; gebouwd in VA-64)
+     ===================================================================== */
+  .skip{position:absolute;left:12px;top:-60px;z-index:100;background:var(--brand);color:#fff;
+    padding:10px 14px;border-radius:10px;font-size:14px;font-weight:650;text-decoration:none}
+  .skip:focus{top:12px;outline:2px solid #fff;outline-offset:2px}
+
+  .vg{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh;background:var(--plane);color:var(--ink)}
+
+  .side{grid-column:1;grid-row:1 / span 2;position:sticky;top:0;align-self:start;height:100vh;overflow:auto;
+    background:var(--brand);color:#fff;border-right:1px solid var(--nav-lijn);
+    display:flex;flex-direction:column;padding:22px 12px 16px;scrollbar-width:thin}
+  .side-kop{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .side .merk{padding:2px 10px 18px}
+  .mark{font-weight:800;letter-spacing:.16em;font-size:15px;color:#fff;white-space:nowrap}
+  .mark small{display:block;letter-spacing:.28em;font-weight:600;font-size:10px;color:var(--nav-label);margin-top:3px}
+  .merk-sub{margin:12px 0 0;font-size:12.5px;color:var(--nav-tekst)}
+
+  .nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+  .nav .groep{margin:0;padding:16px 12px 6px;font-size:10px;font-weight:700;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--nav-label)}
+  .nav .groep:first-child{padding-top:4px}
+  .nav a{position:relative;display:flex;align-items:center;min-height:40px;padding:8px 12px 8px 14px;
+    border-radius:10px;color:var(--nav-tekst);font-size:14px;font-weight:500;text-decoration:none}
+  .vg.klaar .nav a{transition:background-color .15s ease,color .15s ease}
+  @media (hover:hover){ .nav a:hover{background:var(--nav-hover);color:#fff} }
+  .nav a:focus-visible{outline:2px solid #fff;outline-offset:-2px}
+  /* actief: meer dan kleur alleen — streep links, vet, lichter vlak, aria-current */
+  .nav a[aria-current]{background:var(--nav-actief);color:#fff;font-weight:700}
+  .nav a[aria-current]::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;
+    border-radius:0 3px 3px 0;background:#fff}
+
+  .side-voet{margin-top:auto;padding:16px 10px 0;border-top:1px solid var(--nav-lijn);
+    display:flex;flex-wrap:wrap;gap:8px}
   .toggle{cursor:pointer;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);
-    color:#fff;font:inherit;font-size:12px;padding:6px 12px;border-radius:999px}
-  .toggle:hover{background:rgba(255,255,255,.18)}
+    color:#fff;font:inherit;font-size:12px;padding:7px 12px;border-radius:999px;min-height:32px}
+  @media (hover:hover){ .toggle:hover{background:rgba(255,255,255,.18)} }
+  .toggle:focus-visible{outline:2px solid #fff;outline-offset:2px}
 
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:18px}
+  .sluit-menu{display:none;align-items:center;gap:6px;cursor:pointer;flex:none;
+    background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#fff;
+    font:inherit;font-size:13px;font-weight:650;min-height:40px;padding:0 12px;border-radius:10px}
+  .sluit-menu span{font-size:18px;line-height:1}
+  .sluit-menu:focus-visible{outline:2px solid #fff;outline-offset:2px}
+
+  .topbalk{display:none}
+  .menuknop{display:inline-flex;align-items:center;gap:10px;cursor:pointer;min-height:44px;padding:0 14px;
+    background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#fff;
+    font:inherit;font-size:14px;font-weight:650;border-radius:10px}
+  .menuknop .streep{width:18px;height:12px;flex:none;
+    background:linear-gradient(#fff 0 0) top/100% 2px no-repeat,
+               linear-gradient(#fff 0 0) center/100% 2px no-repeat,
+               linear-gradient(#fff 0 0) bottom/100% 2px no-repeat}
+  .menuknop:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .scrim{display:none}
+
+  .inhoud{grid-column:2;min-width:0;padding:26px 28px 64px}
+  .inhoud:focus{outline:none}
+  .deel{scroll-margin-top:16px}
+  .deel:focus{outline:none}
+  .deel + .deel{margin-top:44px}
+  .kop{display:flex;flex-direction:column;gap:6px;margin:0 2px 16px}
+  .kop-rij{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 14px;min-height:28px}
+  .kruimel{margin:0;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+  .kruimel b{color:var(--ink);font-weight:800}
+  .kruimel span{margin:0 .35em}
+  .kop h1,.kop .titel{margin:0;font-weight:750;letter-spacing:-.02em;line-height:1.15}
+  .kop h1{font-size:30px}
+  .kop .titel{font-size:22px}
+  .kop-zin{margin:0;font-size:14.5px;color:var(--ink-2);max-width:78ch}
+  .spills{display:flex;flex-wrap:wrap;gap:6px}
+  .pill{font-size:12px;color:var(--ink-2);background:var(--surface);border:1px solid var(--ring);
+    padding:4px 11px;border-radius:999px;white-space:nowrap}
+  .kop-meta{font-size:12px;color:var(--ink-2)}
+  /* ===================== einde MENU-blok (smal: zie @media (max-width:800px) onderaan) ===================== */
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
   .kpi{background:var(--surface);border:1px solid var(--ring);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
   .kpi .v{font-size:30px;font-weight:750;letter-spacing:-.02em;line-height:1}
   .kpi .v.onb{font-size:22px;letter-spacing:0}
@@ -707,9 +859,9 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   .kpi .h{font-size:11px;color:var(--muted);margin-top:3px}
   .kpi .accent{width:26px;height:3px;border-radius:2px;margin-bottom:12px;background:var(--s1)}
 
-  .cols{display:grid;grid-template-columns:1.35fr 1fr;gap:14px;margin-top:14px}
+  .cols{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}
   .panel{background:var(--surface);border:1px solid var(--ring);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow)}
-  .panel h2{margin:0 0 4px;font-size:14px;font-weight:700}
+  .panel h3{margin:0 0 4px;font-size:14px;font-weight:700}
   .panel .cap{margin:0 0 16px;font-size:12px;color:var(--muted)}
 
   .bar{display:grid;grid-template-columns:150px 1fr;align-items:center;gap:12px;margin:11px 0}
@@ -727,9 +879,6 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   .fact .val{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
   .note{margin-top:14px;font-size:11.5px;color:var(--muted);line-height:1.5}
 
-  .sec-h{display:flex;align-items:baseline;gap:10px;margin:26px 2px 12px}
-  .sec-h h2{margin:0;font-size:15px}
-  .sec-h span{font-size:12px;color:var(--muted)}
   .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
   .card{background:var(--surface);border:1px solid var(--ring);border-radius:14px;padding:16px 17px;
     box-shadow:var(--shadow);display:flex;flex-direction:column;gap:11px}
@@ -803,8 +952,8 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   /* =====================================================================
      PIXELKANTOOR — dit blok gaat mee naar build_dashboard.py
      ===================================================================== */
-  .pk{margin-top:18px;background:var(--surface);border:1px solid var(--ring);border-radius:14px;
-    box-shadow:var(--shadow);overflow:hidden}
+  .pk{background:var(--surface);border:1px solid var(--ring);border-radius:14px;
+    box-shadow:var(--shadow);overflow:hidden;container-type:inline-size}
   .pk-scene{position:relative}
   .pk-scene canvas{display:block;width:100%;height:auto;image-rendering:pixelated}
   .pk-ov{position:absolute;inset:0;pointer-events:none}
@@ -833,7 +982,7 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     border:0;border-radius:8px;padding:0}
   .pk-hit:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
   .pk-voet{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px 12px;
-    border-top:1px solid var(--grid);font-size:11.5px;color:var(--muted)}
+    border-top:1px solid var(--grid);font-size:11.5px;color:var(--ink-2)}
   .pk-uitleg{border-top:1px solid var(--grid);padding:14px 16px 16px;background:var(--surface-2)}
   .pk-uitleg[hidden]{display:none}
   .pk-uitleg h3{margin:0;font-size:13.5px;font-weight:700}
@@ -857,8 +1006,16 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   /* =====================================================================
      KANTOOR3D — dit blok gaat mee naar build_dashboard.py (na het PIXELKANTOOR-blok)
      ===================================================================== */
-  .pk-scene.pk-3d{aspect-ratio:1.45/1;min-height:240px;overflow:hidden;background:var(--surface-2)}
+  /* .pk-start: dezelfde maat al voordat three.js er is, zodat niets onder het kantoor verschuift
+     als het laadt (een adres als #proefresultaat blijft kloppen). Het 2D-kantoor haalt hem weg.
+     width:100% houdt de breedte vast: zonder die regel geeft aspect-ratio de max-height door aan de
+     breedte en wordt de scène smaller dan het kantoor. */
+  .pk-scene.pk-start,.pk-scene.pk-3d{width:100%;aspect-ratio:1.45/1;min-height:240px;overflow:hidden;background:var(--surface-2)}
   .pk-smal .pk-scene.pk-3d{aspect-ratio:1/1}
+  @container (max-width:559.98px){ .pk-scene.pk-start{aspect-ratio:1/1} }   /* = .pk-smal: scène smaller dan 560 px */
+  /* VA-63/64 crit. 13: breed past het hele kantoor met de werkbalk op een scherm van 1280 × 800.
+     270 px = bovenmarge, kop, werkbalk, voettekst en randen (Lumi, gemeten). */
+  @media (min-width:801px){ .pk-scene.pk-start,.pk-scene.pk-3d{max-height:calc(100vh - 270px)} }
   .pk-scene.pk-3d canvas{display:block;width:100%;height:100%;image-rendering:auto}
   .pk-3d .pk-ov{overflow:hidden}
   .pk-3d .pk-bel{z-index:2;animation:none}
@@ -875,26 +1032,36 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   .pk-z{transform:translate(-50%,-100%);white-space:nowrap;font-size:12px;font-weight:800;letter-spacing:.12em;color:var(--muted);
     pointer-events:none;text-shadow:0 1px 0 var(--surface-2)}
   .pk-smal .pk-3d .pk-bel,.pk-smal .pk-3d .pk-z{display:none}
-  .pk-smal .pk-3d .pk-naam{font-size:0;padding:0 5px}   /* smal: alleen het nummer; de namen staan in de lijst eronder */
+  .pk-smal .pk-3d .pk-naam{font-size:0;padding:0 5px}   /* smal: alleen het nummer; de namen staan in de werkbalk eronder */
   .pk-smal .pk-3d .pk-naam b{font-size:10px;margin:0}
   .pk-smal .pk-3d .pk-naam.chef{display:none}
   .pk-smal .pk-3d .pk-naam.aandacht{background:color-mix(in srgb,var(--s4) 30%,var(--surface));border-color:var(--s4);color:var(--ink)}
   .pk-smal .pk-3d .pk-bord{font-size:7px;letter-spacing:.06em;padding:1px 4px}
-  .pk-lijst{display:none;list-style:none;margin:0;padding:8px 10px 4px;gap:4px;border-top:1px solid var(--grid)}
-  .pk-smal .pk-lijst{display:grid}
-  .pk-lijst button{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;align-items:baseline;width:100%;text-align:left;
-    font:inherit;font-size:12px;color:var(--ink);background:none;border:0;border-radius:8px;padding:5px 6px;cursor:pointer}
-  .pk-lijst button:hover{background:var(--grid)}
-  .pk-lijst button:focus-visible{outline:2px solid var(--s1);outline-offset:1px}
-  .pk-lijst button[aria-expanded="true"]{background:color-mix(in srgb,var(--s1) 12%,transparent)}
-  .pk-lijst b{font-weight:700}
-  .pk-lijst b::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--muted);transform:translateY(-1px)}
-  .pk-lijst .werkt b::before{background:var(--s1)}
-  .pk-lijst .aandacht b::before{background:var(--s4)}
-  .pk-lijst .slaapt b::before{background:var(--baseline)}
-  .pk-lijst .chef b::before{background:var(--brand)}
-  .pk-lijst span{color:var(--ink-2)}
-  .pk-lijst .aandacht span::before{content:"! ";color:var(--s2);font-weight:800}
+  /* WERKBALK VAN HET KANTOOR (VA-63, vervangt .pk-lijst): vier genummerde medewerkers, dan de Kantoormanager. */
+  .pk-balk{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border-top:1px solid var(--grid);background:var(--surface)}
+  .pk-knop{display:inline-flex;align-items:center;gap:9px;cursor:pointer;min-height:42px;padding:6px 14px 6px 6px;
+    border-radius:10px;border:1px solid var(--ring);background:var(--surface-2);color:var(--ink);
+    font:inherit;font-size:13px;font-weight:650;text-align:left;transition:background-color .15s ease}
+  .pk-knop[hidden]{display:none}
+  .pk-knop .nr{flex:none;width:28px;height:28px;border-radius:7px;background:var(--brand);color:#fff;
+    font-size:13px;font-weight:800;display:grid;place-items:center;font-variant-numeric:tabular-nums}
+  .pk-knop.chef .nr{background:transparent;border:1.5px dashed var(--baseline)}
+  .pk-knop .tk{display:flex;flex-direction:column;min-width:0}
+  .pk-knop .nm{display:flex;align-items:center;gap:6px}
+  .pk-knop .nm::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--muted)}
+  .pk-knop.werkt .nm::before{background:var(--s1)}
+  .pk-knop.aandacht .nm::before{background:var(--s4)}
+  .pk-knop.slaapt .nm::before{background:var(--baseline)}
+  .pk-knop.chef .nm::before{background:var(--brand);box-shadow:0 0 0 1px var(--baseline)}
+  .pk-knop .bel{display:none;font-size:12px;font-weight:500;color:var(--ink-2);margin-top:1px}
+  .pk-knop.aandacht .bel::before{content:"! ";color:var(--s2);font-weight:800}
+  .pk-smal .pk-knop .bel{display:block}   /* zonder ballonnen in de scène staat de regel in de knop */
+  @media (hover:hover){ .pk-knop:hover{background:var(--grid)} }
+  .pk-knop:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  /* open: lichtblauw vlak + dubbele rand (vorm, niet alleen kleur) + aria-expanded */
+  .pk-knop[aria-expanded="true"]{background:color-mix(in srgb,var(--s1) 12%,var(--surface-2));
+    border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
+  .pk-balk .tussen{flex:1}
   .pk-noot{flex-basis:100%;color:var(--ink-2)}
   /* ===================== einde KANTOOR3D-blok ===================== */
 
@@ -903,6 +1070,40 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     .cols{grid-template-columns:1fr}
     .grid{grid-template-columns:1fr}
     .bar{grid-template-columns:120px 1fr}
+  }
+  /* ---- MENU smal (≤ 800 px, VA-63): bovenbalk met menuknop, de zijbalk wordt een lade ---- */
+  @media (max-width:800px){
+    .vg{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr}
+    .topbalk{grid-column:1;grid-row:1;display:flex;position:sticky;top:0;z-index:20;align-items:center;
+      justify-content:space-between;gap:12px;height:56px;padding:0 10px 0 16px;background:var(--brand);color:#fff;
+      box-shadow:0 1px 0 var(--nav-lijn)}
+    .topbalk .mark{font-size:13px}
+    .topbalk .mark small{font-size:9px;margin-top:2px}
+    .inhoud{grid-column:1;grid-row:2;padding:18px 14px 48px}
+    .deel{scroll-margin-top:72px}
+    .kop h1{font-size:24px}
+    .kop .titel{font-size:19px}
+    .kop-zin{font-size:14px}
+    .side{position:fixed;top:0;bottom:0;left:0;width:min(304px,86%);height:auto;z-index:40;
+      transform:translateX(-100%);visibility:hidden;box-shadow:0 0 40px rgba(0,0,0,.35);padding-top:14px}
+    .vg.open .side{transform:none;visibility:visible}
+    /* Overgangen pas na de eerste frames (.klaar), anders schuift de lade bij elke laadbeurt zichtbaar weg. */
+    .vg.klaar .side{transition:transform .22s ease,visibility 0s linear .22s}
+    .vg.klaar.open .side{transition:transform .22s ease}
+    .sluit-menu{display:inline-flex}
+    .side .merk{padding-top:8px}
+    .scrim{display:block;position:fixed;inset:0;z-index:30;background:rgba(11,11,11,.55);opacity:0;visibility:hidden}
+    .vg.open .scrim{opacity:1;visibility:visible}
+    .vg.klaar .scrim{transition:opacity .22s ease,visibility 0s linear .22s}
+    .vg.klaar.open .scrim{transition:opacity .22s ease}
+    .kpi .v{font-size:26px}
+    .pk-balk{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;padding:8px}
+    .pk-balk .tussen{display:none}
+    .pk-knop{width:100%;align-items:flex-start;padding:8px 10px 8px 8px}
+    .pk-knop .bel{display:block}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .vg.klaar .nav a,.vg.klaar .side,.vg.klaar.open .side,.vg.klaar .scrim,.vg.klaar.open .scrim,.pk-knop{transition:none}
   }
   /* ===================== PAND OPENEN (VA-61, VA-62) ===================== */
   .card.open-baar{cursor:pointer}
@@ -957,57 +1158,106 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
+<a class="skip" href="#inhoud">Sla het menu over</a>
+<div class="vg" id="vg">
+  <header class="topbalk">
     <div class="mark">LEVRAI GROUP<small>VASTGOED</small></div>
-    <div class="sub">Pandenselectie&nbsp;·&nbsp;__LABEL__</div>
-    <div class="spacer"></div>
-    <div class="pill">Bron: PDOK BAG WFS v2_0</div>
-    <div class="pill"__PEILTIP__>__PEILDATUM__</div>
-    <button class="toggle" id="themeBtn" type="button">◐ Thema</button>
+    <button class="menuknop" type="button" aria-expanded="false" aria-controls="menu"><span class="streep" aria-hidden="true"></span>Menu</button>
   </header>
+  <div class="scrim" aria-hidden="true"></div>
 
-  <section class="pk" id="pk" aria-label="Kantoor">
-    <div class="pk-scene">
-      <canvas aria-hidden="true"></canvas>
-      <div class="pk-ov"></div>
+  <aside class="side" id="menu" aria-label="Menu">
+    <div class="side-kop">
+      <div class="merk">
+        <div class="mark">LEVRAI GROUP<small>VASTGOED</small></div>
+        <p class="merk-sub">Pandenselectie&nbsp;·&nbsp;__LABEL__</p>
+      </div>
+      <button class="sluit-menu" type="button"><span aria-hidden="true">×</span>Sluit menu</button>
     </div>
-    <div class="pk-uitleg" hidden aria-live="polite">
-      <h3></h3>
-      <p class="pk-status"></p>
-      <p class="pk-tekst"></p>
-      <button class="pk-sluit" type="button">Sluit uitleg</button>
+    <nav class="nav" aria-label="Onderdelen van het dashboard">__MENU__</nav>
+    <div class="side-voet">
+      <button class="toggle" id="themeBtn" type="button">◐ Thema</button>
     </div>
-    <div class="pk-voet">Elke medewerker is een stap van de pandenselectie. Wat ze zeggen, komt uit de cijfers van dit dashboard. Klik op een medewerker voor uitleg.</div>
-  </section>
+  </aside>
 
-  <section class="kpis" id="kpis"></section>
+  <main class="inhoud" id="inhoud" tabindex="-1">
 
-  <div class="cols">
-    <div class="panel">
-      <h2>Technische voorraad naar categorie</h2>
-      <p class="cap">__LABEL__ · panden binnen categorie A–E · een pand kan in meerdere vallen</p>
-      <div id="cats"></div>
-    </div>
-    <div class="panel">
-      <h2>Proefselectie in cijfers</h2>
-      <p class="cap">De 20 hoogst scorende panden — de controlevraag uit de briefing</p>
-      <div class="facts" id="facts"></div>
-      <p class="note">Score is een <b>index van 1–100</b> tegen het volledige modelbudget.
-        Open een pand voor de volledige score-opbouw per criterium.</p>
-    </div>
-  </div>
+    <section class="deel" id="kantoor" aria-labelledby="t-kantoor" tabindex="-1">
+      <header class="kop">
+        <div class="kop-rij">
+          <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Kantoor</b></p>
+          <div class="spills">
+            <div class="pill">Bron: PDOK BAG WFS v2_0</div>
+            <div class="pill"__PEILTIP__>__PEILDATUM__</div>
+          </div>
+        </div>
+        <h1 id="t-kantoor">__KOP_KANTOOR_TITEL__</h1>
+        <p class="kop-zin">__KOP_KANTOOR_ZIN__</p>
+      </header>
+      <div class="pk" id="pk">
+        <div class="pk-scene pk-start">
+          <canvas aria-hidden="true"></canvas>
+          <div class="pk-ov"></div>
+        </div>
+        <div class="pk-balk" role="group" aria-label="Uitleg per medewerker">__WERKBALK__</div>
+        <div class="pk-uitleg" id="pk-uitleg" hidden aria-live="polite">
+          <h3></h3>
+          <p class="pk-status"></p>
+          <p class="pk-tekst"></p>
+          <button class="pk-sluit" type="button">Sluit uitleg</button>
+        </div>
+        <div class="pk-voet">De kantoormanager loopt naar wie je aandacht vraagt. Klik op iemand in het kantoor of op een naam hierboven voor uitleg.</div>
+      </div>
+    </section>
 
-  <div class="sec-h">
-    <h2>Proefresultaat — 20 panden</h2>
-    <span id="secmeta"></span>
-  </div>
-  <div class="grid" id="leads"></div>
+    <section class="deel" id="kerncijfers" aria-labelledby="t-kerncijfers" tabindex="-1">
+      <header class="kop">
+        <div class="kop-rij"><p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Kerncijfers</b></p></div>
+        <h2 class="titel" id="t-kerncijfers">__KOP_KERNCIJFERS_TITEL__</h2>
+        <p class="kop-zin">__KOP_KERNCIJFERS_ZIN__</p>
+      </header>
+      <div class="kpis" id="kpis"></div>
+    </section>
 
-  <p class="foothint">
-    Klik op <b>Score-opbouw</b> in een pand om te zien waar elk punt vandaan komt ·
-    grijze criteria wachten op een extra databron (energielabel, verkoophistorie, leegstand).
-  </p>
+    <section class="deel" id="voorraad" aria-labelledby="t-voorraad" tabindex="-1">
+      <header class="kop">
+        <div class="kop-rij"><p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Voorraad</b></p></div>
+        <h2 class="titel" id="t-voorraad">__KOP_VOORRAAD_TITEL__</h2>
+        <p class="kop-zin">__KOP_VOORRAAD_ZIN__</p>
+      </header>
+      <div class="cols">
+        <div class="panel">
+          <h3>Technische voorraad naar categorie</h3>
+          <p class="cap">__LABEL__ · panden binnen categorie A–E · een pand kan in meerdere vallen</p>
+          <div id="cats"></div>
+        </div>
+        <div class="panel">
+          <h3>Proefselectie in cijfers</h3>
+          <p class="cap">De 20 hoogst scorende panden — de controlevraag uit de briefing</p>
+          <div class="facts" id="facts"></div>
+          <p class="note">Score is een <b>index van 1–100</b> tegen het volledige modelbudget.
+            Open een pand voor de volledige score-opbouw per criterium.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="deel" id="proefresultaat" aria-labelledby="t-proefresultaat" tabindex="-1">
+      <header class="kop">
+        <div class="kop-rij">
+          <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Proefresultaat</b></p>
+          <span class="kop-meta" id="secmeta">__KOP_PROEFRESULTAAT_META__</span>
+        </div>
+        <h2 class="titel" id="t-proefresultaat">__KOP_PROEFRESULTAAT_TITEL__</h2>
+        <p class="kop-zin">__KOP_PROEFRESULTAAT_ZIN__</p>
+      </header>
+      <div class="grid" id="leads"></div>
+
+      <p class="foothint">
+        Klik op <b>Score-opbouw</b> in een pand om te zien waar elk punt vandaan komt ·
+        grijze criteria wachten op een extra databron (energielabel, verkoophistorie, leegstand).
+      </p>
+    </section>
+  </main>
 </div>
 <div id="tt"></div>
 
@@ -1077,7 +1327,6 @@ function opbouwHTML(d){
   </details>`;
 }
 
-document.getElementById("secmeta").textContent=`${LEADS.length} panden · ${PAYLOAD.gebied} · gesorteerd op score-index`;
 const lb=document.getElementById("leads");
 LEADS.forEach(d=>{
   const order=["woon","winkel","kantoor","bedrijf","overig"];
@@ -1194,6 +1443,90 @@ document.getElementById("themeBtn").addEventListener("click",()=>{
   const dark=cur?cur==="dark":matchMedia("(prefers-color-scheme: dark)").matches;
   root.setAttribute("data-theme",dark?"light":"dark");
 });
+
+/* ============================ MENU (VA-63, VA-64) ============================
+   Breed een zijbalk, tot 800 px een bovenbalk met lade. Elk item brengt je naar zijn deel van
+   dezelfde pagina; het kantoor blijft altijd bovenaan in beeld (Ayman, VA-48 crit. 8).
+   Het actieve item volgt het scrollen, één keer per frame. Alle tekst staat al in de HTML. */
+(() => {
+  const vg = document.getElementById("vg");
+  const side = vg.querySelector(".side"), knop = vg.querySelector(".menuknop"), main = vg.querySelector(".inhoud");
+  const links = [...vg.querySelectorAll(".nav a[data-doel]")];
+  const DELEN = links.map(a => a.dataset.doel);
+  const delen = DELEN.map(id => document.getElementById(id));
+  const mqSmal = matchMedia("(max-width: 800px)"), rustig = matchMedia("(prefers-reduced-motion: reduce)");
+  const isOpen = () => vg.classList.contains("open");
+
+  function openMenu() {
+    vg.classList.add("open"); knop.setAttribute("aria-expanded", "true");
+    main.inert = true; document.body.style.overflow = "hidden";
+    (side.querySelector(".nav a[aria-current]") || links[0]).focus();
+  }
+  function sluitMenu(terug) {
+    if (!isOpen()) return;
+    vg.classList.remove("open"); knop.setAttribute("aria-expanded", "false");
+    main.inert = false; document.body.style.overflow = "";
+    if (terug) knop.focus();
+  }
+  // Breder dan 800 px terwijl de lade open is: dicht, zonder de focus te verplaatsen.
+  mqSmal.addEventListener("change", () => { if (!mqSmal.matches) sluitMenu(false); });
+  // Overgangen pas na de eerste frames, anders schuift de lade bij het laden zichtbaar weg.
+  requestAnimationFrame(() => requestAnimationFrame(() => vg.classList.add("klaar")));
+
+  knop.addEventListener("click", () => isOpen() ? sluitMenu(true) : openMenu());
+  vg.querySelector(".sluit-menu").addEventListener("click", () => sluitMenu(true));
+  vg.querySelector(".scrim").addEventListener("click", () => sluitMenu(true));
+  side.addEventListener("keydown", e => {   // Tab blijft in de open lade
+    if (e.key !== "Tab" || !isOpen()) return;
+    const f = [...side.querySelectorAll("a[href], button")];
+    const eerste = f[0], laatste = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === eerste) { e.preventDefault(); laatste.focus(); }
+    else if (!e.shiftKey && document.activeElement === laatste) { e.preventDefault(); eerste.focus(); }
+  });
+  // Escape sluit eerst de lade; de uitleg van het kantoor hoort deze toets dan niet.
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape" || !isOpen()) return;
+    e.preventDefault(); e.stopPropagation(); sluitMenu(true);
+  }, true);
+
+  let actief = null, slot = 0;
+  function zet(id, adres) {
+    if (id === actief) return;
+    actief = id;
+    links.forEach(a => a.dataset.doel === id ? a.setAttribute("aria-current", "location") : a.removeAttribute("aria-current"));
+    if (adres) history.replaceState(null, "", "#" + id);
+  }
+  // Actief is het laatste deel waarvan de bovenkant boven 30% van het scherm staat (smal: plus de
+  // bovenbalk van 56 px); helemaal onderaan is het laatste deel actief.
+  function bepaal() {
+    if (Date.now() < slot) return;
+    const lijn = (mqSmal.matches ? 56 : 0) + innerHeight * 0.3;
+    let id = DELEN[0];
+    delen.forEach(d => { if (d.getBoundingClientRect().top <= lijn) id = d.id; });
+    if (vg.getBoundingClientRect().bottom <= innerHeight + 2) id = DELEN[DELEN.length - 1];
+    zet(id, true);
+  }
+  let wacht = false;
+  addEventListener("scroll", () => { if (!wacht) { wacht = true; requestAnimationFrame(() => { wacht = false; bepaal(); }); } }, {passive: true});
+  addEventListener("scrollend", () => { slot = 0; bepaal(); });
+
+  links.forEach(a => a.addEventListener("click", e => {
+    const id = a.dataset.doel;
+    zet(id, false); slot = Date.now() + 900;   // geen flikkering over de delen ertussen
+    if (isOpen()) {
+      e.preventDefault();
+      sluitMenu(true);
+      document.getElementById(id).scrollIntoView({behavior: rustig.matches ? "auto" : "smooth"});
+      history.pushState(null, "", "#" + id);
+    }
+  }));
+
+  // Openen met een adres: de cijfers en kaarten staan er nu, dus één keer naar het deel.
+  const start = location.hash.slice(1);
+  if (DELEN.includes(start)) { zet(start, false); document.getElementById(start).scrollIntoView({behavior: "instant"}); }
+  else zet(DELEN[0], false);
+})();
+/* ============================ einde MENU ============================ */
 
 /* ============================ BEGIN PIXELKANTOOR ============================
    Pixelkantoor: elke stap van de pandenselectie is een medewerker aan een bureau.
@@ -1468,14 +1801,21 @@ const PK = (() => {
     const scene = root.querySelector(".pk-scene"), cv = scene.querySelector("canvas"), ov = scene.querySelector(".pk-ov");
     const uitleg = root.querySelector(".pk-uitleg"), R = tekenaar(cv);
     let L = null, breedte = 0, P = palet(root), stil = rm.matches || !!opties.stil, raf = 0, gekozen = null, deeltjes = [];
-    const M = {}, el = {};
+    const M = {}, el = {}, knoppen = {};
+    let terug = null;
     IDS.forEach((id, i) => {
       M[id] = {id, x: 0, y: 0, toestand: "leeg", seed: i * 977 + 311, gekozen: false};
       const bel = document.createElement("div"), naam = document.createElement("div"), hit = document.createElement("button");
       bel.className = "pk-bel"; naam.className = "pk-naam"; hit.className = "pk-hit"; hit.type = "button";
       naam.innerHTML = `<b>${i + 1}</b>${NAMEN[id][0]}`;
-      hit.onclick = bel.onclick = () => kies(gekozen === id ? null : id);
+      hit.onclick = bel.onclick = () => { terug = hit; kies(gekozen === id ? null : id); };
       ov.append(bel, naam, hit); el[id] = {bel, naam, hit};
+    });
+    // De werkbalk (VA-64): dezelfde kies(). Het 2D-kantoor heeft geen kantoormanager, dus geen knop voor hem.
+    root.querySelectorAll(".pk-balk .pk-knop").forEach(k => {
+      const id = k.dataset.wie;
+      if (!IDS.includes(id)) { k.hidden = true; return; }
+      knoppen[id] = k; k.onclick = () => { terug = k; kies(gekozen === id ? null : id); };
     });
     const bord = document.createElement("div"); bord.className = "pk-bord"; bord.innerHTML = "LEVRAI <span>·</span> VASTGOED"; ov.appendChild(bord);
     const pos = (e, x, y) => { e.style.left = x / L.W * 100 + "%"; e.style.top = y / L.H * 100 + "%"; };
@@ -1499,12 +1839,15 @@ const PK = (() => {
       uitleg.querySelector(".pk-tekst").textContent = r.uitleg;
     }
     function kies(id) {
-      gekozen = id; IDS.forEach(k => { M[k].gekozen = k === id; el[k].hit.setAttribute("aria-expanded", String(k === id)); });
+      gekozen = id; IDS.forEach(k => { M[k].gekozen = k === id; el[k].hit.setAttribute("aria-expanded", String(k === id));
+        if (knoppen[k]) knoppen[k].setAttribute("aria-expanded", String(k === id)); });
       uitleg.hidden = !id; if (id) toonUitleg(id);
       if (stil) teken(performance.now());
     }
-    uitleg.querySelector(".pk-sluit").onclick = () => { const was = gekozen; kies(null); if (was) el[was].hit.focus(); };
-    document.addEventListener("keydown", e => { if (e.key === "Escape" && gekozen) { const was = gekozen; kies(null); el[was].hit.focus(); } }); // VA-31: Escape sluit de uitleg
+    const sluit = () => { const was = gekozen; if (!was) return; kies(null); ((terug && terug.isConnected) ? terug : el[was].hit).focus(); };
+    uitleg.querySelector(".pk-sluit").onclick = sluit;
+    // VA-31: Escape sluit de uitleg; niet als een pand open is (dat sluit zelf), VA-64.
+    document.addEventListener("keydown", e => { if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector("dialog[open]")) sluit(); });
 
     function indeling() {
       const b = scene.clientWidth; if (!b || b === breedte) return; breedte = b;
@@ -1572,8 +1915,8 @@ const TEKST3D = {
   // Wat de kantoormanager zegt (afhankelijk van de cijfers) komt uit PAYLOAD.kantoor.tekst.chef (VA-60).
   chef: {naam: "Kantoormanager", rol: "geen stap van de pandenselectie",
     uitleg: "De kantoormanager is geen stap van de pandenselectie en heeft geen eigen cijfers. Vraagt een medewerker je aandacht, dan loopt de kantoormanager daarheen. Anders loopt de kantoormanager een ronde door het kantoor."},
-  voet: "Elke medewerker is een stap van de pandenselectie. Wat ze zeggen, komt uit de cijfers van dit dashboard. De kantoormanager loopt naar wie je aandacht vraagt. Klik op iemand voor uitleg.",
-  lijst: "Wat elke medewerker zegt",
+  // VA-63: de eerste twee zinnen staan nu als uitleg onder de titel van het kantoor.
+  voet: "De kantoormanager loopt naar wie je aandacht vraagt. Klik op iemand in het kantoor of op een naam hierboven voor uitleg.",
   hit: (naam, bel) => `${naam}: ${String(bel).replace(/[.]$/, "")}. Toon uitleg.`,
   geenWebGL: "WebGL staat uit in je browser. Je ziet het kantoor in 2D.",
   geenThree: "Je browser kon de 3D-weergave niet laden. Je ziet het kantoor in 2D.",
@@ -2102,16 +2445,14 @@ const bouwPK3D = () => (() => {
     const chef = {id: "chef", p: chefP, path: [], mode: "stand", face: Math.PI, wait: 0, seed: 7, at: "maquette", target: null, retarget: 0, k: 0};
     const ACT = [...IDS.map(id => W[id]), chef];
     const el = {};
-    const lijst2 = document.createElement("ul"); lijst2.className = "pk-lijst"; lijst2.setAttribute("aria-label", TEKST3D.lijst);
-    sceneEl.after(lijst2);
+    // De werkbalk staat al in de pagina (werkbalk_html() in Python, VA-64): hier alleen aanhaken.
+    const balk = root.querySelector(".pk-balk");
     ACT.forEach(a => {
       const bel = document.createElement("div"), naam = document.createElement("div"), hit = document.createElement("button"), z = document.createElement("div");
       bel.className = "pk-bel"; naam.className = "pk-naam"; hit.className = "pk-hit"; hit.type = "button"; z.className = "pk-z"; z.hidden = true;
       naam.innerHTML = a === chef ? TEKST3D.chef.naam : `<b>${a.nr}</b>${NAMEN[a.id][0]}`;
       if (a === chef) { naam.classList.add("chef"); bel.hidden = true; }
-      const li = document.createElement("li"), knop = document.createElement("button"); knop.type = "button";
-      knop.innerHTML = `<b></b><span></span>`; knop.querySelector("b").textContent = a === chef ? TEKST3D.chef.naam : `${a.nr} · ${NAMEN[a.id][0]}`;
-      li.appendChild(knop); lijst2.appendChild(li);
+      const knop = balk.querySelector(`.pk-knop[data-wie="${a.id}"]`); knop.hidden = false;
       hit.onclick = bel.onclick = () => kies(gekozen === a.id ? null : a.id, hit);
       knop.onclick = () => kies(gekozen === a.id ? null : a.id, knop);
       ov.append(naam, bel, z, hit); el[a.id] = {bel, naam, hit, z, knop, tekst: null};
@@ -2132,7 +2473,7 @@ const bouwPK3D = () => (() => {
         if (e.tekst !== r.bel) { e.tekst = r.bel; e.bel.textContent = r.bel; e.bel.style.animation = "none"; e.bel.offsetWidth; e.bel.style.animation = ""; }
         e.bel.className = "pk-bel " + r.s; e.naam.className = "pk-naam " + r.s;
         e.hit.setAttribute("aria-label", TEKST3D.hit(NAMEN[id][0], r.bel));
-        e.knop.className = r.s; e.knop.querySelector("span").textContent = r.bel;
+        e.knop.className = "pk-knop " + r.s; e.knop.querySelector(".bel").textContent = r.bel;
       });
       spullen(); chefInfo();
       if (gekozen) toonUitleg(gekozen);
@@ -2143,7 +2484,7 @@ const bouwPK3D = () => (() => {
       const c = chefTekst(), e = el.chef, zin = c.zin;
       info.chef = {s: "chef", zin, uitleg: TEKST3D.chef.uitleg, bel: ""};
       e.hit.setAttribute("aria-label", TEKST3D.hit(TEKST3D.chef.naam, zin));
-      e.knop.className = "chef"; e.knop.querySelector("span").textContent = zin;
+      e.knop.className = "pk-knop chef"; e.knop.querySelector(".bel").textContent = zin;
     }
     function spullen() {   // wat in de kamers meebeweegt met de cijfers
       const sel = data && data.selectie;
@@ -2170,7 +2511,8 @@ const bouwPK3D = () => (() => {
     }
     function sluit() { if (!gekozen) return; const terug = opener; kies(null); if (terug && terug.isConnected) terug.focus(); }
     uitleg.querySelector(".pk-sluit").onclick = sluit;
-    document.addEventListener("keydown", e => { if (e.key === "Escape" && gekozen) sluit(); });
+    // Escape sluit de uitleg; niet als een pand open is (dat sluit zelf) of de lade (VA-64).
+    document.addEventListener("keydown", e => { if (e.key === "Escape" && gekozen && !e.defaultPrevented && !document.querySelector("dialog[open]")) sluit(); });
 
     // ------------------------------------------------------------ bewegen
     const SPEED = 2.3;
@@ -2292,7 +2634,11 @@ const bouwPK3D = () => (() => {
       const w = sceneEl.clientWidth, h = sceneEl.clientHeight; if (!w || !h) return false;
       B = w; H = h; smal = w < 560; root.classList.toggle("pk-smal", smal);
       renderer.setSize(w, h, false);
-      const halfW = TOTAL / 2 + (smal ? 0.5 : 2.2), halfH = halfW * h / w;
+      // De camera is afgesteld op 1,45 : 1 (smal 1 : 1). Is de scène breder, omdat haar hoogte
+      // begrensd is (VA-64 crit. 13), dan kijkt ze breder in plaats van boven en onder af te snijden.
+      const r0 = smal ? 1 : 1.45;
+      let halfW = TOTAL / 2 + (smal ? 0.5 : 2.2), halfH = halfW * h / w;
+      if (w / h > r0) { halfH = halfW / r0; halfW = halfH * w / h; }
       Object.assign(cam, {left: -halfW, right: halfW, top: halfH, bottom: -halfH}); cam.updateProjectionMatrix();
       root.style.setProperty("--pk-bel-max", Math.round(w * .19) + "px");
       ACT.forEach(a => { el[a.id].hit.tabIndex = smal ? -1 : 0; });
@@ -2410,6 +2756,7 @@ function kantoorStart(root, data, opties = {}) {
     try { PK3D = PK3D || bouwPK3D(); return PK3D.start(root, data, opties); }
     catch (e) { gl = false; scene.replaceWith(schoon); }  // half gebouwd 3D eerst weg
   }
+  root.querySelector(".pk-scene").classList.remove("pk-start");   // het 2D-canvas bepaalt zijn eigen hoogte
   const noot = document.createElement("div"); noot.className = "pk-noot";
   noot.textContent = window.THREE ? TEKST3D.geenWebGL : TEKST3D.geenThree;
   if (!opties.forceer2d) root.querySelector(".pk-voet").appendChild(noot);
@@ -2439,11 +2786,15 @@ function kantoorStart(root, data, opties = {}) {
 def render(payload: dict) -> str:
     """Vul het sjabloon. De payload als laatste, zodat zijn inhoud niet wordt vervangen."""
     tip = payload["peildatum_tip"]
-    return (TEMPLATE
+    html = (TEMPLATE
             .replace("__LABEL__", payload["gebied"])
             .replace("__PEILDATUM__", escape(payload["peildatum"]))
             .replace("__PEILTIP__", f' data-tip="{escape(tip)}"' if tip else "")
-            .replace("__PAYLOAD__", json.dumps(payload, ensure_ascii=False)))
+            .replace("__MENU__", menu_html())
+            .replace("__WERKBALK__", werkbalk_html((payload.get("kantoor") or {}).get("tekst"))))
+    for sleutel, tekst in (payload.get("koppen") or koppen(payload["gebied"], None, None)).items():
+        html = html.replace("__KOP_" + sleutel.upper().replace(".", "_") + "__", escape(tekst))
+    return html.replace("__PAYLOAD__", json.dumps(payload, ensure_ascii=False))
 
 
 def main() -> int:

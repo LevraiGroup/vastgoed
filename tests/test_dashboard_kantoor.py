@@ -236,9 +236,15 @@ class Pagina(unittest.TestCase):
     """Het kantoor staat bovenaan, haakt in op PAYLOAD.kantoor en laadt niets van buiten."""
 
     def test_plaats_en_aanhaakpunt(self):
+        # Sinds VA-64 staat het kantoor (#pk) in het eerste deel van de pagina, #kantoor,
+        # vóór de kerncijfers; de kop van dat deel staat erboven.
         t = bd.TEMPLATE
-        self.assertLess(t.index('<section class="pk" id="pk"'), t.index('<section class="kpis"'))
-        self.assertLess(t.index('</header>'), t.index('<section class="pk" id="pk"'))
+        kantoor = t.index('<section class="deel" id="kantoor"')
+        self.assertLess(t.index('<main class="inhoud"'), kantoor)
+        self.assertLess(kantoor, t.index('<div class="pk" id="pk"'))
+        self.assertLess(t.index('<div class="pk" id="pk"'), t.index('<div class="kpis" id="kpis"'))
+        self.assertLess(t.index('<header class="kop">', kantoor), t.index('<div class="pk" id="pk"'))
+        self.assertEqual(t.count('<section class="deel"', t.index('<main'), kantoor), 0)
         self.assertIn("kantoorStart(pk, PAYLOAD.kantoor)", t)  # VA-60, na het laden van three.js
         self.assertIn("<canvas", t)
 
@@ -248,8 +254,9 @@ class Pagina(unittest.TestCase):
         for weg in ('id="pkKnop"', "Verberg kantoor", "Toon kantoor", "aria-pressed",
                     ".pk[hidden]", "toon(aan)", "root.hidden = "):
             self.assertNotIn(weg, t)
-        sectie = t[t.index('<section class="pk"'):]
-        self.assertNotIn("hidden", sectie[:sectie.index(">")])
+        for begin in ('<section class="deel" id="kantoor"', '<div class="pk" id="pk"'):
+            tag = t[t.index(begin):]
+            self.assertNotIn("hidden", tag[:tag.index(">")], begin)
 
     def test_niets_van_buiten(self):
         t = bd.TEMPLATE.lower()

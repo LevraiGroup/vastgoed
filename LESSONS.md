@@ -89,3 +89,8 @@ struck through with the reason, never deleted.
   the one being measured.** Several snapshots that share a pand merged in memory, and the first
   stream dropped them; it now merges per pand-ID in snapshot order. National run: 9.998.456 VBO's,
   6.568.913 panden, peak 174 MB, 832 s. *(2026-11-09, Vera, VA-36)*
+- **A box with `aspect-ratio` and `max-height` keeps its ratio by shrinking its width.** Set
+  `width:100%` and measure the width as well as the height when you cap it; the 3D camera then
+  widens its view instead of cropping. *(2026-11-11, Ada and Vera, VA-64)*
+- **Turn transitions on after the first frame.** A layout class set at load otherwise animates:
+  the drawer slid across the phone screen on every load. *(2026-11-11, Lumi, VA-63/VA-64)*
