@@ -94,3 +94,8 @@ struck through with the reason, never deleted.
   widens its view instead of cropping. *(2026-11-11, Ada and Vera, VA-64)*
 - **Turn transitions on after the first frame.** A layout class set at load otherwise animates:
   the drawer slid across the phone screen on every load. *(2026-11-11, Lumi, VA-63/VA-64)*
+- **"Not a literal in the code" includes `.get(key, default)` fallbacks.** Read required config
+  keys bare and let the config check name what is missing. *(2026-11-11, Vera, VA-37)*
+- **A national run never holds all panden.** Counts, the 20 best and the best `werklijst_max` per
+  part stay in memory; the 441.997-row master stock is sorted in a temporary SQLite on D:. Peak
+  172–184 MB for 6.568.913 panden. *(2026-11-11, VA-37)*

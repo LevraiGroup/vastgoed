@@ -21,6 +21,7 @@ from selectie import (
     DATA, kies_snapshots, load_config, mastervolgorde, verwerk, werklijst,
     werklijst_maand, werklijst_waarschuwing,
 )
+import nederland
 from selectie import controleer_drempels, nl_tal
 from snapshots import SnapshotFout
 
@@ -29,6 +30,28 @@ UIT = BASE / "output"
 UIT.mkdir(exist_ok=True)
 
 BAG_VIEWER = "https://bagviewer.kadaster.nl/lvbag/bag-viewer/index.html#?searchQuery="
+
+KOLOMMEN = [
+    "lead_id", "bag_pand_id", "hoofdadres", "gekoppelde_adressen", "woonplaats",
+    "postcode", "bouwjaar", "pandstatus", "vbo_ids", "aantal_vbo", "aantal_adressen",
+    "gebruiksdoelen", "opp_per_functie", "totale_oppervlakte", "pandcategorie",
+    "categorieen", "leadscore", "selectiereden", "visuele_controle", "beoordeling",
+    "eerder_geselecteerd", "laatst_beoordeeld", "bron", "datapeildatum",
+]
+
+
+def csv_rij(p: dict) -> dict:
+    """Eén pand als CSV-rij: lijsten met ' | ', woordenboeken als 'a=b; c=d'."""
+    r = {}
+    for k in KOLOMMEN:
+        v = p.get(k, "")
+        if isinstance(v, list):
+            v = " | ".join(str(x) for x in v)
+        elif isinstance(v, dict):
+            v = "; ".join(f"{a}={b}" for a, b in sorted(v.items()))
+        r[k] = v
+    r["bag_viewer_url"] = f"{BAG_VIEWER}{p['bag_pand_id']}"
+    return r
 
 
 def main() -> int:
@@ -45,6 +68,13 @@ def main() -> int:
         for fout in fouten:
             print(f"FOUT in config.yaml: {fout}", file=sys.stderr)
         return 2
+    if nederland.is_nederland(cfg):
+        # VA-37: heel Nederland uit de landelijke snapshot, pand voor pand.
+        try:
+            return nederland.draai(cfg, args.snapshot, KOLOMMEN, csv_rij, UIT, DATA)
+        except (SnapshotFout, nederland.NederlandFout, FileNotFoundError) as fout:
+            print(f"FOUT: {fout}", file=sys.stderr)
+            return 1
     label, woonplaatsen = resolve(cfg)
     sl = slug(label)
     try:
@@ -109,25 +139,7 @@ def main() -> int:
         print(f"    BAG-viewer  : {BAG_VIEWER}{p['bag_pand_id']}")
 
     # CSV-export van het proefresultaat.
-    kolommen = [
-        "lead_id", "bag_pand_id", "hoofdadres", "gekoppelde_adressen", "woonplaats",
-        "postcode", "bouwjaar", "pandstatus", "vbo_ids", "aantal_vbo", "aantal_adressen",
-        "gebruiksdoelen", "opp_per_functie", "totale_oppervlakte", "pandcategorie",
-        "categorieen", "leadscore", "selectiereden", "visuele_controle", "beoordeling",
-        "eerder_geselecteerd", "laatst_beoordeeld", "bron", "datapeildatum",
-    ]
-
-    def _rij(p: dict) -> dict:
-        r = {}
-        for k in kolommen:
-            v = p.get(k, "")
-            if isinstance(v, list):
-                v = " | ".join(str(x) for x in v)
-            elif isinstance(v, dict):
-                v = "; ".join(f"{a}={b}" for a, b in sorted(v.items()))
-            r[k] = v
-        r["bag_viewer_url"] = f"{BAG_VIEWER}{p['bag_pand_id']}"
-        return r
+    kolommen, _rij = KOLOMMEN, csv_rij
 
     proef_csv = UIT / f"proefresultaat_20_{sl}.csv"
     with open(proef_csv, "w", newline="", encoding="utf-8-sig") as fh:

@@ -121,6 +121,9 @@ def aggregeer(rows: list[dict]) -> list[dict]:
                 "vbo_statussen": sorted({v.get("status", "") for v in vbos}),
             }
         )
+        if "gemeentecode" in eerste:
+            # Landelijke snapshot (VA-34): de gemeente van dezelfde VBO als de woonplaats (VA-37).
+            panden[-1]["gemeentecode"] = eerste.get("gemeentecode") or ""
 
     return panden
 
@@ -640,6 +643,13 @@ def controleer_drempels(cfg: dict) -> list[str]:
     elif isinstance(schaal, (int, float)) and not isinstance(schaal, bool) and score > schaal:
         fouten.append(f"drempels.score_min_voor_werklijst = {score} is hoger dan score.schaal_max = "
                       f"{schaal}: geen pand kan die score halen")
+    aandeel = drempels.get("werklijst_aandeel_overig")  # None = ontbreekt: wordt hieronder gemeld
+    if isinstance(aandeel, bool) or not isinstance(aandeel, (int, float)) or aandeel != aandeel \
+            or not 0 <= aandeel <= 1:
+        fouten.append(f"drempels.werklijst_aandeel_overig = {aandeel!r} is geen getal van 0 tot en met 1")
+    groot = drempels.get("aantal_grote_gemeenten")
+    if not _heel_getal(groot) or groot < 1:
+        fouten.append(f"drempels.aantal_grote_gemeenten = {groot!r} is geen heel getal van minstens 1")
     return fouten
 
 

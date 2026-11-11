@@ -16,6 +16,8 @@ bron:
 doelgebied:
   steden: ["Delft"]           # bv. ["Delft"] of ["Delft", "'s-Gravenhage", "Rotterdam"]
   provincies: []              # bv. ["Zuid-Holland"]  — LET OP: hele provincie is zeer groot
+  nederland: false            # true = heel Nederland uit de landelijke snapshot (bag_nl_<datum>.sqlite,
+                              # python ingest_gpkg.py); steden en provincies tellen dan niet (VA-37)
 # Geldige provincienamen: Groningen, Friesland, Drenthe, Overijssel, Flevoland,
 # Gelderland, Utrecht, Noord-Holland, Zuid-Holland, Zeeland, Noord-Brabant, Limburg
 
@@ -115,6 +117,10 @@ drempels:
   score_min_voor_werklijst: 8
   werklijst_min: 200
   werklijst_max: 500
+  # Alleen voor doelgebied Nederland (VA-37): de werklijst komt vooral uit de grootste gemeenten
+  # volgens CBS (referentie/gemeenten_cbs_<jaar>.csv), en een klein deel uit de rest van het land.
+  aantal_grote_gemeenten: 25
+  werklijst_aandeel_overig: 0.10  # 10% van werklijst_max van buiten de grote gemeenten (Nova, Q9b)
 
 # --- Sectie 8: externe verrijkingsbronnen ---
 # Voeden de 'wacht'-signalen in de leadscore. Standaard UIT: zonder sleutel blijft het

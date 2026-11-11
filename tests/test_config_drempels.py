@@ -17,7 +17,8 @@ import run_proef  # noqa: E402
 import selectie  # noqa: E402
 
 GOED = {"score": {"schaal_max": 26},
-        "drempels": {"score_min_voor_werklijst": 8, "werklijst_min": 200, "werklijst_max": 500}}
+        "drempels": {"score_min_voor_werklijst": 8, "werklijst_min": 200, "werklijst_max": 500,
+                     "aantal_grote_gemeenten": 25, "werklijst_aandeel_overig": 0.10}}
 
 
 def met(**drempels):
@@ -49,6 +50,16 @@ class Drempels(unittest.TestCase):
                 fouten = selectie.controleer_drempels(cfg)
                 self.assertEqual(len(fouten), 1, fouten)
                 self.assertIn(verwacht, fouten[0])
+
+    def test_landelijke_sleutels_verplicht(self):
+        # VA-37 crit. 6: geen standaardwaarde in de code; een ontbrekende sleutel wordt genoemd.
+        for sleutel in ("aantal_grote_gemeenten", "werklijst_aandeel_overig"):
+            with self.subTest(sleutel=sleutel):
+                c = copy.deepcopy(GOED)
+                del c["drempels"][sleutel]
+                fouten = selectie.controleer_drempels(c)
+                self.assertEqual(len(fouten), 1)
+                self.assertIn(f"drempels.{sleutel} = None", fouten[0])
 
     def test_grenswaarden_mogen(self):
         self.assertEqual(selectie.controleer_drempels(met(werklijst_min=0, werklijst_max=1)), [])
