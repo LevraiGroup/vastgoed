@@ -99,3 +99,7 @@ struck through with the reason, never deleted.
 - **A national run never holds all panden.** Counts, the 20 best and the best `werklijst_max` per
   part stay in memory; the 441.997-row master stock is sorted in a temporary SQLite on D:. Peak
   172–184 MB for 6.568.913 panden. *(2026-11-11, VA-37)*
+- **A payload with hundreds of records puts labels and repeated values in once and gives each
+  record numbers** (2 MB went to 0,89 MB for 500 panden); a test unfolds the short form back to
+  the full one. When measuring Fast 4G, report warm and cold runs apart: a cold headless start adds
+  about 2 s at any page size. *(2026-11-12, Ada and Vera, VA-39)*

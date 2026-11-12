@@ -310,7 +310,11 @@ class TestWerklijstDelft(unittest.TestCase):
             data.mkdir()
             argv = ["run_proef.py", "--snapshot", AUGUSTUS_SNAPSHOT]
             fout = io.StringIO()
-            with mock.patch.object(run_proef, "UIT", uit), \
+            # De gecommitte config kiest Nederland (VA-39); deze test draait Delft, zoals in augustus.
+            delft = copy.deepcopy(self.cfg)
+            delft["doelgebied"]["nederland"] = False
+            with mock.patch.object(run_proef, "load_config", return_value=delft), \
+                    mock.patch.object(run_proef, "UIT", uit), \
                     mock.patch.object(run_proef, "BASE", Path(tmp)), \
                     mock.patch.object(run_proef, "DATA", data), \
                     mock.patch.object(sys, "argv", argv), \

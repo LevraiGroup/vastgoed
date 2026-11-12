@@ -72,12 +72,21 @@ doelgebied:
 
 ## Gebruik
 
+Het doelgebied staat in `config.yaml`. Standaard is dat **heel Nederland**
+(`doelgebied.nederland: true`): de werklijst van 500 komt uit de landelijke BAG-GeoPackage, voor
+het grootste deel uit de grootste gemeenten volgens CBS (zie hieronder). Elke maand:
+
 ```bash
 pip install -r requirements.txt
-python ingest.py            # haalt VBO's op -> data/vbo_<plaats>_<JJJJ-MM-DD>.json (+ .meta.json)
-python run_proef.py         # aggregeert, scoort -> output/*.csv + data/panden_<gebied>.json
+python ingest_gpkg.py       # leest data/bron/bag-light_<datum>.gpkg -> data/bag_nl_<datum>.sqlite
+python run_proef.py         # selectie voor Nederland -> output/werklijst_nederland_<JJJJ-MM>.csv
+                            #   + data/panden_nederland.json (ca. 15-20 min, < 200 MB geheugen)
 python build_dashboard.py   # bouwt het dashboard voor het gekozen gebied
 ```
+
+Voor één stad, zoals Delft (de regressiebasis): zet `doelgebied.nederland: false` met
+`steden: ["Delft"]`, en haal de VBO's op met `python ingest.py` (PDOK WFS) in plaats van
+`ingest_gpkg.py`. De Delft-cijfers en -CSV's veranderen daar niet door.
 
 Online staat alleen het dashboard (`design/index.html`): Railway bouwt elke push naar `main`
 met Railpack (`railpack.json`) en start `serve.py`, dat alleen `design/` serveert met de

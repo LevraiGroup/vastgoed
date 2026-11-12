@@ -1,6 +1,10 @@
 """
 Levrai Group - Pandenselectiesysteem
-Bouwt het dashboard (design/index.html) data-gedreven uit panden_delft.json.
+Bouwt het dashboard (design/index.html) data-gedreven uit panden_<gebied>.json.
+
+Welk gebied, kiest config.yaml: doelgebied.nederland: true leest data/panden_nederland.json
+(VA-37: de landelijke totalen en de werklijst van de maand, VA-39); anders panden_<stad>.json
+met alle panden van dat gebied, zoals voor Delft.
 
 Draai na run_proef.py. Genereert een zelfstandige HTML met ingesloten payload,
 zodat de pagina ook als statische snapshot (Claude Design) werkt zonder fetch.
@@ -16,6 +20,8 @@ from datetime import date
 from html import escape
 from pathlib import Path
 
+import nederland
+import snapshots
 from gebieden import resolve, slug
 from selectie import load_config
 
@@ -25,6 +31,8 @@ OUT = BASE / "design" / "index.html"
 
 MAANDEN = ("jan", "feb", "mrt", "apr", "mei", "jun",
            "jul", "aug", "sep", "okt", "nov", "dec")
+MAANDEN_VOL = ("januari", "februari", "maart", "april", "mei", "juni",
+               "juli", "augustus", "september", "oktober", "november", "december")
 BRON_ONBEKEND = "bron onbekend — draai run_proef.py opnieuw"
 PEILDATUM_ONBEKEND = "Peildatum onbekend"
 NBSP = "\u00a0"  # harde spatie: een datum breekt nooit over twee regels
@@ -115,6 +123,32 @@ def bron_regels(bron: list[dict] | None) -> list[str]:
             for b in bron]
 
 
+def maand_voluit(jjjj_mm: str | None) -> str:
+    """'JJJJ-MM' -> 'november JJJJ' (maand voluit, kleine letter); onleesbaar -> 'onbekend'."""
+    try:
+        j, m = (int(x) for x in str(jjjj_mm).split("-"))
+        return f"{MAANDEN_VOL[m - 1]} {j}" if 1 <= m <= 12 else "onbekend"
+    except (ValueError, TypeError):
+        return "onbekend"
+
+
+def lees_landelijk(pad: Path) -> tuple[dict | None, str]:
+    """
+    Lees panden_nederland.json (VA-37): {'gebied', 'totalen', 'werklijst', 'proef'}.
+    Ontbreekt het bestand of klopt de vorm niet, dan (None, reden), net als lees_panden().
+    """
+    if not pad.is_file():
+        return None, f"{pad.name} ontbreekt"
+    try:
+        inhoud = json.loads(pad.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as fout:
+        return None, f"{pad.name} is niet leesbaar ({fout})"
+    if (not isinstance(inhoud, dict) or not isinstance(inhoud.get("totalen"), dict)
+            or not isinstance(inhoud.get("werklijst"), list)):
+        return None, f"{pad.name} heeft geen totalen en werklijst"
+    return inhoud, ""
+
+
 def lees_panden(panden_pad: Path) -> tuple[list[dict] | None, str]:
     """
     Lees panden_<gebied>.json. Ontbreekt het bestand of is het onleesbaar, dan
@@ -197,6 +231,37 @@ def kantoor(gebied: str, bron: list[dict] | None, panden: list[dict] | None,
     return blok
 
 
+def kantoor_landelijk(bron: list[dict] | None, totalen: dict | None, aantal_leads: int | None,
+                      cfg: dict) -> dict:
+    """
+    PAYLOAD.kantoor voor heel Nederland (VA-39 crit. 6): dezelfde vorm als kantoor(), maar de
+    cijfers komen uit de totalen die VA-37 schreef; panden_nederland.json heeft niet elk pand.
+    'landelijk' kiest in kantoor_teksten() Lumi's landelijke zinnen. Onbekend blijft None.
+    """
+    t = totalen or {}
+    drempels = cfg.get("drempels") or {}
+    blok = {
+        "gebied": nederland.NAAM,
+        "ingest": {"bron": bron, "vbo": t.get("vbo"), "verouderd": False, "landelijk": True},
+        "selectie": {"panden": t.get("panden"), "a_e": t.get("a_e"), "werklijst": t.get("werklijst"),
+                     "drempel": t.get("drempel"),
+                     "werklijst_min": drempels.get("werklijst_min"),
+                     "werklijst_max": drempels.get("werklijst_max"),
+                     "categorieen": t.get("categorieen"),
+                     "geschikt": t.get("geschikt"),
+                     "werklijst_groot": t.get("werklijst_25"),
+                     "werklijst_elders": t.get("werklijst_overig"),
+                     "aantal_groot": t.get("aantal_grote_gemeenten"),
+                     "landelijk": True},
+        # Verrijking draait (nog) niet landelijk: hoeveel panden verrijkt zijn, is onbekend.
+        "verrijking": {"panden": t.get("a_e"), "actief": actieve_bronnen(cfg), "verrijkt": None},
+        "controle": {"totaal": aantal_leads, "te_controleren": aantal_leads, "gecontroleerd": None,
+                     "landelijk": True},
+    }
+    blok["tekst"] = kantoor_teksten(blok)
+    return blok
+
+
 # --------------------------------------------------------------- kantoorteksten
 # Wat elke medewerker zegt (VA-30-copytabel; VA-31 criteria 2, 4 en 11). Toestand en
 # zinnen worden hier gemaakt en getest; het script in de pagina toont ze alleen.
@@ -255,14 +320,17 @@ def toestand(wie: str, d: dict | None) -> str:
 
 
 def _ingest(s: str, d: dict, g: str) -> tuple[str, str, str]:
-    uitleg = (f"Ingest haalt alle verblijfsobjecten van {g} op uit de BAG, via de open PDOK-dienst. "
-              "Elke ophaling blijft bewaard als eigen, gedateerde momentopname, zodat je altijd ziet "
-              "uit welke ophaling een cijfer komt.")
+    # Landelijk: Lumi's kopij VA-39 (uit het GeoPackage-bestand, niet via de WFS).
+    uitleg = (f"Ingest leest de BAG van heel {g} in uit het GeoPackage-bestand van PDOK, de open "
+              "dataset van het Kadaster." if d.get("landelijk") else
+              f"Ingest haalt alle verblijfsobjecten van {g} op uit de BAG, via de open PDOK-dienst.")
+    uitleg += (" Elke ophaling blijft bewaard als eigen, gedateerde momentopname, zodat je altijd ziet "
+               "uit welke ophaling een cijfer komt.")
     if s == "werkt":
         o = opgehaald(d["bron"])
-        return (f"BAG opgehaald {o['kort']}",
-                f"Ingest heeft de BAG van {g} opgehaald {o['zin']}: {nl_getal(d.get('vbo'))} verblijfsobjecten.",
-                uitleg)
+        zin = (f"Ingest heeft de BAG van heel {g} ingelezen uit het bestand van {o['kort']}: "
+               if d.get("landelijk") else f"Ingest heeft de BAG van {g} opgehaald {o['zin']}: ")
+        return (f"BAG opgehaald {o['kort']}", zin + f"{nl_getal(d.get('vbo'))} verblijfsobjecten.", uitleg)
     if s == "aandacht":
         if not d.get("bron"):
             return ("Bron onbekend", "Ingest weet niet uit welke BAG-ophaling deze cijfers komen. "
@@ -281,14 +349,24 @@ def _ingest(s: str, d: dict, g: str) -> tuple[str, str, str]:
 def _selectie(s: str, d: dict, g: str) -> tuple[str, str, str]:
     w, dr = nl_getal(d.get("werklijst")), d.get("drempel")
     mn, mx = nl_getal(d.get("werklijst_min")), nl_getal(d.get("werklijst_max"))
+    landelijk = d.get("landelijk")
+    # Landelijk is de werklijst de beste {w} uit de geschikte panden (VA-37), niet alle geschikte.
+    geschikt = nl_getal(d.get("geschikt")) if landelijk else w
     uitleg = (f"Selectie groepeert de verblijfsobjecten per BAG-pand, sluit panden uit die buiten de "
               f"briefing vallen, deelt de rest in categorie A–E in en geeft elk pand een leadscore. Van de "
-              f"{nl_getal(d.get('panden'))} panden in {g} vallen er {nl_getal(d.get('a_e'))} in A–E; {w} halen "
-              f"score {dr} of hoger.")
+              f"{nl_getal(d.get('panden'))} panden in {g} vallen er {nl_getal(d.get('a_e'))} in A–E; {geschikt} "
+              f"halen score {dr} of hoger.")
+    if landelijk:
+        uitleg += (f" Daaruit komen de {w} hoogst scorende op de werklijst: {nl_getal(d.get('werklijst_groot'))} "
+                   f"uit de {nl_getal(d.get('aantal_groot'))} gemeenten met de meeste inwoners (CBS) en "
+                   f"{nl_getal(d.get('werklijst_elders'))} elders in {g}. Bij gelijke score beslist een loting "
+                   "die de hele maand gelijk blijft.")
     if s == "werkt":
-        return (f"{w} panden op de werklijst",
-                f"Selectie heeft {nl_getal(d.get('a_e'))} panden in categorie A–E gescoord. {w} halen score "
-                f"{dr} of hoger en staan op de werklijst.", uitleg)
+        zin = (f"Selectie heeft {nl_getal(d.get('a_e'))} panden in categorie A–E gescoord. {geschikt} halen "
+               f"score {dr} of hoger; de {w} beste staan op de werklijst." if landelijk else
+               f"Selectie heeft {nl_getal(d.get('a_e'))} panden in categorie A–E gescoord. {w} halen score "
+               f"{dr} of hoger en staan op de werklijst.")
+        return (f"{w} panden op de werklijst", zin, uitleg)
     if s == "aandacht":
         # Nova, VA-30 Q5: de maand blijft onder de gebruikelijke 200–500; nooit "ondergrens" of
         # "geen levering".
@@ -328,7 +406,8 @@ def _verrijking(s: str, d: dict, g: str) -> tuple[str, str, str]:
 
 def _controle(s: str, d: dict, g: str) -> tuple[str, str, str]:
     tot, gec = nl_getal(d.get("totaal")), nl_getal(d.get("gecontroleerd"))
-    uitleg = (f"Controle zet de {tot} hoogst scorende panden klaar voor je visuele controle. Bekijk elk "
+    wat = f"de {tot} panden van de werklijst" if d.get("landelijk") else f"de {tot} hoogst scorende panden"
+    uitleg = (f"Controle zet {wat} klaar voor je visuele controle. Bekijk elk "
               "pand op de kaart, de luchtfoto en Street View voordat het een lead wordt. Bij elk pand "
               "hieronder staat een link naar de BAG-viewer.")
     if s == "werkt":
@@ -396,6 +475,10 @@ GEEN = "geen"
 PAND_VELDEN = [  # (veld, label, soort)
     ("hoofdadres", "Hoofdadres", "tekst"),
     ("woonplaats", "Woonplaats", "tekst"),
+    # Alleen landelijke records (VA-37 crit. 2); labels van Lumi (kopij VA-39, sectie 3).
+    ("gemeente", "Gemeente", "gemeente"),
+    ("gemeentecode", "Gemeentecode", "tekst"),
+    ("grote_gemeente", "In de {aantal} grootste gemeenten", "tekst"),  # 'ja'/'nee' in de data
     ("postcode", "Postcode", "tekst"),
     ("huisnummer", "Huisnummer", "tekst"),
     ("huisletter", "Huisletter", "geen_tekst"),
@@ -429,6 +512,10 @@ PAND_VELDEN = [  # (veld, label, soort)
     ("eerder_geselecteerd", "Eerder geselecteerd", "janee"),
     ("laatst_beoordeeld", "Laatst beoordeeld", "invuldatum"),
 ]
+# Velden die een Delfts record niet heeft: daar geen rij, in plaats van drie keer 'onbekend'.
+ALLEEN_LANDELIJK = {"gemeente", "gemeentecode", "grote_gemeente"}
+# De rijen van de detailweergave: alles behalve de score-opbouw, die de pagina apart toont.
+DETAIL_VELDEN = [(v, label, soort) for v, label, soort in PAND_VELDEN if soort != "opbouw"]
 
 
 def _decimaal(n: float, decimalen: int) -> str:
@@ -477,6 +564,8 @@ def pand_waarde(soort: str, v):
         return _decimaal(v, 2)
     if soort == "datum":
         return nl_datum(v) if lees_datum(v) else str(v)
+    if soort == "gemeente":
+        return gemeente_naam(v)
     return str(v)
 
 
@@ -502,34 +591,253 @@ LUCHTFOTO_WMS = "https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0"
 LUCHTFOTO_HALF_M = 40  # 80 m breed: pand en straat zichtbaar (VA-62 crit. 1: 50-150 m)
 
 
-def pand_locatie(p: dict) -> dict | None:
-    """Luchtfoto-URL en links voor een pand met bruikbare x,y; anders None (VA-62 crit. 7)."""
+# De drie adressen per pand, met {b} (BBOX in RD) en {ll} (breedte,lengte). Ze staan één keer in
+# de payload; per pand gaan alleen {b} en {ll} mee (VA-39 crit. 5: 500 panden houden de pagina licht).
+PLEK_SJABLOON = {
+    "foto": (f"{LUCHTFOTO_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=Actueel_orthoHR"
+             "&STYLES=&CRS=EPSG:28992&BBOX={b}&WIDTH=640&HEIGHT=640&FORMAT=image/jpeg"),
+    "maps": "https://www.google.com/maps/search/?api=1&query={ll}",
+    "streetview": "https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={ll}",
+}
+
+
+def pand_plek(p: dict) -> dict | None:
+    """{'b': BBOX van 80 m rond het pand, 'll': 'breedte,lengte'}, of None zonder bruikbare x,y."""
     x, y = p.get("x"), p.get("y")
     if not isinstance(x, (int, float)) or not isinstance(y, (int, float)) or not x or not y:
         return None
     breedte, lengte = rd_naar_wgs84(x, y)
     h = LUCHTFOTO_HALF_M
-    foto = (f"{LUCHTFOTO_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=Actueel_orthoHR"
-            f"&STYLES=&CRS=EPSG:28992&BBOX={x - h:.1f},{y - h:.1f},{x + h:.1f},{y + h:.1f}"
-            f"&WIDTH=640&HEIGHT=640&FORMAT=image/jpeg")
-    return {"lat": breedte, "lon": lengte, "foto": foto,
-            "maps": f"https://www.google.com/maps/search/?api=1&query={breedte},{lengte}",
-            "streetview": ("https://www.google.com/maps/@?api=1&map_action=pano"
-                           f"&viewpoint={breedte},{lengte}")}
+    return {"b": f"{x - h:.1f},{y - h:.1f},{x + h:.1f},{y + h:.1f}", "ll": f"{breedte},{lengte}"}
 
 
-def pand_detail(p: dict) -> dict:
+def pand_locatie(p: dict) -> dict | None:
+    """Luchtfoto-URL en links voor een pand met bruikbare x,y; anders None (VA-62 crit. 7)."""
+    plek = pand_plek(p)
+    if plek is None:
+        return None
+    breedte, lengte = (float(t) for t in plek["ll"].split(","))
+    return {"lat": breedte, "lon": lengte,
+            **{k: s.replace("{b}", plek["b"]).replace("{ll}", plek["ll"]) for k, s in PLEK_SJABLOON.items()}}
+
+
+def detail_labels(aantal_groot: int | None = None) -> list[str]:
+    """De labels van DETAIL_VELDEN, met het aantal grote gemeenten uit de data of config.yaml."""
+    return [label.replace("{aantal}", nl_getal(aantal_groot)) for _, label, _ in DETAIL_VELDEN]
+
+
+def pand_waarden(p: dict) -> list:
+    """Per DETAIL_VELDEN de waarde als Nederlandse tekst; None = geen rij voor dit pand."""
+    return [None if veld in ALLEEN_LANDELIJK and veld not in p else pand_waarde(soort, p.get(veld))
+            for veld, _, soort in DETAIL_VELDEN]
+
+
+def pand_detail(p: dict, aantal_groot: int | None = None) -> dict:
     """Alles voor de detailweergave van één pand: elk veld als Nederlandse tekst, plus locatie."""
-    rijen = []
-    for veld, label, soort in PAND_VELDEN:
-        waarde = pand_waarde(soort, p.get(veld))
-        if waarde is not None:
-            rijen.append({"k": label, "v": waarde})
+    rijen = [{"k": k, "v": v} for k, v in zip(detail_labels(aantal_groot), pand_waarden(p)) if v is not None]
     return {"titel": p.get("hoofdadres") or LEEG, "rijen": rijen, "locatie": pand_locatie(p)}
+
+
+class Tabel:
+    """Elke waarde één keer, per pand alleen haar nummer (VA-39 crit. 5: 500 panden houden de pagina licht)."""
+
+    def __init__(self) -> None:
+        self.lijst: list = []
+        self._nr: dict[str, int] = {}
+
+    def nr(self, waarde) -> int:
+        sleutel = json.dumps(waarde, ensure_ascii=False, sort_keys=True)
+        if sleutel not in self._nr:
+            self._nr[sleutel] = len(self.lijst)
+            self.lijst.append(waarde)
+        return self._nr[sleutel]
+
+
+def pand_kort(p: dict, waarden: Tabel) -> dict:
+    """
+    pand_detail() zoals hij in de payload gaat: per label van PAYLOAD.velden het nummer van de
+    waarde in PAYLOAD.waarden (null = geen rij), en de plek voor PAYLOAD.plek. De pagina vouwt
+    hem bij openen uit tot precies pand_detail(); tests/test_dashboard_pand.py houdt die gelijk.
+    """
+    return {"titel": p.get("hoofdadres") or LEEG, "w": [waarden.nr(v) for v in pand_waarden(p)],
+            "loc": pand_plek(p)}
+
+
+# CBS: 'Utrecht (gemeente)' naast de provincie Utrecht. Alleen dit exacte achtervoegsel gaat weg;
+# andere haakjes onderscheiden twee gemeenten met dezelfde naam en blijven staan (Lumi, VA-39).
+GEMEENTE_TOEVOEGING = " (gemeente)"
+
+
+def gemeente_naam(cbs: str | None) -> str:
+    """De CBS-naam zoals de kaart en het filter hem tonen: 'Utrecht (gemeente)' -> 'Utrecht'."""
+    if _leeg(cbs):
+        return LEEG
+    naam = str(cbs)
+    return naam[: -len(GEMEENTE_TOEVOEGING)] if naam.endswith(GEMEENTE_TOEVOEGING) else naam
+
+
+def kaartregel(p: dict, landelijk: bool) -> str:
+    """De regel onder het adres op een kaart (VA-39: met de gemeente als die anders is)."""
+    if not landelijk:
+        return f"{p.get('postcode', '')} {p.get('woonplaats', '')} · BAG {p.get('bag_pand_id', '')}"
+    plaats = f"{p.get('postcode', '')} {p.get('woonplaats', '')}"
+    g = gemeente_naam(p.get("gemeente"))
+    return plaats if g == p.get("woonplaats") else f"{plaats} · gemeente {g}"
+
+
+# Korte tags voor de kwalificatie-signalen die de gebruiker belangrijk vindt.
+# 'kind' stuurt de kleur: leeg = opvallend (amber), rest = groen.
+QUAL_TAG = {
+    "Buiten gebruik / leegstaand": ("🏚 leegstaand", "leeg"),
+    "In verbouwing": ("🔧 in verbouwing", "bouw"),
+    "Slecht of ontbrekend energielabel": ("⚡ slechte staat", "ok"),
+}
+
+
+def maak_leads(top: list[dict], landelijk: bool) -> tuple[list[dict], list[list], list]:
+    """
+    De kaarten van de pagina, met twee tabellen die elke waarde één keer bevatten: de regels van
+    de score-opbouw ([label, punten, status, detail]; per pand in 'ob' hun nummers) en de
+    waarden van de detailweergave (per pand in detail.w hun nummers).
+    """
+    criteria, waarden = Tabel(), Tabel()
+    leads = []
+    for p in top:
+        f = {k: round(v) for k, v in p["opp_per_functie"].items() if v}
+        sig = [{"t": QUAL_TAG[it["label"]][0], "k": QUAL_TAG[it["label"]][1], "d": it["detail"]}
+               for it in p["score_opbouw"] if it["label"] in QUAL_TAG and it["behaald"]]
+        ob = [criteria.nr([it["label"], it["punten"], it["status"], it["detail"]]) for it in p["score_opbouw"]]
+        lead = {
+            "a": p["hoofdadres"].split(",")[0],
+            "p": p["postcode"],
+            "id": p["bag_pand_id"],
+            "r": kaartregel(p, landelijk),
+            "bj": p["bouwjaar"],
+            "m2": round(p["totale_oppervlakte"]),
+            "vbo": p["aantal_vbo"],
+            "adr": p["aantal_adressen"],
+            "cat": p["categorieen"],
+            "f": f,
+            "wp": p.get("woonplaats", ""),
+            "s100": p["score100"],
+            "raw": p["leadscore"],
+            "sig": sig,
+            "ob": ob,
+            "detail": pand_kort(p, waarden),  # VA-61/62: alle velden, luchtfoto en kaartlinks
+        }
+        if landelijk:
+            lead["g"] = gemeente_naam(p.get("gemeente"))  # waarop het gemeentefilter kiest
+        leads.append(lead)
+    return leads, criteria.lijst, waarden.lijst
+
+
+def lijst_feiten(top: list[dict]) -> list[dict]:
+    """Bereik van score en bouwjaar en de gemiddelde oppervlakte van de panden op de pagina."""
+    scores = [p["score100"] for p in top]
+    bjs = [p["bouwjaar"] for p in top]
+    return [
+        {"k": "Score-index (/100)", "val": f"{min(scores)}–{max(scores)}" if top else "onbekend"},
+        {"k": "Bouwjaren", "val": f"{min(bjs)}–{max(bjs)}" if top else "onbekend"},
+        {"k": "Gem. oppervlakte",
+         "val": f"{nl_getal(sum(p['totale_oppervlakte'] for p in top) / len(top))} m²" if top else "onbekend"},
+    ]
+
+
+# --------------------------------------------------------------- gemeentefilter (VA-39 crit. 3)
+# Lumi's kopij VA-39. Alleen gemeenten die op de werklijst staan; per groep op alfabet.
+FILTER_TEKST = {
+    "label": "Gemeente",
+    "alle": "Alle gemeenten ({n})",
+    "optie": "{gemeente} ({aantal})",
+    "groep.groot": "De {aantal_groot} grootste gemeenten",
+    "groep.elders": "Elders in Nederland",
+    "resultaat": "{aantal} panden in {gemeente} · Alle gemeenten: {n} panden",
+    "resultaat.een": "1 pand in {gemeente}",
+    "leeg": "Er staan geen panden uit {gemeente} op de werklijst van deze maand.",
+    "terug": "Toon alle gemeenten",
+}
+
+
+def _alfabet(naam: str) -> str:
+    """'s-Gravenhage staat bij de s, niet vóór de A."""
+    return naam.lstrip("'").casefold()
+
+
+def gemeente_filter(werklijst: list[dict], aantal_groot: int | None) -> dict:
+    """
+    De keuzes van het filter: per groep (de grote gemeenten, de rest) elke gemeente op de lijst,
+    met hoeveel panden en de zin die het filter dan toont. Alle tellingen hier, niet in de pagina.
+    """
+    n = len(werklijst)
+    tellen: dict[tuple[str, bool], int] = {}
+    for p in werklijst:
+        sleutel = (gemeente_naam(p.get("gemeente")), p.get(nederland.IN_GROOT) == "ja")
+        tellen[sleutel] = tellen.get(sleutel, 0) + 1
+    groepen = []
+    for groot, label in ((True, FILTER_TEKST["groep.groot"]), (False, FILTER_TEKST["groep.elders"])):
+        namen = sorted((g for g, gr in tellen if gr == groot), key=_alfabet)
+        if not namen:
+            continue
+        opties = []
+        for g in namen:
+            a = tellen[(g, groot)]
+            uitkomst = (FILTER_TEKST["resultaat.een"] if a == 1 else FILTER_TEKST["resultaat"]).format(
+                aantal=nl_getal(a), gemeente=g, n=nl_getal(n))
+            opties.append({"naam": g, "aantal": a,
+                           "tekst": FILTER_TEKST["optie"].format(gemeente=g, aantal=nl_getal(a)),
+                           "uitkomst": uitkomst})
+        groepen.append({"label": label.format(aantal_groot=nl_getal(aantal_groot)), "opties": opties})
+    return {"label": FILTER_TEKST["label"], "alle": FILTER_TEKST["alle"].format(n=nl_getal(n)),
+            "groepen": groepen, "leeg": FILTER_TEKST["leeg"], "terug": FILTER_TEKST["terug"]}
+
+
+def filter_html(f: dict | None) -> str:
+    """Het filter boven de werklijst; zonder filter (Delft) niets."""
+    if not f:
+        return ""
+    e = lambda t: escape(str(t), quote=True)  # noqa: E731
+    groepen = "".join(
+        f'<optgroup label="{e(g["label"])}">' + "".join(
+            f'<option value="{e(o["naam"])}" data-uitkomst="{e(o["uitkomst"])}">{e(o["tekst"])}</option>'
+            for o in g["opties"]) + "</optgroup>"
+        for g in f["groepen"])
+    return (f'<div class="filter"><label for="gemeente">{e(f["label"])}</label>'
+            f'<select id="gemeente"><option value="">{e(f["alle"])}</option>{groepen}</select>'
+            '<p class="filter-uitkomst" id="gemeente-uitkomst" aria-live="polite"></p></div>'
+            f'<div class="filter-leeg" id="gemeente-leeg" data-tekst="{e(f["leeg"])}" hidden>'
+            f'<p></p><button class="filter-terug" type="button">{e(f["terug"])}</button></div>')
+
+
+CATEGORIE_NAAM = {"A": "Winkel + wonen", "B": "Bedrijf/kantoor + wonen",
+                  "C": "Klein wooncomplex", "D": "Groot oud pand", "E": "Afwijkende combinatie"}
+CATEGORIE_KLEUR = {"A": "var(--s1)", "B": "var(--s2)", "C": "var(--s3)", "D": "var(--s4)", "E": "var(--s5)"}
+BRON_PIL = "Bron: PDOK BAG WFS v2_0"  # tot VA-39 vast in de kop; nu uit het veld 'bron' van de panden
+
+
+def bron_pil(panden: list[dict], standaard: str = BRON_PIL) -> str:
+    """'Bron: <veld bron van de panden>' zonder het bestand tussen haakjes (Lumi, VA-39)."""
+    for p in panden:
+        b = str(p.get("bron") or "").split(" (")[0].strip()
+        if b:
+            return f"Bron: {b}"
+    return standaard
+
+
+def pagina(lijst: str, titel: str, feiten_titel: str, feiten_cap: str, bronpil: str) -> dict:
+    """De vaste teksten van de pagina die per gebied verschillen; render() plaatst ze."""
+    return {"lijst": lijst, "titel": titel, "feiten.titel": feiten_titel, "feiten.cap": feiten_cap,
+            "bronpil": bronpil}
 
 
 def bouw_payload() -> dict:
     cfg = load_config()
+    if nederland.is_nederland(cfg):
+        return bouw_payload_landelijk(cfg)
+    return bouw_payload_gebied(cfg)
+
+
+def bouw_payload_gebied(cfg: dict) -> dict:
+    """Een stad of provincie met al zijn panden in panden_<gebied>.json (Delft, de regressiebasis)."""
     label, _ = resolve(cfg)
     panden_pad = DATA / f"panden_{slug(label)}.json"
     gelezen, panden_reden = lees_panden(panden_pad)
@@ -556,7 +864,7 @@ def bouw_payload() -> dict:
 
     def tal(n: int) -> str:
         """Duizendtallen met een punt; zonder panden-bestand 'onbekend', geen 0."""
-        return f"{n:,}".replace(",", ".") if gelezen is not None else "onbekend"
+        return nl_getal(n) if gelezen is not None else "onbekend"
 
     kpi = [
         {"v": tal(tot_vbo), "l": "Verblijfsobjecten ingelezen",
@@ -569,23 +877,16 @@ def bouw_payload() -> dict:
         {"v": tal(werklijst), "l": f"Werklijst · score ≥ {drempel}",
          "h": "ruim meerdere maanden voorraad", "c": "var(--s5)"},
     ]
+    cats = [{"k": k, "name": CATEGORIE_NAAM[k], "n": sum(1 for p in act if k in p["categorieen"]),
+             "c": CATEGORIE_KLEUR[k]} for k in "ABCDE"]
 
-    labels = {"A": "Winkel + wonen", "B": "Bedrijf/kantoor + wonen",
-              "C": "Klein wooncomplex", "D": "Groot oud pand", "E": "Afwijkende combinatie"}
-    slot = {"A": "var(--s1)", "B": "var(--s2)", "C": "var(--s3)", "D": "var(--s4)", "E": "var(--s5)"}
-    cats = [{"k": k, "name": labels[k], "n": sum(1 for p in act if k in p["categorieen"]),
-             "c": slot[k]} for k in "ABCDE"]
-
-    scores = [p["score100"] for p in top]
-    bjs = [p["bouwjaar"] for p in top]
     # Zonder panden in de proefselectie bestaat geen bereik of gemiddelde: 'onbekend'.
+    bereik = lijst_feiten(top)
     facts = [
         {"k": "Panden in proefselectie", "val": str(len(top)) if gelezen is not None else "onbekend"},
-        {"k": "Score-index (/100)", "val": f"{min(scores)}–{max(scores)}" if top else "onbekend"},
-        {"k": "Bouwjaren", "val": f"{min(bjs)}–{max(bjs)}" if top else "onbekend"},
-        {"k": "Oudste pand", "val": str(min(bjs)) if top else "onbekend"},
-        {"k": "Gem. oppervlakte",
-         "val": f"{round(sum(p['totale_oppervlakte'] for p in top) / len(top))} m²" if top else "onbekend"},
+        *bereik[:2],
+        {"k": "Oudste pand", "val": str(min(p["bouwjaar"] for p in top)) if top else "onbekend"},
+        *bereik[2:],
         {"k": "Doelgebied", "val": label},
     ]
     # Welke ingest dit resultaat voedt (VA-3): bestand en ophaaldatum per woonplaats.
@@ -599,52 +900,115 @@ def bouw_payload() -> dict:
                           "val": escape(f"{b['bestand']} · {nl_datum(b.get('ophaaldatum'))}"),
                           "tip": escape(bron_regels([b])[0])})
 
-    # Korte tags voor de kwalificatie-signalen die de gebruiker belangrijk vindt.
-    # 'kind' stuurt de kleur: leeg = opvallend (amber), rest = groen.
-    qual_tag = {
-        "Buiten gebruik / leegstaand": ("🏚 leegstaand", "leeg"),
-        "In verbouwing": ("🔧 in verbouwing", "bouw"),
-        "Slecht of ontbrekend energielabel": ("⚡ slechte staat", "ok"),
-    }
-
-    leads = []
-    for p in top:
-        f = {k: round(v) for k, v in p["opp_per_functie"].items() if v}
-        sig = [{"t": qual_tag[it["label"]][0], "k": qual_tag[it["label"]][1], "d": it["detail"]}
-               for it in p["score_opbouw"] if it["label"] in qual_tag and it["behaald"]]
-        leads.append({
-            "a": p["hoofdadres"].split(",")[0],
-            "p": p["postcode"],
-            "id": p["bag_pand_id"],
-            "bj": p["bouwjaar"],
-            "m2": round(p["totale_oppervlakte"]),
-            "vbo": p["aantal_vbo"],
-            "adr": p["aantal_adressen"],
-            "won": p["aantal_per_functie"].get("woon", 0),
-            "cat": p["categorieen"],
-            "f": f,
-            "wp": p.get("woonplaats", ""),
-            "s100": p["score100"],
-            "raw": p["leadscore"],
-            "sig": sig,
-            "opbouw": p["score_opbouw"],
-            "detail": pand_detail(p),  # VA-61/62: alle velden, luchtfoto en kaartlinks
-        })
-
+    leads, criteria, waarden = maak_leads(top, landelijk=False)
+    aantal_groot = (cfg.get("drempels") or {}).get("aantal_grote_gemeenten")
     budget = cfg["score"].get("schaal_max", 26)
     return {"kpi": kpi, "cats": cats, "facts": facts, "leads": leads,
+            "velden": detail_labels(aantal_groot), "criteria": criteria, "waarden": waarden, "plek": PLEK_SJABLOON,
+            "filter": None,
             "budget": budget, "gebied": label, "koppen": koppen(label, drempel, len(leads)),
+            "pagina": pagina("proefresultaat", f"Levrai · Pandenselectie Dashboard — {label}",
+                             "Proefselectie in cijfers",
+                             "De 20 hoogst scorende panden — de controlevraag uit de briefing",
+                             bron_pil(top or panden[:1])),
             "bron": bron, "bron_regels": bron_regels(bron), "bron_reden": bron_reden,
             "peildatum": peildatum(bron), "peildatum_tip": peildatum_tip(bron, bron_reden),
             "kantoor": kantoor(label, bron, gelezen, len(leads) if gelezen is not None else None,
                                cfg)}
 
 
+def bronbestand(bron: list[dict], data: Path) -> str:
+    """
+    Het bestand van PDOK achter een snapshot: de GeoPackage die ingest_gpkg.py las (VA-34 zet
+    die als 'bron' in de meta-tabel; alleen-lezen geopend). Zonder snapshot op deze machine
+    het bestand uit .bron.json, zodat er nooit een verzonnen naam staat.
+    """
+    b = bron[0]
+    pad = data / b["bestand"]
+    if pad.suffix == ".sqlite" and pad.is_file():
+        meta = snapshots._lees_meta(pad) or {}
+        if meta.get("bron"):
+            return meta["bron"]
+    return b["bestand"]
+
+
+def bouw_payload_landelijk(cfg: dict) -> dict:
+    """
+    Heel Nederland uit panden_nederland.json (VA-37, VA-39): de cijfers uit 'totalen', de kaarten
+    uit 'werklijst' in de volgorde van de run (leadscore, dan de maandloting). Wat de run telde,
+    wordt hier niet opnieuw geteld; alleen wat op de pagina staat, telt de pagina zelf.
+    """
+    label = nederland.NAAM
+    pad = DATA / f"panden_{nederland.SLUG}.json"
+    gelezen, reden = lees_landelijk(pad)
+    if gelezen is None:
+        bron, bron_reden = None, reden
+    else:
+        bron, bron_reden = lees_bron(pad)
+    t = (gelezen or {}).get("totalen") or {}
+    lijst = (gelezen or {}).get("werklijst") or []
+    groot = t.get("aantal_grote_gemeenten")
+    drempel = t.get("drempel")
+    ophaal = nl_datum(bron[0].get("ophaaldatum")) if bron else None
+
+    def tal(sleutel: str) -> str:
+        return nl_getal(t.get(sleutel)) if gelezen is not None else "onbekend"
+
+    # Lumi, VA-39: geen dekkingspercentage (de WFS-telling komt uit een andere bron en datum), en
+    # kaart 4 toont de pool waaruit de werklijst kiest; de werklijst zelf staat in zijn eigen kop.
+    kpi = [
+        {"v": tal("vbo"), "l": "Verblijfsobjecten ingelezen",
+         "h": escape(f"uit de BAG van {ophaal}" if ophaal else (bron_reden or reden)), "c": "var(--s1)"},
+        {"v": tal("panden"), "l": "Unieke BAG-panden", "h": tal("uitgesloten") + " uitgesloten",
+         "c": "var(--s3)"},
+        {"v": tal("a_e"), "l": "Binnen categorie A–E", "h": "de mastervoorraad", "c": "var(--s2)"},
+        {"v": tal("geschikt"), "l": f"Geschikt · score ≥ {nl_getal(drempel)}",
+         "h": f"{tal('geschikt_25')} in de {nl_getal(groot)} grootste gemeenten · {tal('geschikt_overig')} elders",
+         "c": "var(--s5)"},
+    ]
+    per_cat = t.get("categorieen") or {}
+    cats = [{"k": k, "name": CATEGORIE_NAAM[k], "n": per_cat.get(k, 0), "c": CATEGORIE_KLEUR[k]}
+            for k in "ABCDE"]
+
+    facts = [
+        {"k": "Panden op de werklijst", "val": tal("werklijst")},
+        {"k": f"Uit de {nl_getal(groot)} grootste gemeenten", "val": tal("werklijst_25")},
+        {"k": f"Elders in {label}", "val": tal("werklijst_overig")},
+        *lijst_feiten(lijst),
+        {"k": "Doelgebied", "val": label},
+    ]
+    if bron is None:
+        facts.append({"k": "Bronbestand", "val": "onbekend", "tip": escape(bron_reden)})
+    else:
+        facts.append({"k": "Bronbestand", "val": escape(f"{bronbestand(bron, DATA)} · {ophaal}"),
+                      "tip": escape(f"Heel {label}: BAG-GeoPackage van PDOK, stand {ophaal}")})
+
+    leads, criteria, waarden = maak_leads(lijst, landelijk=True)
+    n_groot = sum(1 for p in lijst if p.get(nederland.IN_GROOT) == "ja")
+    n = len(leads)
+    return {"kpi": kpi, "cats": cats, "facts": facts, "leads": leads,
+            "velden": detail_labels((cfg.get("drempels") or {}).get("aantal_grote_gemeenten")),
+            "criteria": criteria, "waarden": waarden, "plek": PLEK_SJABLOON,
+            "filter": gemeente_filter(lijst, groot) if lijst else None,
+            "budget": cfg["score"].get("schaal_max", 26), "gebied": label,
+            "koppen": koppen(label, drempel, n if gelezen is not None else None,
+                             {"maand": maand_voluit(t.get("maand")), "n_groot": nl_getal(n_groot),
+                              "n_rest": nl_getal(n - n_groot), "aantal": nl_getal(groot),
+                              "n_ae": tal("a_e")}),
+            "pagina": pagina("werklijst", f"Levrai · Pandenselectie — {label}", "Werklijst in cijfers",
+                             f"De {nl_getal(n)} panden van deze maand, verdeeld over het land",
+                             bron_pil(lijst, "Bron: PDOK BAG GeoPackage")),
+            "bron": bron, "bron_regels": bron_regels(bron), "bron_reden": bron_reden,
+            "peildatum": peildatum(bron), "peildatum_tip": peildatum_tip(bron, bron_reden),
+            "kantoor": kantoor_landelijk(bron, t if gelezen is not None else None,
+                                         n if gelezen is not None else None, cfg)}
+
+
 # --------------------------------------------------------------- menu en koppen (VA-63, VA-64)
 # Lumi's kopijtabel uit design/menu.html, als data. Elk menu-item wijst naar een section.deel op
 # de pagina; tests/test_dashboard_menu.py faalt als een href nergens naar wijst (VA-64 crit. 4).
-# Alleen wat de pagina nu heeft: Werklijst (VA-17), Nederland (VA-39) en Koppelingen (VA-56/58)
-# komen er pas bij als hun verhaal Done is.
+# Alleen wat de pagina nu heeft: voor heel Nederland staat Werklijst op de plek van Proefresultaat
+# (VA-39, menu_voor()); Koppelingen (VA-56/58) komt er pas bij als zijn verhaal Done is.
 MENU = [
     {"groep": "Overzicht", "id": "g-overzicht",
      "items": [("kantoor", "Kantoor"), ("kerncijfers", "Kerncijfers")]},
@@ -667,19 +1031,46 @@ KOP_TEKST = {
                           "criterium.",
     "proefresultaat.meta": "{n} panden · {gebied} · gesorteerd op score-index",
 }
+# Heel Nederland (Lumi, kopij VA-39): het proefresultaat van Delft wordt de werklijst van de maand.
+# Waar haar tabel niets zegt, blijft de tekst van vandaag staan.
+LIJST_LANDELIJK = ("werklijst", "Werklijst")
+KOP_TEKST_LANDELIJK = {
+    **{k: t for k, t in KOP_TEKST.items() if not k.startswith("proefresultaat.")},
+    "voorraad.titel": "Voorraad en werklijst",
+    "voorraad.zin": "Hoeveel van de {n_ae} panden in elke categorie A–E vallen, en wat de {n} panden op de "
+                    "werklijst van deze maand kenmerkt.",
+    "werklijst.titel": "Werklijst {maand}",
+    "werklijst.zin": "De {n} hoogst scorende panden van {gebied}, klaar voor je visuele controle. Open een "
+                     "pand voor alle gegevens.",
+    "werklijst.meta": "{n} panden · {n_groot} uit de {aantal} grootste gemeenten · {n_rest} elders · "
+                      "gesorteerd op score-index",
+}
 
 
-def koppen(gebied: str, drempel: int | None, n: int | None) -> dict:
-    """De titel, de uitlegregel en de meta boven elk deel; onbekend blijft 'onbekend'."""
-    waarden = {"gebied": gebied, "drempel": nl_getal(drempel), "n": nl_getal(n)}
-    return {k: t.format(**waarden) for k, t in KOP_TEKST.items()}
+def koppen(gebied: str, drempel: int | None, n: int | None, landelijk: dict | None = None) -> dict:
+    """
+    De titel, de uitlegregel en de meta boven elk deel; onbekend blijft 'onbekend'.
+    landelijk: {'maand', 'n_groot', 'n_rest', 'aantal', 'n_ae'} als tekst, voor de werklijst van Nederland.
+    """
+    waarden = {"gebied": gebied, "drempel": nl_getal(drempel), "n": nl_getal(n), **(landelijk or {})}
+    tekst = KOP_TEKST_LANDELIJK if landelijk is not None else KOP_TEKST
+    return {k: t.format(**waarden) for k, t in tekst.items()}
 
 
-def menu_html() -> str:
+def menu_voor(lijst: str) -> list[dict]:
+    """MENU, met voor heel Nederland 'Werklijst' op de plek van 'Proefresultaat'."""
+    if lijst != LIJST_LANDELIJK[0]:
+        return MENU
+    return [dict(g, items=[LIJST_LANDELIJK if doel == "proefresultaat" else (doel, naam)
+                           for doel, naam in g["items"]]) for g in MENU]
+
+
+def menu_html(lijst: str = "proefresultaat") -> str:
     """De groepen en items van de zijbalk. Het eerste item is actief tot het script het zet."""
-    eerste = MENU[0]["items"][0][0]
+    menu = menu_voor(lijst)
+    eerste = menu[0]["items"][0][0]
     uit = []
-    for g in MENU:
+    for g in menu:
         uit.append(f'<p class="groep" id="{g["id"]}">{escape(g["groep"])}</p>')
         items = []
         for doel, naam in g["items"]:
@@ -726,7 +1117,7 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Levrai · Pandenselectie Dashboard — __LABEL__</title>
+<title>__TITEL__</title>
 <style>
   :root{
     color-scheme: light;
@@ -1155,6 +1546,24 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     @keyframes pandIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   }
   /* ===================== einde PAND OPENEN ===================== */
+  /* ===================== WERKLIJST: gemeentefilter (VA-39) ===================== */
+  .filter{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 2px 14px}
+  .filter label{font-size:12.5px;font-weight:650;color:var(--ink-2)}
+  .filter select{font:inherit;font-size:13.5px;color:var(--ink);background:var(--surface);border:1px solid var(--ring);
+    border-radius:10px;min-height:40px;padding:6px 10px;max-width:100%;box-shadow:var(--shadow);cursor:pointer}
+  .filter select:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .filter-uitkomst{margin:0;font-size:12.5px;color:var(--ink-2)}
+  .filter-uitkomst:empty{display:none}
+  .filter-leeg{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:0 0 14px;padding:14px 16px;
+    background:var(--surface);border:1px solid var(--ring);border-radius:14px;box-shadow:var(--shadow)}
+  .filter-leeg[hidden]{display:none}
+  .filter-leeg p{margin:0;font-size:13.5px;color:var(--ink-2)}
+  .filter-terug{font:inherit;font-size:13px;font-weight:600;color:var(--ink);background:var(--surface-2);
+    border:1px solid var(--ring);border-radius:9px;padding:7px 12px;cursor:pointer}
+  .filter-terug:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .schildwacht{height:1px}
+  @media (max-width:560px){ .filter select{width:100%} }
+  /* ===================== einde WERKLIJST ===================== */
 </style>
 </head>
 <body>
@@ -1187,7 +1596,7 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
         <div class="kop-rij">
           <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Kantoor</b></p>
           <div class="spills">
-            <div class="pill">Bron: PDOK BAG WFS v2_0</div>
+            <div class="pill">__BRONPIL__</div>
             <div class="pill"__PEILTIP__>__PEILDATUM__</div>
           </div>
         </div>
@@ -1232,8 +1641,8 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
           <div id="cats"></div>
         </div>
         <div class="panel">
-          <h3>Proefselectie in cijfers</h3>
-          <p class="cap">De 20 hoogst scorende panden — de controlevraag uit de briefing</p>
+          <h3>__FEITEN_TITEL__</h3>
+          <p class="cap">__FEITEN_CAP__</p>
           <div class="facts" id="facts"></div>
           <p class="note">Score is een <b>index van 1–100</b> tegen het volledige modelbudget.
             Open een pand voor de volledige score-opbouw per criterium.</p>
@@ -1241,16 +1650,18 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
       </div>
     </section>
 
-    <section class="deel" id="proefresultaat" aria-labelledby="t-proefresultaat" tabindex="-1">
+    <section class="deel" id="__LIJST__" aria-labelledby="t-__LIJST__" tabindex="-1">
       <header class="kop">
         <div class="kop-rij">
-          <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Proefresultaat</b></p>
-          <span class="kop-meta" id="secmeta">__KOP_PROEFRESULTAAT_META__</span>
+          <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>__LIJST_NAAM__</b></p>
+          <span class="kop-meta" id="secmeta">__KOP_LIJST_META__</span>
         </div>
-        <h2 class="titel" id="t-proefresultaat">__KOP_PROEFRESULTAAT_TITEL__</h2>
-        <p class="kop-zin">__KOP_PROEFRESULTAAT_ZIN__</p>
+        <h2 class="titel" id="t-__LIJST__">__KOP_LIJST_TITEL__</h2>
+        <p class="kop-zin">__KOP_LIJST_ZIN__</p>
       </header>
+      __FILTER__
       <div class="grid" id="leads"></div>
+      <div class="schildwacht" aria-hidden="true"></div>
 
       <p class="foothint">
         Klik op <b>Score-opbouw</b> in een pand om te zien waar elk punt vandaan komt ·
@@ -1304,10 +1715,14 @@ if(PAYLOAD.bron===null){
     dan legt het vast uit welke BAG-ingest deze cijfers komen.`),fb.nextSibling);
 }
 
+// De score-opbouw: elke regel [label, punten, status, detail] staat één keer in PAYLOAD.criteria
+// (VA-39); een pand heeft in 'ob' alleen de nummers van zijn regels.
+const CRIT = PAYLOAD.criteria || [];
+const opbouw = d => (d.ob || []).map(i => { const [label, punten, status, detail] = CRIT[i]; return {label, punten, status, detail}; });
 function opbouwHTML(d){
   const cls={behaald:"ok",niet:"miss",aftrek:"neg",inactief:"off"};
   const ic={behaald:"✓",niet:"✕",aftrek:"▼",inactief:"○"};
-  const rows=d.opbouw.map(it=>{
+  const rows=opbouw(d).map(it=>{
     let pts;
     if(it.status==="behaald") pts=`+${it.punten}`;
     else if(it.status==="aftrek") pts=`${it.punten}`;
@@ -1328,7 +1743,7 @@ function opbouwHTML(d){
 }
 
 const lb=document.getElementById("leads");
-LEADS.forEach(d=>{
+function kaart(d){
   const order=["woon","winkel","kantoor","bedrijf","overig"];
   const segs=order.filter(k=>d.f[k]).map(k=>
     `<i data-tip="${FNL[k]}: ${d.f[k]} m²" style="flex:${d.f[k]};background:${FN[k]}"></i>`).join("");
@@ -1340,7 +1755,7 @@ LEADS.forEach(d=>{
   card.innerHTML=`
     <div class="rowtop">
       <div><div class="addr">${d.a}</div>
-        <div class="lid">${d.p} ${d.wp} · BAG ${d.id}</div></div>
+        <div class="lid"></div></div>
       <div class="score"><b>${d.s100}</b><small>/100</small></div>
     </div>
     <div class="meter"><i style="width:0" data-w="${d.s100}"></i></div>
@@ -1359,15 +1774,18 @@ LEADS.forEach(d=>{
       <a class="baglink" href="${BAG}${d.id}" target="_blank" rel="noopener">Open in BAG-viewer ↗</a>
       <span class="status">te controleren</span>
     </div>`;
-  lb.appendChild(card);
+  card.querySelector(".lid").textContent = d.r;   // de regel onder het adres komt uit Python
   const m=card.querySelector(".meter i");
   requestAnimationFrame(()=>{m.style.width=m.dataset.w+"%";});
-});
+  maakOpenbaar(card, d);
+  return card;
+}
 
 /* ============================ PAND OPENEN (VA-61, VA-62) ============================
-   Alle tekst en elke waarde komt kant-en-klaar uit pand_detail() in build_dashboard.py.
-   Alleen-lezen: openen of sluiten schrijft niets. De luchtfoto (PDOK, open data) wordt pas
-   opgevraagd als een pand opengaat, en alleen voor dat pand. */
+   Alle tekst en elke waarde komt kant-en-klaar uit pand_detail() in build_dashboard.py, in de
+   korte vorm van pand_kort(): de labels één keer in PAYLOAD.velden, elke waarde één keer in
+   PAYLOAD.waarden, de adressen van luchtfoto en kaarten één keer in PAYLOAD.plek. Alleen-lezen: openen of sluiten schrijft niets. De
+   luchtfoto (PDOK, open data) wordt pas opgevraagd als een pand opengaat, en alleen voor dat pand. */
 const PAND_TEKST = {
   laden: "De luchtfoto laadt…",
   mislukt: "De luchtfoto kon niet laden. Bekijk het pand via Google Maps of Street View hieronder.",
@@ -1377,6 +1795,9 @@ const PAND_TEKST = {
   maps: "Open in Google Maps", sv: "Open in Street View", bag: "Open in BAG-viewer",
   open: "Open pand", openLabel: a => `Open pand: alle gegevens van ${a}`,
 };
+const VELDEN = PAYLOAD.velden || [], WAARDEN = PAYLOAD.waarden || [], PLEK = PAYLOAD.plek || {};
+const locatie = p => { if (!p) return null; const zet = s => s.replace("{b}", p.b).replace("{ll}", p.ll);
+  return {foto: zet(PLEK.foto), maps: zet(PLEK.maps), streetview: zet(PLEK.streetview)}; };
 const pandDlg = document.getElementById("pand");
 let pandOpener = null;
 const maak = (tag, cls, tekst) => { const e = document.createElement(tag); if (cls) e.className = cls; if (tekst != null) e.textContent = tekst; return e; };
@@ -1386,7 +1807,7 @@ function openPand(d, opener) {
   document.getElementById("pandSub").textContent = `${d.p} ${d.wp} · BAG ${d.id}`;
   document.getElementById("pandScore").innerHTML = `<b>${d.s100}</b><small>/100</small>`;
   const romp = document.getElementById("pandRomp"); romp.textContent = "";
-  const loc = det.locatie;
+  const loc = locatie(det.loc);
   if (loc) {
     const fig = maak("figure", "pand-foto"), kader = maak("div", "kader"), melding = maak("div", "melding", PAND_TEKST.laden);
     const img = new Image(); img.alt = PAND_TEKST.alt(det.titel); img.decoding = "async";
@@ -1403,11 +1824,13 @@ function openPand(d, opener) {
   link(BAG + d.id, PAND_TEKST.bag);
   romp.appendChild(links);
   const dl = maak("dl", "pand-velden");
-  det.rijen.forEach(r => {
+  det.w.forEach((nr, i) => {
+    const v = WAARDEN[nr];
+    if (v === null) return;   // een veld dat dit pand niet heeft (de landelijke velden bij een stad)
     const dd = maak("dd");
-    if (Array.isArray(r.v)) { const ul = maak("ul"); r.v.forEach(x => ul.appendChild(maak("li", null, x))); dd.appendChild(ul); }
-    else dd.textContent = r.v;
-    dl.append(maak("dt", null, r.k), dd);
+    if (Array.isArray(v)) { const ul = maak("ul"); v.forEach(x => ul.appendChild(maak("li", null, x))); dd.appendChild(ul); }
+    else dd.textContent = v;
+    dl.append(maak("dt", null, VELDEN[i]), dd);
   });
   romp.appendChild(dl);
   const ob = maak("div", "pand-opbouw"); ob.innerHTML = opbouwHTML(d); ob.querySelector("details").open = true;
@@ -1418,8 +1841,8 @@ function openPand(d, opener) {
 document.getElementById("pandSluit").addEventListener("click", () => pandDlg.close());
 pandDlg.addEventListener("click", e => { if (e.target === pandDlg) pandDlg.close(); });
 pandDlg.addEventListener("close", () => { if (pandOpener && pandOpener.isConnected) pandOpener.focus(); });
-[...lb.children].forEach((card, i) => {
-  const d = LEADS[i]; if (!d || !d.detail) return;
+function maakOpenbaar(card, d) {
+  if (!d.detail) return;
   card.classList.add("open-baar");
   const knop = maak("button", "pand-open", PAND_TEKST.open); knop.type = "button";
   knop.setAttribute("aria-haspopup", "dialog"); knop.setAttribute("aria-label", PAND_TEKST.openLabel(d.detail.titel));
@@ -1427,8 +1850,51 @@ pandDlg.addEventListener("close", () => { if (pandOpener && pandOpener.isConnect
   // Klik op de kaart opent het pand; de link, de score-opbouw en de knop zelf doen hun eigen ding.
   card.addEventListener("click", e => { if (e.target.closest("a, summary, details, button")) return; openPand(d, knop); });
   knop.addEventListener("click", () => openPand(d, knop));
-});
+}
 /* ============================ einde PAND OPENEN ============================ */
+
+/* ============================ WERKLIJST (VA-39) ============================
+   Tot 500 kaarten: de eerste STAP meteen, de volgende pas als je in de buurt scrolt, zodat de
+   pagina op een telefoon snel staat. Het gemeentefilter kiest alleen uit de panden op de lijst;
+   de keuzes, tellingen en zinnen komen uit gemeente_filter() in Python. De gekozen gemeente
+   staat in het adres (?gemeente=), zodat herladen dezelfde keuze houdt. */
+(() => {
+  const STAP = 40, wacht = document.querySelector(".schildwacht");
+  let rij = LEADS, getoond = 0;
+  const io = "IntersectionObserver" in window ? new IntersectionObserver(e => {
+    if (e.some(x => x.isIntersecting)) { meer(); kijk(); }
+  }, {rootMargin: "0px 0px 1200px 0px"}) : null;
+  function meer() {
+    const tot = io ? Math.min(rij.length, getoond + STAP) : rij.length, deel = document.createDocumentFragment();
+    for (; getoond < tot; getoond++) deel.appendChild(kaart(rij[getoond]));
+    lb.appendChild(deel);
+  }
+  // Opnieuw waarnemen geeft direct een nieuwe melding: staat de wacht nog in de buurt, dan volgt de volgende STAP.
+  function kijk() { if (!io) return; io.unobserve(wacht); if (getoond < rij.length) io.observe(wacht); }
+  function teken(lijst) { rij = lijst; getoond = 0; lb.textContent = ""; meer(); kijk(); }
+
+  const kies = document.getElementById("gemeente");
+  if (!kies) { teken(LEADS); return; }
+  const uitkomst = document.getElementById("gemeente-uitkomst"), leeg = document.getElementById("gemeente-leeg");
+  function toon(naam, adres) {
+    const optie = naam ? [...kies.options].find(o => o.value === naam) : null;
+    kies.value = optie ? naam : "";
+    uitkomst.textContent = optie ? optie.dataset.uitkomst : "";
+    leeg.hidden = !naam || !!optie;
+    if (naam && !optie) leeg.querySelector("p").textContent = leeg.dataset.tekst.replace("{gemeente}", naam);
+    teken(naam ? LEADS.filter(d => d.g === naam) : LEADS);
+    if (adres) {
+      const q = new URLSearchParams(location.search);
+      if (naam) q.set("gemeente", naam); else q.delete("gemeente");
+      const s = q.toString();
+      history.replaceState(null, "", location.pathname + (s ? "?" + s : "") + location.hash);
+    }
+  }
+  kies.addEventListener("change", () => toon(kies.value, true));
+  leeg.querySelector("button").addEventListener("click", () => { toon("", true); kies.focus(); });
+  toon(new URLSearchParams(location.search).get("gemeente") || "", false);
+})();
+/* ============================ einde WERKLIJST ============================ */
 
 const tt=document.getElementById("tt");
 document.addEventListener("pointerover",e=>{const t=e.target.closest("[data-tip]");
@@ -1636,7 +2102,7 @@ const PK = (() => {
       else { const ctx = R.ctx, k = R.k, cx = x + ((d.stil ? 20 : t / 120 + d.cx * 3) % (w + 12)) - 8;
         ctx.save(); ctx.beginPath(); ctx.rect(Math.round(x * k), Math.round(y * k), Math.round(w * k), Math.round(h * k)); ctx.clip();
         R.px(cx, y + 4, 8, 2, V.wit); R.px(cx + 2, y + 2, 4, 2, V.wit); R.px(cx + 15, y + 13, 6, 2, mix(V.wit, b, .3)); ctx.restore();
-        // daken van Delft achter het raam: trapgevels
+        // daken achter het raam: trapgevels
         const dak = mix(V.navy, b, .55);
         for (let i = 0; i < w; i += 7) { const hg = 4 + ((i * 3 + d.cx) % 4);
           R.px(x + i, y + h - hg, 6, hg, dak); R.px(x + i + 2, y + h - hg - 2, 2, 2, dak); }
@@ -2766,7 +3232,7 @@ function kantoorStart(root, data, opties = {}) {
 
 /* Kantoor in het dashboard (VA-31): het blok PAYLOAD.kantoor uit bouw_payload().
    #pk is het aanhaakpunt; toestand en zinnen komen uit PAYLOAD.kantoor.tekst, nooit met de hand.
-   Het kantoor is altijd zichtbaar: er is geen knop om het te verbergen (Ayman, VA-31-review). */
+   Het kantoor is altijd zichtbaar: er is geen knop om het weg te halen (Ayman, VA-31-review). */
 (() => {  // VA-60: three.js r128 (cdnjs, integrity) laadt los; hangt cdnjs, dan na 4 s het 2D-kantoor.
   const pk = document.getElementById("pk"); let gestart = false;
   const start = () => { if (gestart) return; gestart = true; kantoorStart(pk, PAYLOAD.kantoor); };
@@ -2786,14 +3252,30 @@ function kantoorStart(root, data, opties = {}) {
 def render(payload: dict) -> str:
     """Vul het sjabloon. De payload als laatste, zodat zijn inhoud niet wordt vervangen."""
     tip = payload["peildatum_tip"]
+    # Zonder 'pagina' (een payload van vóór VA-39, of een test) de teksten van een gebied als Delft.
+    pg = payload.get("pagina") or pagina(
+        "proefresultaat", f"Levrai · Pandenselectie Dashboard — {payload['gebied']}", "Proefselectie in cijfers",
+        "De 20 hoogst scorende panden — de controlevraag uit de briefing", BRON_PIL)
+    lijst = pg["lijst"]
+    naam = next(n for g in menu_voor(lijst) for d, n in g["items"] if d == lijst)
     html = (TEMPLATE
+            .replace("__TITEL__", escape(pg["titel"]))
             .replace("__LABEL__", payload["gebied"])
             .replace("__PEILDATUM__", escape(payload["peildatum"]))
             .replace("__PEILTIP__", f' data-tip="{escape(tip)}"' if tip else "")
-            .replace("__MENU__", menu_html())
+            .replace("__BRONPIL__", escape(pg["bronpil"]))
+            .replace("__FEITEN_TITEL__", escape(pg["feiten.titel"]))
+            .replace("__FEITEN_CAP__", escape(pg["feiten.cap"]))
+            .replace("__LIJST_NAAM__", escape(naam))
+            .replace("__LIJST__", lijst)
+            .replace("__FILTER__", filter_html(payload.get("filter")))
+            .replace("__MENU__", menu_html(lijst))
             .replace("__WERKBALK__", werkbalk_html((payload.get("kantoor") or {}).get("tekst"))))
+    # De koppen van het lijstdeel ('proefresultaat.*' of 'werklijst.*') gaan naar __KOP_LIJST_*__.
     for sleutel, tekst in (payload.get("koppen") or koppen(payload["gebied"], None, None)).items():
-        html = html.replace("__KOP_" + sleutel.upper().replace(".", "_") + "__", escape(tekst))
+        deel, _, rest = sleutel.partition(".")
+        plek = f"lijst.{rest}" if deel == lijst else sleutel
+        html = html.replace("__KOP_" + plek.upper().replace(".", "_") + "__", escape(tekst))
     return html.replace("__PAYLOAD__", json.dumps(payload, ensure_ascii=False))
 
 

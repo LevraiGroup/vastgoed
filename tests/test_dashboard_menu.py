@@ -260,15 +260,74 @@ class LadeEnMaat(unittest.TestCase):
         self.assertNotRegex(bd.TEMPLATE, r"\n\s*\.merk\{")
 
 
-@unittest.skipUnless(DELFT_PANDEN.is_file(), f"{DELFT_PANDEN} ontbreekt; echte pagina overgeslagen")
+NL_PANDEN = bd.DATA / "panden_nederland.json"
+
+
+def gekozen(nederland):
+    c = bd.load_config()
+    c["doelgebied"]["nederland"] = nederland
+    return lambda: c
+
+
 class EchtePagina(unittest.TestCase):
-    def test_gebouwde_pagina(self):
-        html = bd.render(bd.bouw_payload())
+    def controleer(self, html, laatste):
         p = Pagina(html)
         self.assertEqual(kapotte_links(html), [])
         self.assertEqual([a["href"][1:] for a in p.menu], [d["id"] for d in p.delen])
+        self.assertEqual(p.menu[-1]["href"], "#" + laatste)
         self.assertEqual(len(p.knoppen), 5)
         self.assertEqual(len(set(p.ids)), len(p.ids), "dubbele ids")
+        self.assertEqual(re.findall(r"__[A-Z][A-Z0-9_]*__", html), [])
+
+    @unittest.skipUnless(DELFT_PANDEN.is_file(), f"{DELFT_PANDEN} ontbreekt; echte pagina overgeslagen")
+    def test_gebouwde_pagina_delft(self):
+        with mock.patch.object(bd, "load_config", gekozen(False)):
+            html = bd.render(bd.bouw_payload())
+        self.controleer(html, "proefresultaat")
+        self.assertIn("<title>Levrai · Pandenselectie Dashboard — Delft</title>", html)
+        self.assertNotIn('id="gemeente"', html)
+
+    @unittest.skipUnless(NL_PANDEN.is_file(), f"{NL_PANDEN} ontbreekt; echte landelijke pagina overgeslagen")
+    def test_gebouwde_pagina_nederland(self):
+        with mock.patch.object(bd, "load_config", gekozen(True)):
+            html = bd.render(bd.bouw_payload())
+        self.controleer(html, "werklijst")
+        self.assertIn("<title>Levrai · Pandenselectie — Nederland</title>", html)
+        self.assertIn('<p class="merk-sub">Pandenselectie&nbsp;·&nbsp;Nederland</p>', html)
+        self.assertIn('<div class="pill">Bron: PDOK BAG GeoPackage</div>', html)
+        self.assertIn("<b>Werklijst</b>", html)
+        self.assertIn('<select id="gemeente">', html)
+        # VA-39 crit. 1: buiten de data (adressen, woonplaatsen, gemeenten) noemt niets Delft.
+        zonder_data = re.sub(r"const PAYLOAD = [^\n]*", "", html)
+        zonder_data = re.sub(r'<select id="gemeente">.*?</select>', "", zonder_data, flags=re.S)
+        self.assertNotIn("Delft", zonder_data)
+        self.assertNotIn("Proefresultaat", zonder_data)
+
+
+class MenuLandelijk(unittest.TestCase):
+    """Lumi, VA-39: 'Proefresultaat' wordt 'Werklijst' (#werklijst), op dezelfde plek in de groep Panden."""
+
+    def test_werklijst_op_de_plek_van_proefresultaat(self):
+        self.assertEqual([(g["groep"], g["items"]) for g in bd.menu_voor("werklijst")],
+                         [("Overzicht", [("kantoor", "Kantoor"), ("kerncijfers", "Kerncijfers")]),
+                          ("Panden", [("voorraad", "Voorraad"), ("werklijst", "Werklijst")])])
+        self.assertIs(bd.menu_voor("proefresultaat"), bd.MENU)
+
+    def test_landelijke_koppen(self):
+        k = bd.koppen("Nederland", 8, 500, {"maand": "november 2026", "n_groot": "450", "n_rest": "50",
+                                            "aantal": "25", "n_ae": "441.997"})
+        self.assertEqual(k["voorraad.titel"], "Voorraad en werklijst")
+        self.assertEqual(k["voorraad.zin"], "Hoeveel van de 441.997 panden in elke categorie A–E vallen, en wat "
+                                            "de 500 panden op de werklijst van deze maand kenmerkt.")
+        self.assertEqual(k["kerncijfers.titel"], "Nederland in vier cijfers")
+        self.assertEqual(k["werklijst.titel"], "Werklijst november 2026")
+        self.assertEqual(k["werklijst.zin"], "De 500 hoogst scorende panden van Nederland, klaar voor je "
+                                             "visuele controle. Open een pand voor alle gegevens.")
+        self.assertEqual(k["werklijst.meta"], "500 panden · 450 uit de 25 grootste gemeenten · 50 elders · "
+                                              "gesorteerd op score-index")
+        self.assertFalse([s for s in k if s.startswith("proefresultaat.")])
+        for t in bd.KOP_TEKST_LANDELIJK.values():
+            self.assertNotRegex(t.lower(), r"snapshot")
 
 
 if __name__ == "__main__":

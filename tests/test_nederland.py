@@ -113,7 +113,10 @@ class Kiezen(unittest.TestCase):
     def test_nederland_uit_config(self):
         self.assertTrue(nederland.is_nederland({"doelgebied": {"nederland": True}}))
         self.assertFalse(nederland.is_nederland({"doelgebied": {"steden": ["Delft"]}}))
-        self.assertFalse(nederland.is_nederland(selectie.load_config()))  # Delft blijft de standaard
+        # VA-39: de gecommitte config.yaml kiest Nederland, want elke push deployt het dashboard en
+        # Levrai hoort het land te zien (Ayman, 2026-11-08). Delft blijft de regressiebasis: die
+        # tests kiezen Delft zelf (verwerk(["Delft"], ...) of een config met nederland: false).
+        self.assertTrue(nederland.is_nederland(selectie.load_config()))
 
 
 class DraaiMetStub(unittest.TestCase):

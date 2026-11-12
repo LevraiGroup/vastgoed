@@ -16,8 +16,10 @@ bron:
 doelgebied:
   steden: ["Delft"]           # bv. ["Delft"] of ["Delft", "'s-Gravenhage", "Rotterdam"]
   provincies: []              # bv. ["Zuid-Holland"]  — LET OP: hele provincie is zeer groot
-  nederland: false            # true = heel Nederland uit de landelijke snapshot (bag_nl_<datum>.sqlite,
-                              # python ingest_gpkg.py); steden en provincies tellen dan niet (VA-37)
+  nederland: true             # true = heel Nederland uit de landelijke snapshot (bag_nl_<datum>.sqlite,
+                              # python ingest_gpkg.py); steden en provincies tellen dan niet (VA-37).
+                              # Het dashboard volgt dezelfde keuze: true = Nederland (VA-39), false = de
+                              # stad hierboven. Delft blijft de regressiebasis; de tests kiezen het zelf.
 # Geldige provincienamen: Groningen, Friesland, Drenthe, Overijssel, Flevoland,
 # Gelderland, Utrecht, Noord-Holland, Zuid-Holland, Zeeland, Noord-Brabant, Limburg
 

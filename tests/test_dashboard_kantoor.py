@@ -16,6 +16,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import build_dashboard as bd  # noqa: E402
+import selectie  # noqa: E402
 
 DELFT_PANDEN = bd.DATA / "panden_delft.json"
 
@@ -436,10 +437,19 @@ class Pagina3D(unittest.TestCase):
             self.assertNotIn(weg, t)
 
 
+def delft_config():
+    """De gecommitte config.yaml, maar met Delft gekozen (VA-39: de gecommitte kiest Nederland)."""
+    c = selectie.load_config()
+    c["doelgebied"]["nederland"] = False
+    return c
+
+
 @unittest.skipUnless(DELFT_PANDEN.is_file(), f"{DELFT_PANDEN} ontbreekt; echte Delft-cijfers overgeslagen")
 class EchteDelftCijfers(unittest.TestCase):
     def test_kantoor_uit_de_echte_payload(self):
-        payload = bd.bouw_payload()
+        # VA-39 crit. 8: de Delftse bouw werkt nog als Delft gekozen is.
+        with mock.patch.object(bd, "load_config", delft_config):
+            payload = bd.bouw_payload()
         k = payload["kantoor"]
         self.assertEqual(k["gebied"], "Delft")
         self.assertEqual(k["ingest"]["vbo"], 61993)
@@ -454,6 +464,101 @@ class EchteDelftCijfers(unittest.TestCase):
         self.assertEqual(k["tekst"]["verrijking"]["bel"], "Geen extra bron actief")
         self.assertEqual(k["tekst"]["controle"]["bel"],
                          f"{len(payload['leads'])} panden wachten op visuele controle")
+
+
+NL_PANDEN = bd.DATA / "panden_nederland.json"
+
+
+@unittest.skipUnless(NL_PANDEN.is_file(), f"{NL_PANDEN} ontbreekt; echte landelijke cijfers overgeslagen")
+class EchteNederlandCijfers(unittest.TestCase):
+    """VA-39 crit. 2 en 6: de figuren van de pagina en het kantoor zijn de totalen van VA-37."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.t = json.loads(NL_PANDEN.read_text(encoding="utf-8"))["totalen"]
+        cfg = selectie.load_config()
+        cfg["doelgebied"]["nederland"] = True
+        with mock.patch.object(bd, "load_config", lambda: cfg):
+            cls.payload = bd.bouw_payload()
+
+    def test_kerncijfers_zijn_de_totalen(self):
+        t, kpi = self.t, self.payload["kpi"]
+        self.assertEqual([int(k["v"].replace(".", "")) for k in kpi],
+                         [t["vbo"], t["panden"], t["a_e"], t["geschikt"]])
+        self.assertEqual(kpi[1]["h"], f"{bd.nl_getal(t['uitgesloten'])} uitgesloten")
+        self.assertEqual(kpi[3]["l"], f"Geschikt · score ≥ {t['drempel']}")
+        self.assertEqual(kpi[3]["h"], f"{bd.nl_getal(t['geschikt_25'])} in de {t['aantal_grote_gemeenten']} "
+                                      f"grootste gemeenten · {bd.nl_getal(t['geschikt_overig'])} elders")
+        self.assertNotIn("dekking", kpi[0]["h"])  # Lumi: geen dekkingspercentage tegen de WFS
+        self.assertEqual({c["k"]: c["n"] for c in self.payload["cats"]}, t["categorieen"])
+        feiten = {f["k"]: f["val"] for f in self.payload["facts"]}
+        self.assertEqual(feiten["Panden op de werklijst"], bd.nl_getal(t["werklijst"]))
+        self.assertEqual(feiten[f"Uit de {t['aantal_grote_gemeenten']} grootste gemeenten"],
+                         bd.nl_getal(t["werklijst_25"]))
+        self.assertEqual(feiten["Elders in Nederland"], bd.nl_getal(t["werklijst_overig"]))
+        self.assertNotIn("Oudste pand", feiten)
+        self.assertNotIn("Bron-snapshot", feiten)
+
+    def test_lijst_en_verdeling_kloppen_met_de_totalen(self):
+        leads, t = self.payload["leads"], self.t
+        self.assertEqual(len(leads), t["werklijst"])
+        meta = self.payload["koppen"]["werklijst.meta"]
+        self.assertEqual(meta, f"{t['werklijst']} panden · {t['werklijst_25']} uit de "
+                               f"{t['aantal_grote_gemeenten']} grootste gemeenten · {t['werklijst_overig']} elders "
+                               "· gesorteerd op score-index")
+        self.assertEqual(sum(o["aantal"] for g in self.payload["filter"]["groepen"] for o in g["opties"]),
+                         len(leads))
+
+    def test_kantoor_reageert_op_het_land(self):
+        k, t = self.payload["kantoor"], self.t
+        self.assertEqual(k["gebied"], "Nederland")
+        self.assertEqual((k["ingest"]["vbo"], k["selectie"]["panden"], k["selectie"]["a_e"]),
+                         (t["vbo"], t["panden"], t["a_e"]))
+        self.assertEqual(k["selectie"]["categorieen"], t["categorieen"])  # het bord in de taxatiekamer
+        self.assertEqual(k["tekst"]["selectie"]["bel"], f"{t['werklijst']} panden op de werklijst")
+        self.assertIn(f"{bd.nl_getal(t['geschikt'])} halen score {t['drempel']} of hoger; de {t['werklijst']} "
+                      "beste staan op de werklijst.", k["tekst"]["selectie"]["zin"])
+        self.assertTrue(k["tekst"]["ingest"]["zin"].startswith("Ingest heeft de BAG van heel Nederland ingelezen"))
+        self.assertEqual(k["controle"]["totaal"], len(self.payload["leads"]))
+
+
+class KantoorLandelijk(unittest.TestCase):
+    """Lumi's kopij VA-39 voor het kantoor, op handgemaakte totalen van de eerste landelijke run."""
+
+    T = {"vbo": 9998456, "panden": 6568913, "uitgesloten": 475372, "a_e": 441997,
+         "categorieen": {"A": 1, "B": 2, "C": 3, "D": 4, "E": 5}, "geschikt": 263319, "geschikt_25": 139846,
+         "geschikt_overig": 123473, "werklijst": 500, "werklijst_25": 450, "werklijst_overig": 50,
+         "drempel": 8, "maand": "2026-11", "aantal_grote_gemeenten": 25}
+
+    def test_lumis_regels(self):
+        bron = [{"woonplaats": "Nederland", "bestand": "bag_nl_2026-11-01.sqlite", "ophaaldatum": "2026-11-01"}]
+        k = bd.kantoor_landelijk(bron, self.T, 500, cfg())
+        tk = k["tekst"]
+        self.assertEqual(tk["ingest"]["bel"], "BAG opgehaald " + hard("1 nov 2026"))
+        self.assertEqual(tk["ingest"]["zin"], "Ingest heeft de BAG van heel Nederland ingelezen uit het "
+                                              f"bestand van {hard('1 nov 2026')}: 9.998.456 verblijfsobjecten.")
+        self.assertEqual(tk["ingest"]["uitleg"],
+                         "Ingest leest de BAG van heel Nederland in uit het GeoPackage-bestand van PDOK, de open "
+                         "dataset van het Kadaster. Elke ophaling blijft bewaard als eigen, gedateerde "
+                         "momentopname, zodat je altijd ziet uit welke ophaling een cijfer komt.")
+        self.assertEqual(tk["selectie"]["bel"], "500 panden op de werklijst")
+        self.assertEqual(tk["selectie"]["zin"], "Selectie heeft 441.997 panden in categorie A–E gescoord. "
+                                                "263.319 halen score 8 of hoger; de 500 beste staan op de werklijst.")
+        self.assertEqual(tk["selectie"]["uitleg"],
+                         "Selectie groepeert de verblijfsobjecten per BAG-pand, sluit panden uit die buiten de "
+                         "briefing vallen, deelt de rest in categorie A–E in en geeft elk pand een leadscore. "
+                         "Van de 6.568.913 panden in Nederland vallen er 441.997 in A–E; 263.319 halen score 8 "
+                         "of hoger. Daaruit komen de 500 hoogst scorende op de werklijst: 450 uit de 25 "
+                         "gemeenten met de meeste inwoners (CBS) en 50 elders in Nederland. Bij gelijke score "
+                         "beslist een loting die de hele maand gelijk blijft.")
+        self.assertEqual(tk["controle"]["bel"], "500 panden wachten op visuele controle")
+        self.assertTrue(tk["controle"]["uitleg"].startswith(
+            "Controle zet de 500 panden van de werklijst klaar voor je visuele controle."))
+        self.assertEqual(tk["verrijking"]["bel"], "Geen extra bron actief")  # ongewijzigd
+
+    def test_zonder_totalen_onbekend(self):
+        k = bd.kantoor_landelijk(None, None, None, cfg())
+        self.assertEqual({k["tekst"][w]["s"] for w in ("ingest", "selectie", "verrijking", "controle")}, {"leeg"})
 
 
 if __name__ == "__main__":
