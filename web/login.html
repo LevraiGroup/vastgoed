@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{titel}}</title>
+<!-- Inlogpagina (VA-50/VA-52), gemaakt uit design/login.html (VA-49). serve.py vult de invulplekken in. -->
+<style>
+  :root{
+    color-scheme: light;
+    --plane:#f9f9f7; --surface:#fcfcfb; --surface-2:#ffffff;
+    --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --baseline:#c3c2b7; --ring:rgba(11,11,11,.10);
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4;
+    --good:#0ca30c; --crit:#d03b3b;
+    --shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -12px rgba(11,11,11,.12);
+    --brand:#12233b;
+    /* alleen login: knop, vinkje en link. Licht = het merk-navy van het bord. */
+    --knop:#12233b; --knop-tekst:#ffffff; --link:#12233b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])){
+      color-scheme: dark;
+      --plane:#0d0d0d; --surface:#1a1a19; --surface-2:#201f1e;
+      --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,.10);
+      --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+      --good:#0ca30c; --crit:#e06666;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);
+      --brand:#0a1524;
+      /* donker: --brand (#0a1524) verdwijnt tegen --plane, dus de knop wordt het lichte blauwgrijs van de kop */
+      --knop:#c6d3e4; --knop-tekst:#12233b; --link:#3987e5;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --plane:#0d0d0d; --surface:#1a1a19; --surface-2:#201f1e;
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,.10);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+    --good:#0ca30c; --crit:#e06666;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);
+    --brand:#0a1524;
+    --knop:#c6d3e4; --knop-tekst:#12233b; --link:#3987e5;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--plane);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.45}
+  [hidden]{display:none!important}
+  .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+    clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+  /* ============================ LOGIN (overnemen) ============================ */
+  .login{display:grid;grid-template-columns:440px minmax(0,1fr);min-height:100vh;min-height:100dvh}
+
+  .paneel{background:var(--brand);color:#fff;padding:56px 56px 40px;
+    display:flex;flex-direction:column;justify-content:space-between;gap:48px}
+  /* het woordmerk precies zoals de kop van het dashboard (.mark in index.html) */
+  .mark{font-weight:800;letter-spacing:.16em;font-size:15px}
+  .mark small{display:block;letter-spacing:.28em;font-weight:600;font-size:10px;color:#9fb3cc;margin-top:3px}
+  .paneel-midden{display:flex;flex-direction:column;gap:28px}
+  .huizen{--u:1px;display:flex;align-items:flex-end;gap:calc(6 * var(--u));height:calc(110 * var(--u))}
+  .huis{width:calc(var(--b) * var(--u));height:calc(var(--h) * var(--u));
+    clip-path:polygon(0 var(--n),50% 0,100% var(--n),100% 100%,0 100%)}
+  .hA{background:var(--s1)} .hB{background:var(--s2)} .hC{background:var(--s3)}
+  .hD{background:var(--s4)} .hE{background:var(--s5)}
+  .paneel h1{margin:0;font-size:40px;line-height:1.12;font-weight:700;letter-spacing:-.01em;max-width:440px}
+  .lead{margin:0;font-size:16px;line-height:1.55;color:#c6d3e4;max-width:440px}
+  .bron{font-size:13px;color:#9fb3cc}
+
+  .zijde{display:flex;align-items:center;justify-content:center;padding:48px 24px}
+  .formulier{width:100%;max-width:400px;display:flex;flex-direction:column;gap:20px}
+  .kop h2{margin:0;font-size:28px;line-height:1.2;font-weight:700}
+  .kop p{margin:8px 0 0;font-size:15px;color:var(--ink-2)}
+
+  .fout{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:10px;
+    background:color-mix(in srgb,var(--crit) 10%,var(--surface-2));
+    border:1px solid color-mix(in srgb,var(--crit) 55%,transparent);
+    color:var(--ink);font-size:14px;line-height:1.45}
+  .fout:empty{display:none}
+  .fout .ic{flex:none;width:20px;height:20px;border-radius:50%;background:var(--crit);color:#fff;
+    font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:0}
+
+  .veld{display:flex;flex-direction:column;gap:6px}
+  .veld label{font-size:14px;font-weight:600;color:var(--ink)}
+  .veld input{width:100%;height:48px;padding:0 14px;font:inherit;font-size:16px;
+    border:1px solid var(--muted);border-radius:10px;background:var(--surface-2);color:var(--ink)}
+  .veld input:focus{outline:2px solid var(--s1);outline-offset:2px;border-color:var(--s1)}
+  .veld input[aria-invalid="true"]{border:2px solid var(--crit);padding:0 13px}
+  .veld input[readonly]{background:var(--surface);color:var(--ink-2)}
+
+  .blijven{display:flex;align-items:center;gap:10px;align-self:flex-start;min-height:44px;
+    font-size:14px;color:var(--ink-2);cursor:pointer}
+  .blijven input{width:18px;height:18px;margin:0;flex:none;accent-color:var(--knop)}
+  .blijven input:focus-visible{outline:2px solid var(--s1);outline-offset:3px}
+
+  .knop{height:52px;border:0;border-radius:10px;background:var(--knop);color:var(--knop-tekst);
+    font:inherit;font-size:16px;font-weight:600;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:10px}
+  .knop:hover{background:color-mix(in srgb,var(--knop) 85%,var(--s1))}
+  .knop:focus-visible{outline:2px solid var(--s1);outline-offset:3px}
+  .knop[aria-disabled="true"]{cursor:progress;background:var(--knop)}
+  .draai{width:16px;height:16px;border-radius:50%;border:2px solid currentColor;
+    border-right-color:transparent;animation:draai .8s linear infinite}
+  @keyframes draai{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion: reduce){ .draai{animation:none;border-right-color:currentColor;border-style:dotted} }
+
+  .vergeten{align-self:flex-start;font-size:14px;font-weight:500;color:var(--link);
+    text-underline-offset:3px;padding:4px 0}
+  .vergeten:hover{text-decoration-thickness:2px}
+  .vergeten:focus-visible{outline:2px solid var(--s1);outline-offset:3px;border-radius:4px}
+  .voet{margin:0;font-size:13px;line-height:1.5;color:var(--ink-2)}
+
+  @media (max-width: 899px){
+    .login{grid-template-columns:minmax(0,1fr);min-height:0}
+    /* het paneel krimpt tot een kop: woordmerk en huisjes op een rij, de titel eronder */
+    .paneel{display:grid;grid-template-columns:minmax(0,1fr) auto;
+      grid-template-areas:"mark huizen" "titel titel";align-items:end;gap:14px 12px;padding:18px 20px 20px}
+    .paneel-midden{display:contents}
+    .mark{grid-area:mark;align-self:center}
+    .huizen{grid-area:huizen;--u:.4px}
+    .paneel h1{grid-area:titel;font-size:22px;line-height:1.2}
+    .lead,.bron{display:none}
+    .zijde{align-items:flex-start;padding:28px 20px 40px}
+  }
+  /* ========================= einde LOGIN-blok ========================= */
+</style>
+</head>
+<body>
+<div class="login" id="login">
+  <header class="paneel">
+    <div class="mark">LEVRAI GROUP<small>VASTGOED</small></div>
+    <div class="paneel-midden">
+      <div class="huizen" aria-hidden="true">
+        <div class="huis hA" style="--b:44;--h:92;--n:22%"></div>
+        <div class="huis hB" style="--b:40;--h:110;--n:18%"></div>
+        <div class="huis hC" style="--b:46;--h:84;--n:26%"></div>
+        <div class="huis hD" style="--b:38;--h:104;--n:20%"></div>
+        <div class="huis hE" style="--b:44;--h:96;--n:22%"></div>
+      </div>
+      <h1>Pandenselectie voor heel Nederland</h1>
+      <p class="lead">De kansrijkste panden uit de BAG, gescoord en klaar voor je visuele controle.</p>
+    </div>
+    <div class="bron">Bron: PDOK BAG · open data van het Kadaster</div>
+  </header>
+
+  <main class="zijde">
+    <form class="formulier" id="formulier" method="post" action="/login" aria-labelledby="kopForm">
+      <div class="kop">
+        <h2 id="kopForm">Inloggen</h2>
+        <p>Log in om het dashboard te openen.</p>
+      </div>
+
+      <div class="fout" id="fout" role="alert">{{fout}}</div>
+
+      <div class="veld">
+        <label for="gebruiker" id="labelGebruiker">Gebruikersnaam</label>
+        <input id="gebruiker" name="gebruiker" type="text" autocomplete="username"
+               autocapitalize="none" spellcheck="false" required value="{{gebruiker}}"{{veld_fout}}{{focus_gebruiker}}>
+      </div>
+      <div class="veld">
+        <label for="wachtwoord">Wachtwoord</label>
+        <input id="wachtwoord" name="wachtwoord" type="password" autocomplete="current-password" required{{veld_fout}}{{focus_wachtwoord}}>
+      </div>
+      <label class="blijven"><input type="checkbox" name="blijven" value="1" id="blijven"> Ingelogd blijven op dit apparaat</label>
+      <button class="knop" type="submit" id="knop"><span class="draai" id="draai" aria-hidden="true" hidden></span><span id="knopTekst">Inloggen</span></button>
+      <p class="sr" role="status" id="status"></p>
+
+      <p class="voet" id="voet">Alleen voor medewerkers van Levrai Group. Wachtwoord vergeten of geen toegang? Vraag het je beheerder.</p>
+    </form>
+  </main>
+</div>
+<script>
+/* Bezig (VA-49): alleen een verbetering; inloggen werkt ook zonder JavaScript.
+   Geen 'disabled': uitgeschakelde velden worden niet meegestuurd. */
+(function () {
+  var f = document.getElementById("formulier"), knop = document.getElementById("knop"), bezig = false;
+  f.addEventListener("submit", function (e) {
+    if (bezig) { e.preventDefault(); return; }
+    bezig = true;
+    knop.setAttribute("aria-disabled", "true");
+    document.getElementById("draai").hidden = false;
+    document.getElementById("knopTekst").textContent = "Bezig met inloggen\u2026";
+    document.getElementById("status").textContent = "Bezig met inloggen\u2026";
+    f.querySelectorAll("input[type=text],input[type=password]").forEach(function (i) { i.readOnly = true; });
+  });
+})();
+</script>
+</body>
+</html>

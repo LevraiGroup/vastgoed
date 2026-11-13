@@ -93,6 +93,35 @@ met Railpack (`railpack.json`) en start `serve.py`, dat alleen `design/` serveer
 standaardbibliotheek van Python, op de poort uit de variabele `PORT`. Lokaal hetzelfde:
 `python serve.py`, dan http://localhost:8000/. De pipeline zelf draait niet op Railway.
 
+Het dashboard is alleen te zien na inloggen met het ene gedeelde Levrai-account; zonder
+sessie geeft de server alleen de inlogpagina (`web/login.html`). Alles komt uit
+Railway-variabelen, die Ayman zet; er staat nooit een waarde in git:
+
+| Variabele | Betekenis | Standaard |
+| --- | --- | --- |
+| `VASTGOED_GEBRUIKER` | gebruikersnaam van het gedeelde account | geen: zonder deze blijft het dicht |
+| `VASTGOED_WACHTWOORD` | wachtwoord van het gedeelde account; alleen spaties telt als leeg | geen: zonder deze blijft het dicht |
+| `VASTGOED_SESSIESLEUTEL` | willekeurige tekst van minstens 32 tekens waarmee sessies worden ondertekend | geen: zonder deze, of korter, blijft het dicht |
+| `VASTGOED_BLIJVEN_DAGEN` | dagen dat "Ingelogd blijven" geldt | 30 |
+| `VASTGOED_POGINGEN` | mislukte inlogs per adres voordat het dichtgaat | 5 |
+| `VASTGOED_VENSTER_MIN` | binnen hoeveel minuten die mislukte inlogs tellen | 15 |
+| `VASTGOED_BLOKKADE_MIN` | hoeveel minuten een adres daarna dicht is | 15 |
+
+Het adres dat telt, is de kop `X-Real-IP`, die Railway zet; `X-Forwarded-For` wordt genegeerd.
+Waarom: `X-Real-IP` is de enige kop die Railway documenteert voor het adres van de bezoeker
+(docs.railway.com, "Specs & Limits"). Dat Railway's proxy een zelf meegestuurde `X-Real-IP`
+overschrijft, staat niet in die documentatie maar alleen op Railway's forum, met een meting.
+Over `X-Forwarded-For` spreken Railway's eigen antwoorden elkaar tegen (links of rechts te
+vertrouwen), en via een CDN staat rechts het CDN-adres in plaats van de bezoeker. Staan er
+toch meerdere `X-Real-IP`-regels of een lijst, dan telt de laatste; zonder geldig adres telt
+de verbinding zelf. Na de eerste deploy controleren: vijf foute inlogs met een zelfgekozen
+`X-Real-IP` en `X-Forwarded-For` moeten het eigen adres dichtzetten (15 minuten), niet het
+zelfgekozen adres.
+
+Sessies staan in het geheugen van de server: na elke deploy (dus elke push) moet iedereen
+opnieuw inloggen. Lokaal testen: zet de drie eerste variabelen in je eigen shell, nooit in een
+bestand in deze map.
+
 Elke maand, na `run_proef.py`: draai `build_dashboard.py` en commit `design/index.html` in
 dezelfde commit als de nieuwe `output/*.csv`. Railway bouwt de pagina niet zelf (daar is geen
 `data/`), dus alleen zo toont de online versie dezelfde cijfers als de geleverde CSV's. Elke
