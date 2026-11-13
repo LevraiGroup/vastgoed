@@ -103,3 +103,7 @@ struck through with the reason, never deleted.
   record numbers** (2 MB went to 0,89 MB for 500 panden); a test unfolds the short form back to
   the full one. When measuring Fast 4G, report warm and cold runs apart: a cold headless start adds
   about 2 s at any page size. *(2026-11-12, Ada and Vera, VA-39)*
+- **Keep built cards in a Map keyed by ID and hang them back on redraw,** so a filter change
+  never re-requests the PDOK photos (500 cards scrolled = 500 requests; filtering after that = 0).
+  Screenshot the dashboard headless with CDP `captureScreenshot` and a clip, and test lazy
+  rendering with reduced motion on. *(2026-11-13, Ada and Vera, VA-68/VA-71)*

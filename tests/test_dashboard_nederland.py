@@ -95,12 +95,14 @@ class Filter(unittest.TestCase):
         self.assertEqual([o["tekst"] for o in self.f["groepen"][1]["opties"]], ["Alkmaar (2)", "Baarn (1)"])
         self.assertEqual(sum(o["aantal"] for g in self.f["groepen"] for o in g["opties"]), len(self.lijst))
 
-    def test_uitkomst_een_en_meer(self):
-        uit = {o["naam"]: o["uitkomst"] for g in self.f["groepen"] for o in g["opties"]}
-        self.assertEqual(uit["Amsterdam"], "2 panden in Amsterdam · Alle gemeenten: 7 panden")
-        self.assertEqual(uit["Baarn"], "1 pand in Baarn")
-        self.assertEqual(self.f["leeg"], "Er staan geen panden uit {gemeente} op de werklijst van deze maand.")
-        self.assertEqual(self.f["terug"], "Toon alle gemeenten")
+    def test_gebieden_en_teksten_voor_het_script(self):
+        # VA-68: de uitkomstregel van VA-39 vervalt (de telling vervangt hem, Lumi bouwnotitie 1);
+        # een onbekende gemeente in het adres valt weg (VA-68 crit. 9), dus geen eigen lege zin meer.
+        self.assertEqual(self.f["gebied"], [["groot", "De 25 grootste gemeenten"], ["elders", "Elders in Nederland"]])
+        self.assertEqual(self.f["tekst"]["alle"], "Alle 7 panden")
+        self.assertEqual(self.f["tekst"]["telling"], "{n} van 7 panden")
+        for weg in ("uitkomst", "leeg", "terug"):
+            self.assertNotIn(weg, self.f)
 
     def test_namen_in_het_filter_zijn_uniek(self):
         f = bd.gemeente_filter(self.lijst + [pand(8, "Bergen (L.)", groot=False),
@@ -210,15 +212,16 @@ class Sjabloon(unittest.TestCase):
 
     def test_script_maakt_geen_filterzinnen(self):
         for weg in ("Alle gemeenten", "grootste gemeenten", "Elders in Nederland", "Toon alle gemeenten",
-                    "pand in ", "op de werklijst van deze maand"):
+                    "pand in ", "op de werklijst van deze maand", "Wis alle filters", "Categorie", "Leegstaand",
+                    "In verbouwing", "Luchtfoto kon niet laden", "Locatie onbekend"):
             self.assertNotIn(weg, bd.TEMPLATE)
-        self.assertIn('leeg.dataset.tekst.replace("{gemeente}", naam)', bd.TEMPLATE)
+        self.assertIn("const T = PAYLOAD.filter.tekst", bd.TEMPLATE)
 
     def test_kaarten_in_stappen_met_terugval(self):
         t = bd.TEMPLATE
         self.assertIn('"IntersectionObserver" in window', t)
         self.assertIn('<div class="schildwacht" aria-hidden="true"></div>', t)
-        self.assertIn("LEADS.filter(d => d.g === naam)", t)  # het filter werkt alleen op de lijst
+        self.assertIn("LEADS.filter(d => past(d, null))", t)  # het filter werkt alleen op de lijst
 
     def test_geen_jaartal_of_verbergen_in_de_code(self):
         bron = Path(bd.__file__).read_text(encoding="utf-8")
