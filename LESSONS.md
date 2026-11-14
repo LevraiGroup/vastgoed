@@ -103,3 +103,8 @@ struck through with the reason, never deleted.
   record numbers** (2 MB went to 0,89 MB for 500 panden); a test unfolds the short form back to
   the full one. When measuring Fast 4G, report warm and cold runs apart: a cold headless start adds
   about 2 s at any page size. *(2026-11-12, Ada and Vera, VA-39)*
+- **Take a download's date from its own entry, never from the feed header.** PDOK's BAG feed says
+  `<updated>2026-11-08</updated>` at the top because of the zip; the GeoPackage entry still says
+  11-01. A partial download gets a name the ingest pattern cannot match, and a live check of a
+  real folder runs with an impossible disk floor, so it can never start a 7,8 GB download by
+  accident. *(2026-11-13, Rex, VA-72)*

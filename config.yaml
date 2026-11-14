@@ -8,6 +8,16 @@ bron:
   # LET OP: deze WFS negeert 'cql_filter' stilzwijgend en levert dan heel NL.
   # Uitsluitend OGC Filter XML (parameter 'filter') wordt gehonoreerd.
 
+# === LANDELIJKE GEOPACKAGE (VA-72) ================================================
+# python gpkg_ophalen.py kijkt in de Atom-feed van PDOK of er een nieuwere maandelijkse
+# BAG-GeoPackage is en haalt die dan compleet binnen (of niet). Hij verwijdert nooit iets.
+# Paden zijn relatief aan deze map, of absoluut.
+geopackage:
+  atom_url: "https://service.pdok.nl/kadaster/bag/atom/bag.xml"
+  bron_map: "data/bron"                               # hier staan de bag-light_<datum>.gpkg
+  resultaat: "data/bron/controle_geopackage.json"     # uitkomst van de laatste controle (VA-74)
+  min_vrij_gb: 25                                     # GeoPackage (7,8 GB) + snapshot (2,9 GB) + marge
+
 # === DOELGEBIED — KIES HIER je stad of provincie ===================================
 # Vul 'steden' met woonplaatsnamen, OF 'provincies' met provincienamen. Bij een
 # provincie worden automatisch alle woonplaatsen opgehaald (PDOK Locatieserver).
