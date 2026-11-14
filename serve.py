@@ -260,8 +260,8 @@ def lees_cookie(kop: str | None, naam: str = COOKIE) -> str | None:
 TITEL = "Inloggen · Levrai Vastgoed"
 TITEL_FOUT = "Inloggen mislukt · Levrai Vastgoed"
 FOUTMELDING = "Gebruikersnaam of wachtwoord klopt niet. Probeer het opnieuw."
-# VA-51; nog niet in Lumi's copytabel, ter controle aan haar voorgelegd.
-TE_VAAK = "Te veel mislukte pogingen. Probeer het over {minuten} opnieuw."
+# VA-51; goedgekeurd door Lumi (2026-11-14).
+TE_VAAK = "Te veel mislukte pogingen vanaf dit netwerk. Over {minuten} kun je weer inloggen."
 
 
 def te_vaak_melding(seconden: float) -> str:
@@ -269,16 +269,18 @@ def te_vaak_melding(seconden: float) -> str:
     return TE_VAAK.format(minuten="1 minuut" if minuten == 1 else f"{minuten} minuten")
 
 
-def login_pagina(fout: bool = False, gebruiker: str = "", melding: str = FOUTMELDING) -> bytes:
+def login_pagina(fout: bool = False, gebruiker: str = "", melding: str = FOUTMELDING,
+                 ongeldig: bool = True) -> bytes:
     """
     De inlogpagina. Na een mislukte login: titel en foutblok gevuld, beide velden gemarkeerd
     (niet te zien welke fout was), de getypte gebruikersnaam terug, het wachtwoord leeg en
-    met de focus, zodat een schermlezer de fout via aria-describedby hoort.
+    met de focus, zodat een schermlezer de fout via aria-describedby hoort. Bij een blokkade
+    (429, `ongeldig=False`) is geen veld fout ingevuld: dan geen aria-invalid, wel de melding.
     """
     invullen = {
         "{{titel}}": TITEL_FOUT if fout else TITEL,
         "{{fout}}": ('<span class="ic" aria-hidden="true">!</span>' + html.escape(melding)) if fout else "",
-        "{{veld_fout}}": ' aria-invalid="true" aria-describedby="fout"' if fout else "",
+        "{{veld_fout}}": ((' aria-invalid="true"' if ongeldig else "") + ' aria-describedby="fout"') if fout else "",
         "{{focus_gebruiker}}": "" if fout else " autofocus",
         "{{focus_wachtwoord}}": " autofocus" if fout else "",
         # Als laatste: wat iemand typt, wordt daarna nergens meer vervangen.
@@ -361,8 +363,8 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def _stuur_login(self, fout=False, gebruiker="", status=HTTPStatus.OK, kop_alleen=False,
-                     melding=FOUTMELDING, wacht=0.0):
-        body = login_pagina(fout, gebruiker, melding)
+                     melding=FOUTMELDING, wacht=0.0, ongeldig=True):
+        body = login_pagina(fout, gebruiker, melding, ongeldig)
         self.send_response(status)
         if wacht:
             self.send_header("Retry-After", str(int(wacht) + 1))
@@ -458,7 +460,7 @@ class Handler(SimpleHTTPRequestHandler):
         wacht = self.pogingen.wacht(adres)
         if wacht:
             return self._stuur_login(fout=True, gebruiker=gebruiker, status=HTTPStatus.TOO_MANY_REQUESTS,
-                                     melding=te_vaak_melding(wacht), wacht=wacht)
+                                     melding=te_vaak_melding(wacht), wacht=wacht, ongeldig=False)
         if not self.instellingen.klopt(gebruiker, wachtwoord):
             self.pogingen.mislukt(adres)
             return self._stuur_login(fout=True, gebruiker=gebruiker, status=HTTPStatus.UNAUTHORIZED)

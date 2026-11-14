@@ -186,6 +186,7 @@ class Inloggen(Server):
         self.assertNotIn("value=", wachtwoordveld)  # het wachtwoord komt nooit terug
         self.assertIn("autofocus", wachtwoordveld)
         self.assertEqual(tekst.split("<body>")[1].count('aria-invalid="true"'), 2)  # niet te zien welk veld fout was
+        self.assertEqual(tekst.split("<body>")[1].count('aria-describedby="fout"'), 2)
         self.assertNotIn(FIGUUR, tekst)
 
     def test_gebruikersnaam_wordt_geescaped(self):
@@ -320,8 +321,8 @@ class Pogingen(unittest.TestCase):
                 self.assertEqual(serve.client_adres(rommel, "10.0.0.1"), "10.0.0.1")
 
     def test_melding(self):
-        self.assertEqual(serve.te_vaak_melding(30), "Te veel mislukte pogingen. Probeer het over 1 minuut opnieuw.")
-        self.assertEqual(serve.te_vaak_melding(14 * 60 + 1), "Te veel mislukte pogingen. Probeer het over 15 minuten opnieuw.")
+        self.assertEqual(serve.te_vaak_melding(30), "Te veel mislukte pogingen vanaf dit netwerk. Over 1 minuut kun je weer inloggen.")
+        self.assertEqual(serve.te_vaak_melding(14 * 60 + 1), "Te veel mislukte pogingen vanaf dit netwerk. Over 15 minuten kun je weer inloggen.")
 
 
 class TeVaakOverHttp(Server):
@@ -344,7 +345,11 @@ class TeVaakOverHttp(Server):
         self.assertNotIn("Set-Cookie", koppen)
         self.assertIn("Retry-After", koppen)
         tekst = body.decode("utf-8")
-        self.assertIn("Te veel mislukte pogingen. Probeer het over 10 minuten opnieuw.", tekst)
+        self.assertIn("Te veel mislukte pogingen vanaf dit netwerk. Over 10 minuten kun je weer inloggen.", tekst)
+        # Lumi: bij een blokkade is geen veld fout, dus geen aria-invalid; de melding blijft gekoppeld.
+        lijf = tekst.split("<body>")[1]
+        self.assertEqual(lijf.count('aria-invalid'), 0)
+        self.assertEqual(lijf.count('aria-describedby="fout"'), 2)
         self.assertNotIn("Gebruikersnaam of wachtwoord klopt niet", tekst)
         # Een ander adres logt gewoon in.
         self.assertEqual(self.vraag("POST", "/login", {"gebruiker": "levrai", "wachtwoord": "juist-wachtwoord"},
