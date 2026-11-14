@@ -103,6 +103,10 @@ struck through with the reason, never deleted.
   record numbers** (2 MB went to 0,89 MB for 500 panden); a test unfolds the short form back to
   the full one. When measuring Fast 4G, report warm and cold runs apart: a cold headless start adds
   about 2 s at any page size. *(2026-11-12, Ada and Vera, VA-39)*
+- **A test that pins committed bytes must be told which columns a story is allowed to move, and
+  check those columns by their meaning.** VA-79's `ja`/`nee` turned the byte-for-byte Delft check
+  in `test_werklijst.py` red even though `VERWACHT` held; it now compares column by column and reads
+  ja/nee and the August `True`/`False` alike (`selectie.lees_janee`). *(2026-11-13, Rex, VA-79)*
 - **Take a download's date from its own entry, never from the feed header.** PDOK's BAG feed says
   `<updated>2026-11-08</updated>` at the top because of the zip; the GeoPackage entry still says
   11-01. A partial download gets a name the ingest pattern cannot match, and a live check of a

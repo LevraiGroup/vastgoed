@@ -60,11 +60,6 @@ def ids(lijst: list[dict]) -> list[str]:
     return [p["bag_pand_id"] for p in lijst]
 
 
-def zonder_cr(pad: Path) -> bytes:
-    """Bestandsinhoud met CRLF als LF: de checkout (core.autocrlf) mag beide hebben."""
-    return pad.read_bytes().replace(b"\r\n", b"\n")
-
-
 def gelijkspel(aantal: int = 40) -> list[dict]:
     """Drie panden boven de grens, `aantal` op de grensscore 11, en twee eronder."""
     boven = [pand("0503100000000901", 14), pand("0503100000000902", 13),
@@ -340,15 +335,35 @@ class TestWerklijstDelft(unittest.TestCase):
             master_rijen = {tuple(r.items()) for r in master}
             for r in rijen:
                 self.assertIn(tuple(r.items()), master_rijen)
-            # Byte voor byte de vastgelegde bestanden (op de regeleinden na, die
-            # core.autocrlf bepaalt): de werklijst sinds VA-32, de mastervoorraad en het
-            # proefresultaat ongewijzigd.
+            # Kolom voor kolom de vastgelegde augustusbestanden: de werklijst sinds VA-32, de
+            # mastervoorraad en het proefresultaat. Alleen de ja/nee-kolommen zeggen sinds VA-79
+            # 'ja'/'nee' waar de vastgelegde bestanden 'True'/'False' hebben, met dezelfde waarde.
             for naam, vastgelegd in (("werklijst_delft_2026-08.csv", WERKLIJST_CSV),
                                      ("mastervoorraad_delft.csv", MASTER_CSV),
                                      ("proefresultaat_20_delft.csv", PROEF_CSV)):
-                self.assertEqual(zonder_cr(uit / naam), zonder_cr(vastgelegd), naam)
+                self.vergelijk_met_vastgelegd(uit / naam, vastgelegd)
 
         self.assertEqual(sorted(p.name for p in (PROJECT / "output").iterdir()), echte_output)
+
+    def vergelijk_met_vastgelegd(self, nieuw: Path, vastgelegd: Path) -> None:
+        def lees(pad):
+            with open(pad, encoding="utf-8-sig", newline="") as fh:
+                lezer = csv.DictReader(fh, delimiter=";")
+                return lezer.fieldnames, list(lezer)
+
+        kop_n, nieuw_rijen = lees(nieuw)
+        kop_v, oud_rijen = lees(vastgelegd)
+        self.assertEqual(kop_n, kop_v, nieuw.name)
+        self.assertEqual(len(nieuw_rijen), len(oud_rijen), nieuw.name)
+        for kolom in kop_n:
+            n = [r[kolom] for r in nieuw_rijen]
+            v = [r[kolom] for r in oud_rijen]
+            if kolom in selectie.JANEE_KOLOMMEN:
+                self.assertTrue(set(n) <= {"ja", "nee"}, (nieuw.name, kolom, set(n)))
+                self.assertEqual([selectie.lees_janee(x) for x in n],
+                                 [selectie.lees_janee(x) for x in v], (nieuw.name, kolom))
+            else:
+                self.assertEqual(n, v, (nieuw.name, kolom))
 
 
 if __name__ == "__main__":

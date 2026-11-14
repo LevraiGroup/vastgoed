@@ -653,6 +653,29 @@ def controleer_drempels(cfg: dict) -> list[str]:
     return fouten
 
 
+# Ja/nee-kolommen in de CSV's (VA-79): de CSV zegt 'ja'/'nee', zoals grote_gemeente; JSON houdt true/false.
+JANEE_KOLOMMEN = ("visuele_controle", "eerder_geselecteerd")
+_JANEE_TEKST = {"ja": True, "nee": False, "true": True, "false": False}
+
+
+def lees_janee(waarde) -> bool:
+    """
+    Een ja/nee-cel terug als bool. Leest 'ja'/'nee' en ook het 'True'/'False' van de CSV's van
+    vóór VA-79 (de augustusbestanden van Delft). Iets anders is een fout, nooit stil 'nee'.
+    """
+    if isinstance(waarde, bool):
+        return waarde
+    tekst = str(waarde).strip().lower()
+    if tekst not in _JANEE_TEKST:
+        raise ValueError(f"{waarde!r} is geen ja/nee-waarde (verwacht ja, nee, True of False)")
+    return _JANEE_TEKST[tekst]
+
+
+def janee(waarde) -> str:
+    """De CSV-tekst van een ja/nee-waarde: 'ja' of 'nee' (VA-79)."""
+    return "ja" if lees_janee(waarde) else "nee"
+
+
 def nl_tal(n: float) -> str:
     """Getal met punt als duizendtalscheiding, afgerond op een heel getal: 1668 -> '1.668'."""
     return f"{round(n):,}".replace(",", ".")

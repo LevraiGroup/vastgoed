@@ -22,7 +22,7 @@ from selectie import (
     werklijst_maand, werklijst_waarschuwing,
 )
 import nederland
-from selectie import controleer_drempels, nl_tal
+from selectie import JANEE_KOLOMMEN, controleer_drempels, janee, nl_tal
 from snapshots import SnapshotFout
 
 BASE = Path(__file__).parent
@@ -41,11 +41,13 @@ KOLOMMEN = [
 
 
 def csv_rij(p: dict) -> dict:
-    """Eén pand als CSV-rij: lijsten met ' | ', woordenboeken als 'a=b; c=d'."""
+    """Eén pand als CSV-rij: lijsten met ' | ', woordenboeken als 'a=b; c=d', ja/nee als 'ja'/'nee'."""
     r = {}
     for k in KOLOMMEN:
         v = p.get(k, "")
-        if isinstance(v, list):
+        if k in JANEE_KOLOMMEN:
+            v = janee(p.get(k, False))  # VA-79: nooit Pythons True/False in de CSV
+        elif isinstance(v, list):
             v = " | ".join(str(x) for x in v)
         elif isinstance(v, dict):
             v = "; ".join(f"{a}={b}" for a, b in sorted(v.items()))
