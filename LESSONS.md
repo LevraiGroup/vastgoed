@@ -71,8 +71,9 @@ struck through with the reason, never deleted.
   bottom, not only `scrollWidth`. *(2026-11-09, Vera, VA-61)*
 - **Headless Chrome cannot make a 375 px window; measure 375 inside an iframe.** *(2026-11-09,
   Vera, VA-61)*
-- **A pand's x,y is not its hoofdadres point.** 11 of 20 Delft leads are 5,7–18,3 m off, because
-  x,y, postcode and huisnummer come from another VBO of the pand. *(2026-11-09, Vera, VA-62)*
+- ~~**A pand's x,y is not its hoofdadres point.** 11 of 20 Delft leads are 5,7–18,3 m off, because
+  x,y, postcode and huisnummer come from another VBO of the pand. *(2026-11-09, Vera, VA-62)*~~
+  Superseded by VA-78 (2026-11-13): the address fields and x,y now come from the hoofdadres VBO.
 - **A fixed `data-theme="light"` on `<html>` overrides `prefers-color-scheme`.** Ayman wants the
   dashboard to open light on every computer; only the Thema button sets the theme. A design file
   that follows the OS colour scheme quietly decides the default. *(2026-11-09, Vera, VA-66)*
@@ -107,6 +108,11 @@ struck through with the reason, never deleted.
   check those columns by their meaning.** VA-79's `ja`/`nee` turned the byte-for-byte Delft check
   in `test_werklijst.py` red even though `VERWACHT` held; it now compares column by column and reads
   ja/nee and the August `True`/`False` alike (`selectie.lees_janee`). *(2026-11-13, Rex, VA-79)*
+- **Fields shown together must come from one record.** `hoofdadres` was the first address in sorted
+  order but postcode and x,y came from the first VBO in input order; VA-78 takes them from the
+  hoofdadres VBO. Nationally 31.946 postcodes and 156.407 locations moved, and no gemeentecode or
+  werklijst ID did. A hoofdadres VBO can lack a postcode (8 national werklijst/proef rows, 2
+  Delft proof leads), so the Postcode row can go empty. *(2026-11-13, Rex, VA-78)*
 - **Take a download's date from its own entry, never from the feed header.** PDOK's BAG feed says
   `<updated>2026-11-08</updated>` at the top because of the zip; the GeoPackage entry still says
   11-01. A partial download gets a name the ingest pattern cannot match, and a live check of a

@@ -56,11 +56,15 @@ class Gelijk(unittest.TestCase):
         self.assertEqual(len(panden), 50)  # de VBO zonder pand telt niet mee
         self.assertEqual([p["bag_pand_id"] for p in panden], sorted(p["bag_pand_id"] for p in panden))
 
-    def test_eerste_vbo_wint_ook_in_sqlite(self):
-        # Binnen een pand blijft de volgorde van de ingest: woonplaats, postcode, x,y van de eerste VBO.
+    def test_hoofdadres_vbo_wint_ook_in_sqlite(self):
+        # VA-78: woonplaats, postcode, x,y komen van de VBO van het hoofdadres, niet van de eerste VBO.
         rijen = gegenereerd(3)
-        rijen[2]["postcode"] = "9999ZZ"  # tweede VBO van pand 1 (pand 0 heeft er één)
+        rijen[1]["huisletter"] = "B"     # eerste VBO van pand 1: Straat 2B, niet meer het hoofdadres
+        rijen[2]["postcode"] = "9999ZZ"  # tweede VBO van pand 1: Straat 2A, nu het hoofdadres
         panden = {p["bag_pand_id"]: p for p in self.vergelijk(rijen)}
+        pand_1 = panden.pop("0503100000000002")
+        self.assertEqual(pand_1["hoofdadres"], "Straat 2A, 9999ZZ Delft")
+        self.assertEqual((pand_1["postcode"], pand_1["huisletter"], pand_1["x"]), ("9999ZZ", "A", 84001.0))
         self.assertTrue(all(p["postcode"] == "2611AA" for p in panden.values()))
 
     def test_meer_snapshots_met_hetzelfde_pand(self):

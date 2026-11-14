@@ -19,6 +19,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -337,15 +338,16 @@ class TestWerklijstDelft(unittest.TestCase):
                 self.assertIn(tuple(r.items()), master_rijen)
             # Kolom voor kolom de vastgelegde augustusbestanden: de werklijst sinds VA-32, de
             # mastervoorraad en het proefresultaat. Alleen de ja/nee-kolommen zeggen sinds VA-79
-            # 'ja'/'nee' waar de vastgelegde bestanden 'True'/'False' hebben, met dezelfde waarde.
-            for naam, vastgelegd in (("werklijst_delft_2026-08.csv", WERKLIJST_CSV),
-                                     ("mastervoorraad_delft.csv", MASTER_CSV),
-                                     ("proefresultaat_20_delft.csv", PROEF_CSV)):
-                self.vergelijk_met_vastgelegd(uit / naam, vastgelegd)
+            # 'ja'/'nee' waar de vastgelegde bestanden 'True'/'False' hebben, met dezelfde waarde,
+            # en sinds VA-78 is de postcode die van het hoofdadres (zoveel rijen verschoven).
+            for naam, vastgelegd, verschoven in (("werklijst_delft_2026-08.csv", WERKLIJST_CSV, 59),
+                                                 ("mastervoorraad_delft.csv", MASTER_CSV, 142),
+                                                 ("proefresultaat_20_delft.csv", PROEF_CSV, 7)):
+                self.vergelijk_met_vastgelegd(uit / naam, vastgelegd, verschoven)
 
         self.assertEqual(sorted(p.name for p in (PROJECT / "output").iterdir()), echte_output)
 
-    def vergelijk_met_vastgelegd(self, nieuw: Path, vastgelegd: Path) -> None:
+    def vergelijk_met_vastgelegd(self, nieuw: Path, vastgelegd: Path, postcode_verschoven: int) -> None:
         def lees(pad):
             with open(pad, encoding="utf-8-sig", newline="") as fh:
                 lezer = csv.DictReader(fh, delimiter=";")
@@ -362,6 +364,12 @@ class TestWerklijstDelft(unittest.TestCase):
                 self.assertTrue(set(n) <= {"ja", "nee"}, (nieuw.name, kolom, set(n)))
                 self.assertEqual([selectie.lees_janee(x) for x in n],
                                  [selectie.lees_janee(x) for x in v], (nieuw.name, kolom))
+            elif kolom == "postcode":
+                self.assertEqual(sum(a != b for a, b in zip(n, v)), postcode_verschoven, nieuw.name)
+                for r in nieuw_rijen:  # de postcode hoort bij het hoofdadres (VA-78)
+                    adres_pc = r["hoofdadres"].split(", ")[-1].split(" ")[0]
+                    self.assertEqual(r["postcode"], adres_pc if re.fullmatch(r"\d{4}[A-Z]{2}", adres_pc) else "",
+                                     (nieuw.name, r["bag_pand_id"]))
             else:
                 self.assertEqual(n, v, (nieuw.name, kolom))
 

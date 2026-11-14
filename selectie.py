@@ -95,19 +95,27 @@ def aggregeer(rows: list[dict]) -> list[dict]:
                 # zodat de som over functies gelijk blijft aan de totale oppervlakte.
                 opp_per_functie[groep] += opp / len(groepen)
 
-        adressen = sorted({_adres(v) for v in vbos if _adres(v)})
+        adres_van = [(_adres(v), v) for v in vbos]
+        adressen = sorted({a for a, _ in adres_van if a})
+        hoofdadres = adressen[0] if adressen else ""
         eerste = vbos[0]
+        # VA-78: postcode, huisnummer, huisletter, woonplaats, x,y en gemeentecode komen van de VBO
+        # van het hoofdadres (bij gelijke adressen de laagste identificatie); zonder adres de eerste.
+        adres_vbo = min(
+            (v for a, v in adres_van if a == hoofdadres),
+            key=lambda v: str(v.get("identificatie") or ""),
+        ) if hoofdadres else eerste
 
         panden.append(
             {
                 "bag_pand_id": pand_id,
-                "hoofdadres": adressen[0] if adressen else "",
+                "hoofdadres": hoofdadres,
                 "gekoppelde_adressen": adressen,
                 "aantal_adressen": len(adressen),
-                "woonplaats": eerste.get("woonplaats") or "",
-                "postcode": eerste.get("postcode") or "",
-                "huisnummer": eerste.get("huisnummer"),
-                "huisletter": eerste.get("huisletter") or "",
+                "woonplaats": adres_vbo.get("woonplaats") or "",
+                "postcode": adres_vbo.get("postcode") or "",
+                "huisnummer": adres_vbo.get("huisnummer"),
+                "huisletter": adres_vbo.get("huisletter") or "",
                 "bouwjaar": int(eerste.get("bouwjaar") or 0),
                 "pandstatus": eerste.get("pandstatus") or "",
                 "vbo_ids": sorted(v.get("identificatie", "") for v in vbos),
@@ -116,14 +124,14 @@ def aggregeer(rows: list[dict]) -> list[dict]:
                 "opp_per_functie": {k: round(opp_per_functie[k], 1) for k in sorted(opp_per_functie)},
                 "aantal_per_functie": {k: aantal_per_functie[k] for k in sorted(aantal_per_functie)},
                 "totale_oppervlakte": round(sum(float(v.get("oppervlakte") or 0) for v in vbos), 1),
-                "x": eerste.get("_x"),
-                "y": eerste.get("_y"),
+                "x": adres_vbo.get("_x"),
+                "y": adres_vbo.get("_y"),
                 "vbo_statussen": sorted({v.get("status", "") for v in vbos}),
             }
         )
-        if "gemeentecode" in eerste:
-            # Landelijke snapshot (VA-34): de gemeente van dezelfde VBO als de woonplaats (VA-37).
-            panden[-1]["gemeentecode"] = eerste.get("gemeentecode") or ""
+        if "gemeentecode" in adres_vbo:
+            # Landelijke snapshot (VA-34): de gemeente van dezelfde VBO als de woonplaats (VA-37, VA-78).
+            panden[-1]["gemeentecode"] = adres_vbo.get("gemeentecode") or ""
 
     return panden
 
@@ -467,7 +475,7 @@ def verwerk(
         for rij in snap_rows:
             pand_id = rij.get("pandidentificatie")
             if pand_id:
-                # Eerste VBO wint, net als de woonplaats in aggregeer().
+                # Eerste VBO wint, net als bouwjaar en pandstatus in aggregeer().
                 peildatum.setdefault(pand_id, snap.ophaaldatum)
         rows += snap_rows
     panden = aggregeer(rows)
