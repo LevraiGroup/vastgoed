@@ -232,15 +232,21 @@ class Sjabloon(unittest.TestCase):
 class Pagina(HTMLParser):
     def __init__(self, html):
         super().__init__()
-        self.opties, self.groepen = [], []
+        self.opties, self.groepen, self.in_gemeente = [], [], False
         self.feed(html)
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
-        if tag == "option":
+        if tag == "select":   # alleen de opties van het gemeentefilter, niet die van Sorteer op (VA-70)
+            self.in_gemeente = a.get("id") == "gemeente"
+        if tag == "option" and self.in_gemeente:
             self.opties.append(a)
         if tag == "optgroup":
             self.groepen.append(a["label"])
+
+    def handle_endtag(self, tag):
+        if tag == "select":
+            self.in_gemeente = False
 
 
 @unittest.skipUnless(NL_PANDEN.is_file(), f"{NL_PANDEN} ontbreekt; echte landelijke pagina overgeslagen")

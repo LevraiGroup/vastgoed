@@ -323,8 +323,7 @@ class MenuLandelijk(unittest.TestCase):
         self.assertEqual(k["werklijst.titel"], "Werklijst november 2026")
         self.assertEqual(k["werklijst.zin"], "De 500 hoogst scorende panden van Nederland, klaar voor je "
                                              "visuele controle. Open een pand voor alle gegevens.")
-        self.assertEqual(k["werklijst.meta"], "500 panden · 450 uit de 25 grootste gemeenten · 50 elders · "
-                                              "gesorteerd op score-index")
+        self.assertEqual(k["werklijst.meta"], "500 panden · 450 uit de 25 grootste gemeenten · 50 elders")
         self.assertFalse([s for s in k if s.startswith("proefresultaat.")])
         for t in bd.KOP_TEKST_LANDELIJK.values():
             self.assertNotRegex(t.lower(), r"snapshot")
