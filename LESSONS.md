@@ -118,3 +118,7 @@ struck through with the reason, never deleted.
   11-01. A partial download gets a name the ingest pattern cannot match, and a live check of a
   real folder runs with an impossible disk floor, so it can never start a 7,8 GB download by
   accident. *(2026-11-13, Rex, VA-72)*
+- **Keep built cards in a Map keyed by ID and hang them back on redraw,** so a filter change
+  never re-requests the PDOK photos (500 cards scrolled = 500 requests; filtering after that = 0).
+  Screenshot the dashboard headless with CDP `captureScreenshot` and a clip, and test lazy
+  rendering with reduced motion on. *(2026-11-13, Ada and Vera, VA-68/VA-71)*

@@ -588,14 +588,24 @@ def rd_naar_wgs84(x: float, y: float) -> tuple[float, float]:
 
 
 LUCHTFOTO_WMS = "https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0"
+LUCHTFOTO_LAAG = "Actueel_orthoHR"
 LUCHTFOTO_HALF_M = 40  # 80 m breed: pand en straat zichtbaar (VA-62 crit. 1: 50-150 m)
+LUCHTFOTO_PX = 640  # de grote foto in 'Open pand' (VA-62)
+KAARTFOTO_PX = 200  # de kleine foto op elke kaart (VA-71 crit. 2: hooguit 240 px; Nova mat 9-11 KB)
 
 
-# De drie adressen per pand, met {b} (BBOX in RD) en {ll} (breedte,lengte). Ze staan één keer in
-# de payload; per pand gaan alleen {b} en {ll} mee (VA-39 crit. 5: 500 panden houden de pagina licht).
+def luchtfoto_sjabloon(px: int) -> str:
+    """Het GetMap-adres van PDOK voor een vierkante foto van px pixels, met {b} voor de BBOX."""
+    return (f"{LUCHTFOTO_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS={LUCHTFOTO_LAAG}"
+            f"&STYLES=&CRS=EPSG:28992&BBOX={{b}}&WIDTH={px}&HEIGHT={px}&FORMAT=image/jpeg")
+
+
+# De adressen per pand, met {b} (BBOX in RD) en {ll} (breedte,lengte). Ze staan één keer in de
+# payload; per pand gaan alleen {b} en {ll} mee (VA-39 crit. 5: 500 panden houden de pagina licht).
+# 'mini' is de kaartfoto (VA-71): dezelfde dienst, laag en BBOX als 'foto', alleen kleiner.
 PLEK_SJABLOON = {
-    "foto": (f"{LUCHTFOTO_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=Actueel_orthoHR"
-             "&STYLES=&CRS=EPSG:28992&BBOX={b}&WIDTH=640&HEIGHT=640&FORMAT=image/jpeg"),
+    "foto": luchtfoto_sjabloon(LUCHTFOTO_PX),
+    "mini": luchtfoto_sjabloon(KAARTFOTO_PX),
     "maps": "https://www.google.com/maps/search/?api=1&query={ll}",
     "streetview": "https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={ll}",
 }
@@ -727,6 +737,7 @@ def maak_leads(top: list[dict], landelijk: bool) -> tuple[list[dict], list[list]
         }
         if landelijk:
             lead["g"] = gemeente_naam(p.get("gemeente"))  # waarop het gemeentefilter kiest
+            lead["gg"] = 1 if p.get(nederland.IN_GROOT) == "ja" else 0  # filter Gebied (VA-68 crit. 3)
         leads.append(lead)
     return leads, criteria.lijst, waarden.lijst
 
@@ -743,19 +754,51 @@ def lijst_feiten(top: list[dict]) -> list[dict]:
     ]
 
 
-# --------------------------------------------------------------- gemeentefilter (VA-39 crit. 3)
-# Lumi's kopij VA-39. Alleen gemeenten die op de werklijst staan; per groep op alfabet.
+# --------------------------------------------------------------- werklijstfilters (VA-39, VA-68)
+# Lumi's kopij VA-39 en design/filters.html (VA-68). Alleen gemeenten die op de werklijst staan;
+# per groep op alfabet.
 FILTER_TEKST = {
     "label": "Gemeente",
     "alle": "Alle gemeenten ({n})",
     "optie": "{gemeente} ({aantal})",
     "groep.groot": "De {aantal_groot} grootste gemeenten",
     "groep.elders": "Elders in Nederland",
-    "resultaat": "{aantal} panden in {gemeente} · Alle gemeenten: {n} panden",
-    "resultaat.een": "1 pand in {gemeente}",
-    "leeg": "Er staan geen panden uit {gemeente} op de werklijst van deze maand.",
-    "terug": "Toon alle gemeenten",
 }
+# De zinnen van het filterpaneel. Hoeveel panden een combinatie geeft, weet Python niet vooraf:
+# het script vult alleen {n} (en {aantal} bij een gemeente) in, met nl(), en kiest de vorm voor
+# 1 en 0 uit wat hier staat (Lumi, bouwnotitie 2). {totaal} vult lijst_tekst() hier al in.
+LIJST_TEKST = {
+    "knop": "Filters",
+    "actief": " ({n} actief)",
+    "telling.alle": "Alle {totaal} panden",
+    "telling": "{n} van {totaal} panden",
+    "toon": "Toon {n} panden",
+    "toon.een": "Toon 1 pand",
+    "toon.nul": "Sluit filters",
+    "categorie": "Categorie",
+    "signaal": "Signaal",
+    "gebied": "Gebied",
+    "optie.aantal": " panden",
+    "chips": "Actieve filters",
+    "chip.gemeente": "Gemeente {gemeente}",
+    "chip.categorie": "Categorie {letter}",
+    "chip.naam": "Verwijder filter: {chip}",
+    "wis": "Wis alle filters",
+    "leeg": "Geen enkel pand op de werklijst van deze maand past bij deze filters. Verwijder hierboven "
+            "een filter, of wis ze allemaal.",
+}
+# Signaal: (waarde in het adres, sig.k van de kaart, label). Gefilterd op de sleutel, nooit op de tekst.
+SIGNALEN = [("leeg", "leeg", "Leegstaand"), ("verbouwing", "bouw", "In verbouwing")]
+GEBIEDEN = ("groot", "elders")  # waarde in het adres; label uit FILTER_TEKST['groep.*']
+
+
+def lijst_tekst(totaal: int) -> dict:
+    """Wat het script van het paneel invult, met het totaal van de werklijst al ingevuld."""
+    t, tot = LIJST_TEKST, nl_getal(totaal)
+    return {"actief": t["actief"], "alle": t["telling.alle"].format(totaal=tot),
+            "telling": t["telling"].replace("{totaal}", tot), "toon": t["toon"], "toonEen": t["toon.een"],
+            "toonNul": t["toon.nul"], "gemAlle": FILTER_TEKST["alle"], "gemOptie": FILTER_TEKST["optie"],
+            "chipGemeente": t["chip.gemeente"], "chipNaam": t["chip.naam"], "wis": t["wis"]}
 
 
 def _alfabet(naam: str) -> str:
@@ -765,47 +808,90 @@ def _alfabet(naam: str) -> str:
 
 def gemeente_filter(werklijst: list[dict], aantal_groot: int | None) -> dict:
     """
-    De keuzes van het filter: per groep (de grote gemeenten, de rest) elke gemeente op de lijst,
-    met hoeveel panden en de zin die het filter dan toont. Alle tellingen hier, niet in de pagina.
+    De keuzes van de filters: per groep (de grote gemeenten, de rest) elke gemeente op de lijst met
+    hoeveel panden, de twee gebieden en de teksten voor het script. De tellingen hier gelden voor de
+    hele lijst; zodra een ander filter aan staat, telt het script opnieuw (VA-68 crit. 6).
     """
     n = len(werklijst)
     tellen: dict[tuple[str, bool], int] = {}
     for p in werklijst:
         sleutel = (gemeente_naam(p.get("gemeente")), p.get(nederland.IN_GROOT) == "ja")
         tellen[sleutel] = tellen.get(sleutel, 0) + 1
+    gebied = {"groot": FILTER_TEKST["groep.groot"].format(aantal_groot=nl_getal(aantal_groot)),
+              "elders": FILTER_TEKST["groep.elders"]}
     groepen = []
-    for groot, label in ((True, FILTER_TEKST["groep.groot"]), (False, FILTER_TEKST["groep.elders"])):
+    for groot, label in ((True, gebied["groot"]), (False, gebied["elders"])):
         namen = sorted((g for g, gr in tellen if gr == groot), key=_alfabet)
         if not namen:
             continue
-        opties = []
-        for g in namen:
-            a = tellen[(g, groot)]
-            uitkomst = (FILTER_TEKST["resultaat.een"] if a == 1 else FILTER_TEKST["resultaat"]).format(
-                aantal=nl_getal(a), gemeente=g, n=nl_getal(n))
-            opties.append({"naam": g, "aantal": a,
-                           "tekst": FILTER_TEKST["optie"].format(gemeente=g, aantal=nl_getal(a)),
-                           "uitkomst": uitkomst})
-        groepen.append({"label": label.format(aantal_groot=nl_getal(aantal_groot)), "opties": opties})
+        opties = [{"naam": g, "aantal": tellen[(g, groot)],
+                   "tekst": FILTER_TEKST["optie"].format(gemeente=g, aantal=nl_getal(tellen[(g, groot)]))}
+                  for g in namen]
+        groepen.append({"label": label, "opties": opties})
     return {"label": FILTER_TEKST["label"], "alle": FILTER_TEKST["alle"].format(n=nl_getal(n)),
-            "groepen": groepen, "leeg": FILTER_TEKST["leeg"], "terug": FILTER_TEKST["terug"]}
+            "groepen": groepen, "gebied": [[w, gebied[w]] for w in GEBIEDEN], "tekst": lijst_tekst(n)}
 
 
-def filter_html(f: dict | None) -> str:
-    """Het filter boven de werklijst; zonder filter (Delft) niets."""
-    if not f:
-        return ""
+def filter_html(f: dict | None, fotobron: str | None = None) -> str:
+    """
+    Wat boven de kaarten staat (Lumi, design/filters.html bouwnotitie 1): de balk met de knop
+    Filters en de telling, het paneel, de actieve filters, de bronregel van de kaartfoto's en de
+    lege lijst. Zonder filter (Delft) alleen de bronregel.
+    """
     e = lambda t: escape(str(t), quote=True)  # noqa: E731
-    groepen = "".join(
+    bron = f'<p class="wl-bron">{e(fotobron)}</p>' if fotobron else ""
+    if not f:
+        return bron
+    t = LIJST_TEKST
+
+    def optie(groep: str, waarde: str, naam: str, chip: str, kleur: str | None = None) -> str:
+        merk = (f'<i class="wl-kleur" style="background:{kleur}" aria-hidden="true"></i>'
+                f'<b class="wl-letter">{waarde}</b>') if kleur else ""
+        return (f'<label class="wl-optie" data-groep="{groep}" data-waarde="{waarde}" data-chip="{e(chip)}">'
+                f'<input type="checkbox" name="wl-{groep}" value="{waarde}">{merk}'
+                f'<span class="wl-naam">{e(naam)}</span><span class="wl-n"><span class="wl-getal"></span>'
+                f'<span class="vh">{e(t["optie.aantal"])}</span></span></label>')
+
+    def groep(naam: str, opties: str, heel: bool = False) -> str:
+        return (f'<fieldset class="wl-groep{" wl-heel" if heel else ""}"><legend>{e(naam)}</legend>'
+                f'<div class="wl-opties">{opties}</div></fieldset>')
+
+    cats = "".join(optie("cat", k, CATEGORIE_NAAM[k], t["chip.categorie"].format(letter=k), CATEGORIE_KLEUR[k])
+                   for k in "ABCDE")
+    sigs = "".join(optie("sig", w, label, label) for w, _, label in SIGNALEN)
+    gebs = "".join(optie("geb", w, label, label) for w, label in f["gebied"])
+    gemeenten = "".join(
         f'<optgroup label="{e(g["label"])}">' + "".join(
-            f'<option value="{e(o["naam"])}" data-uitkomst="{e(o["uitkomst"])}">{e(o["tekst"])}</option>'
-            for o in g["opties"]) + "</optgroup>"
+            f'<option value="{e(o["naam"])}">{e(o["tekst"])}</option>' for o in g["opties"]) + "</optgroup>"
         for g in f["groepen"])
-    return (f'<div class="filter"><label for="gemeente">{e(f["label"])}</label>'
-            f'<select id="gemeente"><option value="">{e(f["alle"])}</option>{groepen}</select>'
-            '<p class="filter-uitkomst" id="gemeente-uitkomst" aria-live="polite"></p></div>'
-            f'<div class="filter-leeg" id="gemeente-leeg" data-tekst="{e(f["leeg"])}" hidden>'
-            f'<p></p><button class="filter-terug" type="button">{e(f["terug"])}</button></div>')
+    return ('<div class="wl-balk"><button type="button" class="wl-knop" id="wl-knop" aria-expanded="false" '
+            'aria-controls="wl-paneel"><span class="wl-ico" aria-hidden="true"></span>'
+            f'<span>{e(t["knop"])}</span><span class="wl-aantal" aria-hidden="true" hidden></span>'
+            '<span class="vh wl-actief"></span><span class="wl-pijl" aria-hidden="true"></span></button>'
+            f'<p class="wl-telling" aria-live="polite">{e(f["tekst"]["alle"])}</p></div>'
+            '<div class="wl-paneel" id="wl-paneel" role="group" aria-labelledby="wl-knop" hidden>'
+            f'<div class="wl-keuzes">{groep(t["categorie"], cats, heel=True)}{groep(t["signaal"], sigs)}'
+            f'<div class="wl-veld wl-gem"><label for="gemeente">{e(f["label"])}</label>'
+            f'<select id="gemeente"><option value="">{e(f["alle"])}</option>{gemeenten}</select></div>'
+            f'{groep(t["gebied"], gebs)}</div>'
+            '<div class="wl-paneelvoet"><button type="button" class="wl-toon"></button></div></div>'
+            f'<div class="wl-chips" role="group" aria-label="{e(t["chips"])}" hidden></div>{bron}'
+            f'<div class="wl-leeg" hidden><p>{e(t["leeg"])}</p>'
+            f'<button type="button" class="wl-wis">{e(t["wis"])}</button></div>')
+
+
+# De kleine luchtfoto op elke kaart (VA-71, Lumi's kopij). De bronregel staat één keer boven de lijst.
+KAARTFOTO_TEKST = {
+    "alt": "Luchtfoto van {adres}",
+    "mislukt": "Luchtfoto kon niet laden",
+    "geen": "Locatie onbekend",
+    "bron": "Luchtfoto's: Beeldmateriaal.nl, via PDOK · open data (CC BY 4.0).",
+}
+
+
+def kaartfoto_tekst() -> dict:
+    """De teksten die het script op een kaart zet; de bronregel staat al in de HTML."""
+    return {k: v for k, v in KAARTFOTO_TEKST.items() if k != "bron"}
 
 
 CATEGORIE_NAAM = {"A": "Winkel + wonen", "B": "Bedrijf/kantoor + wonen",
@@ -905,7 +991,7 @@ def bouw_payload_gebied(cfg: dict) -> dict:
     budget = cfg["score"].get("schaal_max", 26)
     return {"kpi": kpi, "cats": cats, "facts": facts, "leads": leads,
             "velden": detail_labels(aantal_groot), "criteria": criteria, "waarden": waarden, "plek": PLEK_SJABLOON,
-            "filter": None,
+            "filter": None, "kaartfoto": kaartfoto_tekst(),
             "budget": budget, "gebied": label, "koppen": koppen(label, drempel, len(leads)),
             "pagina": pagina("proefresultaat", f"Levrai · Pandenselectie Dashboard — {label}",
                              "Proefselectie in cijfers",
@@ -989,7 +1075,7 @@ def bouw_payload_landelijk(cfg: dict) -> dict:
     return {"kpi": kpi, "cats": cats, "facts": facts, "leads": leads,
             "velden": detail_labels((cfg.get("drempels") or {}).get("aantal_grote_gemeenten")),
             "criteria": criteria, "waarden": waarden, "plek": PLEK_SJABLOON,
-            "filter": gemeente_filter(lijst, groot) if lijst else None,
+            "filter": gemeente_filter(lijst, groot) if lijst else None, "kaartfoto": kaartfoto_tekst(),
             "budget": cfg["score"].get("schaal_max", 26), "gebied": label,
             "koppen": koppen(label, drempel, n if gelezen is not None else None,
                              {"maand": maand_voluit(t.get("maand")), "n_groot": nl_getal(n_groot),
@@ -1271,11 +1357,12 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   .note{margin-top:14px;font-size:11.5px;color:var(--muted);line-height:1.5}
 
   .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
-  .card{background:var(--surface);border:1px solid var(--ring);border-radius:14px;padding:16px 17px;
-    box-shadow:var(--shadow);display:flex;flex-direction:column;gap:11px}
-  .card .rowtop{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
-  .card .addr{font-size:14.5px;font-weight:700;letter-spacing:-.01em}
-  .card .lid{font-size:11px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+  .card{container:kaart / inline-size;background:var(--surface);border:1px solid var(--ring);border-radius:14px;
+    padding:16px 17px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:11px;min-width:0}
+  .card-top{display:grid;grid-template-columns:100px minmax(0,1fr) auto;gap:12px;align-items:start}
+  .card-kern{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .card .addr{font-size:14.5px;font-weight:700;letter-spacing:-.01em;overflow-wrap:anywhere}
+  .card .lid{font-size:11.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
   .score{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;
     width:56px;height:56px;border-radius:14px;background:var(--brand);color:#fff}
   .score b{font-size:22px;font-weight:800;line-height:1}
@@ -1546,23 +1633,104 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     @keyframes pandIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   }
   /* ===================== einde PAND OPENEN ===================== */
-  /* ===================== WERKLIJST: gemeentefilter (VA-39) ===================== */
-  .filter{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 2px 14px}
-  .filter label{font-size:12.5px;font-weight:650;color:var(--ink-2)}
-  .filter select{font:inherit;font-size:13.5px;color:var(--ink);background:var(--surface);border:1px solid var(--ring);
-    border-radius:10px;min-height:40px;padding:6px 10px;max-width:100%;box-shadow:var(--shadow);cursor:pointer}
-  .filter select:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
-  .filter-uitkomst{margin:0;font-size:12.5px;color:var(--ink-2)}
-  .filter-uitkomst:empty{display:none}
-  .filter-leeg{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:0 0 14px;padding:14px 16px;
+  /* =====================================================================
+     WERKLIJSTFILTERS (VA-68, Lumi: design/filters.html). Breed of smal hangt af van de breedte
+     van de werklijst zelf (container), niet van het scherm.
+     ===================================================================== */
+  :root{--knop:#12233b;--knop-rand:transparent}
+  @media (prefers-color-scheme: dark){ :root:where(:not([data-theme="light"])){--knop-rand:rgba(255,255,255,.18)} }
+  :root[data-theme="dark"]{--knop-rand:rgba(255,255,255,.18)}
+  .vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  .wl{container:wl / inline-size}
+  .wl-balk{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 14px;margin:0 2px 12px}
+  .wl-knop{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 12px 0 14px;font:inherit;font-size:13.5px;
+    font-weight:650;color:var(--ink);background:var(--surface);border:1px solid var(--muted);border-radius:10px;cursor:pointer;box-shadow:var(--shadow)}
+  .wl-knop[aria-expanded="true"]{border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
+  .wl-ico{width:16px;height:12px;flex:none;
+    background:linear-gradient(currentColor 0 0) 0 0/100% 2px no-repeat,
+               linear-gradient(currentColor 0 0) 50% 50%/66% 2px no-repeat,
+               linear-gradient(currentColor 0 0) 50% 100%/34% 2px no-repeat}
+  .wl-aantal{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;
+    background:var(--ink);color:var(--surface);font-size:11.5px;font-weight:800;font-variant-numeric:tabular-nums}
+  .wl-aantal[hidden]{display:none}
+  .wl-pijl{width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:translateY(-2px) rotate(45deg);margin-left:2px}
+  .wl-knop[aria-expanded="true"] .wl-pijl{transform:translateY(2px) rotate(-135deg)}
+  .wl-telling{margin:0 0 10px;font-size:13px;font-weight:650;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .wl-veld{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .wl-veld label,.wl legend{font-size:12px;font-weight:700;color:var(--ink-2)}
+  .wl select{font:inherit;font-size:13.5px;color:var(--ink);background:var(--surface-2);border:1px solid var(--muted);
+    border-radius:10px;min-height:40px;padding:6px 10px;max-width:100%;cursor:pointer}
+  .wl-paneel{background:var(--surface);border:1px solid var(--ring);border-radius:14px;box-shadow:var(--shadow);
+    padding:16px 18px;margin:0 0 12px}
+  .wl-paneel[hidden]{display:none}
+  .wl-keuzes{display:flex;flex-wrap:wrap;gap:16px 28px}
+  .wl-heel{flex-basis:100%}
+  .wl fieldset{border:0;margin:0;padding:0;min-width:0}
+  .wl legend{padding:0;margin:0 0 6px}
+  .wl-opties{display:flex;flex-wrap:wrap;gap:6px}
+  .wl-optie{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:6px 12px 6px 10px;border:1px solid var(--ring);
+    border-radius:10px;background:var(--surface-2);font-size:13px;color:var(--ink);cursor:pointer;user-select:none}
+  .wl-optie input{margin:0;width:16px;height:16px;flex:none;accent-color:var(--s1);cursor:pointer}
+  .wl-kleur{width:10px;height:10px;border-radius:3px;flex:none}
+  .wl-letter{font-weight:800}
+  .wl-n{margin-left:2px;font-size:12px;font-weight:650;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .wl-optie.nul{border-style:dashed;border-color:var(--baseline)}
+  .wl-optie.nul .wl-naam,.wl-optie.nul .wl-letter{color:var(--ink-2)}
+  @supports selector(:has(a)){
+    .wl-optie:has(input:checked){border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1);
+      background:color-mix(in srgb,var(--s1) 9%,var(--surface-2))}
+    .wl-optie:has(input:checked) .wl-naam{font-weight:650}
+    .wl-optie:has(input:focus-visible){outline:2px solid var(--s1);outline-offset:2px}
+    .wl-optie input:focus-visible{outline:none}
+  }
+  .wl-paneelvoet{display:none}
+  .wl-toon{flex:1;min-height:44px;font:inherit;font-size:14px;font-weight:700;color:#fff;background:var(--knop);
+    border:1px solid var(--knop-rand);border-radius:10px;cursor:pointer}
+  .wl-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 2px 10px}
+  .wl-chips[hidden]{display:none}
+  .wl-chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:4px 8px 4px 12px;border-radius:999px;
+    border:1px solid var(--muted);background:var(--surface);color:var(--ink);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+  .wl-chip .x{font-size:16px;line-height:1;color:var(--ink-2)}
+  @media (hover:hover){ .wl-chip:hover{background:var(--grid)} .wl-wis:hover{color:var(--ink-2)} }
+  .wl-wis{font:inherit;font-size:12.5px;font-weight:650;color:var(--ink);background:none;border:0;padding:6px 6px;min-height:32px;
+    text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+  .wl-bron{margin:0 2px 12px;font-size:11.5px;color:var(--ink-2)}
+  .wl-leeg{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:0 0 14px;padding:16px 18px;
     background:var(--surface);border:1px solid var(--ring);border-radius:14px;box-shadow:var(--shadow)}
-  .filter-leeg[hidden]{display:none}
-  .filter-leeg p{margin:0;font-size:13.5px;color:var(--ink-2)}
-  .filter-terug{font:inherit;font-size:13px;font-weight:600;color:var(--ink);background:var(--surface-2);
-    border:1px solid var(--ring);border-radius:9px;padding:7px 12px;cursor:pointer}
-  .filter-terug:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .wl-leeg[hidden]{display:none}
+  .wl-leeg p{margin:0;font-size:13.5px;color:var(--ink-2);flex:1 1 260px}
+  .wl-leeg .wl-wis{text-decoration:none;background:var(--surface-2);border:1px solid var(--muted);border-radius:9px;padding:7px 12px;min-height:40px}
+  .wl :is(button,select,input,a):focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .wl .grid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+  .wl .grid[hidden]{display:none}
+  @container wl (min-width:720px){ .wl .grid{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  @container wl (max-width:599.98px){
+    .wl-telling{flex:1}
+    .wl-paneel{padding:14px 14px 0}
+    .wl-keuzes > *{flex-basis:100%}
+    .wl-gem select{width:100%}
+    .wl-optie{min-height:44px}
+    .wl-paneelvoet{display:flex;position:sticky;bottom:0;margin:14px -14px 0;padding:12px 14px;background:var(--surface);
+      border-top:1px solid var(--grid);border-radius:0 0 14px 14px}
+  }
   .schildwacht{height:1px}
-  @media (max-width:560px){ .filter select{width:100%} }
+  /* ---- KAART MET LUCHTFOTO (VA-71): een vast vlak, dus niets verschuift als de foto komt of faalt ---- */
+  .card-foto{position:relative;width:100px;height:100px;border-radius:10px;overflow:hidden;background:var(--grid)}
+  .card-foto.laadt{background:repeating-linear-gradient(135deg,var(--grid) 0 7px,color-mix(in srgb,var(--grid) 55%,var(--surface)) 7px 14px)}
+  .card-foto img{display:block;width:100%;height:100%;object-fit:cover;opacity:0}
+  .card-foto.geladen img{opacity:1}
+  @media (prefers-reduced-motion: no-preference){ .card-foto.geladen img{transition:opacity .15s ease} }
+  .card-foto .merk{display:none;position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+    border:2px solid #fff;box-shadow:0 0 0 1.5px var(--crit);pointer-events:none}
+  .card-foto.geladen .merk{display:block}
+  .card-foto .melding{display:none;position:absolute;inset:0;align-items:center;justify-content:center;padding:6px;text-align:center;
+    font-size:11px;line-height:1.25;font-weight:600;color:var(--ink-2)}
+  .card-foto.mislukt,.card-foto.geen{background:var(--grid);box-shadow:inset 0 0 0 1px var(--baseline)}
+  .card-foto.mislukt .melding,.card-foto.geen .melding{display:flex}
+  @container kaart (max-width:380px){
+    .card-top{grid-template-columns:84px minmax(0,1fr) auto;gap:10px}
+    .card-foto{width:84px;height:84px}
+  }
   /* ===================== einde WERKLIJST ===================== */
 </style>
 </head>
@@ -1659,9 +1827,11 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
         <h2 class="titel" id="t-__LIJST__">__KOP_LIJST_TITEL__</h2>
         <p class="kop-zin">__KOP_LIJST_ZIN__</p>
       </header>
-      __FILTER__
-      <div class="grid" id="leads"></div>
-      <div class="schildwacht" aria-hidden="true"></div>
+      <div class="wl">
+        __FILTER__
+        <div class="grid" id="leads"></div>
+        <div class="schildwacht" aria-hidden="true"></div>
+      </div>
 
       <p class="foothint">
         Klik op <b>Score-opbouw</b> in een pand om te zien waar elk punt vandaan komt ·
@@ -1743,6 +1913,19 @@ function opbouwHTML(d){
 }
 
 const lb=document.getElementById("leads");
+/* De kleine luchtfoto (VA-71): PLEK.mini van PDOK, alleen voor een kaart die getekend wordt, met
+   loading="lazy". Het vlak heeft een vaste maat; laden, mislukken en geen locatie zijn een klasse. */
+const FOTO = PAYLOAD.kaartfoto;
+function kaartFoto(vlak, d){
+  const m = vlak.querySelector(".melding"), plek = d.detail && d.detail.loc;
+  if (!plek || !PLEK.mini) { vlak.classList.add("geen"); m.textContent = FOTO.geen; return; }
+  vlak.classList.add("laadt");
+  const img = new Image(100, 100);
+  img.alt = FOTO.alt.replace("{adres}", () => d.a); img.loading = "lazy"; img.decoding = "async";
+  img.addEventListener("load", () => vlak.classList.replace("laadt", "geladen"), {once: true});
+  img.addEventListener("error", () => { img.remove(); vlak.classList.replace("laadt", "mislukt"); m.textContent = FOTO.mislukt; }, {once: true});
+  vlak.prepend(img); img.src = PLEK.mini.replace("{b}", plek.b);
+}
 function kaart(d){
   const order=["woon","winkel","kantoor","bedrijf","overig"];
   const segs=order.filter(k=>d.f[k]).map(k=>
@@ -1753,14 +1936,14 @@ function kaart(d){
   const sigtags=d.sig.map(s=>`<span class="sigtag ${s.k}" data-tip="${s.d}">${s.t}</span>`).join("");
   const card=el("div","card");
   card.innerHTML=`
-    <div class="rowtop">
-      <div><div class="addr">${d.a}</div>
-        <div class="lid"></div></div>
+    <div class="card-top">
+      <div class="card-foto"><span class="merk" aria-hidden="true"></span><span class="melding"></span></div>
+      <div class="card-kern"><div class="addr">${d.a}</div><div class="lid"></div>
+        <div class="chips">${chips}</div>
+        ${sigtags?`<div class="sigtags">${sigtags}</div>`:""}</div>
       <div class="score"><b>${d.s100}</b><small>/100</small></div>
     </div>
     <div class="meter"><i style="width:0" data-w="${d.s100}"></i></div>
-    <div class="chips">${chips}</div>
-    ${sigtags?`<div class="sigtags">${sigtags}</div>`:""}
     <div class="meta">
       <div><div class="mv">${d.bj}</div><div class="ml">BOUWJAAR</div></div>
       <div><div class="mv">${nl(d.m2)}</div><div class="ml">M²</div></div>
@@ -1775,6 +1958,7 @@ function kaart(d){
       <span class="status">te controleren</span>
     </div>`;
   card.querySelector(".lid").textContent = d.r;   // de regel onder het adres komt uit Python
+  kaartFoto(card.querySelector(".card-foto"), d);
   const m=card.querySelector(".meter i");
   requestAnimationFrame(()=>{m.style.width=m.dataset.w+"%";});
   maakOpenbaar(card, d);
@@ -1853,46 +2037,137 @@ function maakOpenbaar(card, d) {
 }
 /* ============================ einde PAND OPENEN ============================ */
 
-/* ============================ WERKLIJST (VA-39) ============================
+/* ============================ WERKLIJST (VA-39, VA-68) ============================
    Tot 500 kaarten: de eerste STAP meteen, de volgende pas als je in de buurt scrolt, zodat de
-   pagina op een telefoon snel staat. Het gemeentefilter kiest alleen uit de panden op de lijst;
-   de keuzes, tellingen en zinnen komen uit gemeente_filter() in Python. De gekozen gemeente
-   staat in het adres (?gemeente=), zodat herladen dezelfde keuze houdt. */
+   pagina op een telefoon snel staat. Elke kaart wordt één keer gebouwd en daarna teruggehangen,
+   zodat zijn luchtfoto maar één keer wordt opgevraagd (VA-71 crit. 3).
+   De filters (gemeente, categorie, signaal, gebied) rekenen in de browser op de panden van de
+   lijst: tussen filters EN, binnen een filter OF; het aantal bij een keuze telt de panden die alle
+   andere filters halen. Elke zin komt uit Python (filter_html(), PAYLOAD.filter.tekst); het script
+   vult alleen getallen in. De stand staat in het adres, zodat herladen en delen dezelfde lijst geven. */
 (() => {
-  const STAP = 40, wacht = document.querySelector(".schildwacht");
+  const STAP = 40, wacht = document.querySelector(".schildwacht"), gebouwd = new Map();
   let rij = LEADS, getoond = 0;
   const io = "IntersectionObserver" in window ? new IntersectionObserver(e => {
     if (e.some(x => x.isIntersecting)) { meer(); kijk(); }
   }, {rootMargin: "0px 0px 1200px 0px"}) : null;
   function meer() {
     const tot = io ? Math.min(rij.length, getoond + STAP) : rij.length, deel = document.createDocumentFragment();
-    for (; getoond < tot; getoond++) deel.appendChild(kaart(rij[getoond]));
+    for (; getoond < tot; getoond++) {
+      const d = rij[getoond];
+      if (!gebouwd.has(d.id)) gebouwd.set(d.id, kaart(d));
+      deel.appendChild(gebouwd.get(d.id));
+    }
     lb.appendChild(deel);
   }
   // Opnieuw waarnemen geeft direct een nieuwe melding: staat de wacht nog in de buurt, dan volgt de volgende STAP.
   function kijk() { if (!io) return; io.unobserve(wacht); if (getoond < rij.length) io.observe(wacht); }
   function teken(lijst) { rij = lijst; getoond = 0; lb.textContent = ""; meer(); kijk(); }
 
-  const kies = document.getElementById("gemeente");
-  if (!kies) { teken(LEADS); return; }
-  const uitkomst = document.getElementById("gemeente-uitkomst"), leeg = document.getElementById("gemeente-leeg");
-  function toon(naam, adres) {
-    const optie = naam ? [...kies.options].find(o => o.value === naam) : null;
-    kies.value = optie ? naam : "";
-    uitkomst.textContent = optie ? optie.dataset.uitkomst : "";
-    leeg.hidden = !naam || !!optie;
-    if (naam && !optie) leeg.querySelector("p").textContent = leeg.dataset.tekst.replace("{gemeente}", naam);
-    teken(naam ? LEADS.filter(d => d.g === naam) : LEADS);
-    if (adres) {
-      const q = new URLSearchParams(location.search);
-      if (naam) q.set("gemeente", naam); else q.delete("gemeente");
-      const s = q.toString();
-      history.replaceState(null, "", location.pathname + (s ? "?" + s : "") + location.hash);
-    }
+  const wl = document.querySelector(".wl"), kies = document.getElementById("gemeente");
+  if (!kies || !PAYLOAD.filter) { teken(LEADS); return; }
+  const T = PAYLOAD.filter.tekst, $ = s => wl.querySelector(s);
+  const knop = $(".wl-knop"), paneel = $(".wl-paneel"), telling = $(".wl-telling"), chipsEl = $(".wl-chips");
+  const leeg = $(".wl-leeg"), toon = $(".wl-toon"), opties = [...wl.querySelectorAll(".wl-optie")];
+  const SIG = {leeg: "leeg", verbouwing: "bouw"};   // adreswaarde -> sig.k op de kaart
+  const HEEFT = {cat: (d, w) => d.cat.includes(w), sig: (d, w) => d.sig.some(s => s.k === SIG[w]),
+                 geb: (d, w) => d.gg === (w === "groot" ? 1 : 0)};
+  const LIJST = [["cat", "categorie"], ["sig", "signaal"], ["geb", "gebied"]];   // groep, adresparameter
+  const KEUZES = Object.fromEntries(LIJST.map(([g]) => [g, opties.filter(o => o.dataset.groep === g).map(o => o.dataset.waarde)]));
+  const GEMEENTEN = [...kies.options].map(o => o.value).filter(Boolean);
+  const st = {gemeente: "", cat: new Set(), sig: new Set(), geb: new Set()};
+  const vul = (zin, n) => zin.replace("{n}", nl(n));
+
+  function past(d, behalve) {
+    if (behalve !== "gemeente" && st.gemeente && d.g !== st.gemeente) return false;
+    for (const [g] of LIJST) if (g !== behalve && st[g].size && ![...st[g]].some(w => HEEFT[g](d, w))) return false;
+    return true;
   }
-  kies.addEventListener("change", () => toon(kies.value, true));
-  leeg.querySelector("button").addEventListener("click", () => { toon("", true); kies.focus(); });
-  toon(new URLSearchParams(location.search).get("gemeente") || "", false);
+  // Beide gebieden aan is hetzelfde als geen van beide (crit. 3): dat is geen actief filter.
+  const telt = g => st[g].size > 0 && !(g === "geb" && st.geb.size === KEUZES.geb.length);
+
+  function chips() {
+    const c = [];
+    if (st.gemeente) c.push([T.chipGemeente.replace("{gemeente}", () => st.gemeente), () => { st.gemeente = ""; }]);
+    for (const g of ["geb", "cat", "sig"]) if (telt(g))
+      opties.forEach(o => { const w = o.dataset.waarde; if (o.dataset.groep === g && st[g].has(w)) c.push([o.dataset.chip, () => st[g].delete(w)]); });
+    return c;
+  }
+  function knopje(cls, tekst, klik) { const b = maak("button", cls, tekst); b.type = "button"; b.addEventListener("click", klik); return b; }
+
+  function werk(schrijf) {
+    const treffers = LEADS.filter(d => past(d, null)), n = treffers.length;
+    const zonder = g => LEADS.filter(d => past(d, g));
+    const basis = {gemeente: zonder("gemeente"), cat: zonder("cat"), sig: zonder("sig"), geb: zonder("geb")};
+    opties.forEach(o => {
+      const g = o.dataset.groep, w = o.dataset.waarde, c = basis[g].filter(d => HEEFT[g](d, w)).length;
+      o.querySelector("input").checked = st[g].has(w);
+      o.querySelector(".wl-getal").textContent = nl(c);
+      o.classList.toggle("nul", c === 0);
+    });
+    const perGemeente = {};
+    basis.gemeente.forEach(d => { perGemeente[d.g] = (perGemeente[d.g] || 0) + 1; });
+    for (const o of kies.options) o.textContent = o.value
+      ? T.gemOptie.replace("{gemeente}", () => o.value).replace("{aantal}", nl(perGemeente[o.value] || 0))
+      : vul(T.gemAlle, basis.gemeente.length);
+    kies.value = st.gemeente;
+
+    const lijst = chips(), a = lijst.length, bol = $(".wl-aantal");
+    bol.hidden = !a; bol.textContent = nl(a); $(".wl-actief").textContent = a ? vul(T.actief, a) : "";
+    telling.textContent = a ? vul(T.telling, n) : T.alle;
+    toon.textContent = n === 0 ? T.toonNul : n === 1 ? T.toonEen : vul(T.toon, n);
+    chipsEl.textContent = ""; chipsEl.hidden = !a;
+    lijst.forEach(([tekst, weg], i) => {
+      const b = knopje("wl-chip", tekst, () => {
+        weg(); werk(true);
+        const rest = chipsEl.querySelectorAll(".wl-chip");
+        (rest[i] || rest[i - 1] || knop).focus();
+      });
+      b.setAttribute("aria-label", T.chipNaam.replace("{chip}", () => tekst));
+      const x = maak("span", "x", "×"); x.setAttribute("aria-hidden", "true"); b.append(x);
+      chipsEl.append(b);
+    });
+    if (a) chipsEl.append(knopje("wl-wis", T.wis, wisAlles));
+    leeg.hidden = n > 0; lb.hidden = n === 0;
+    teken(treffers);
+    if (schrijf) schrijfAdres();
+  }
+  function wisAlles() { st.gemeente = ""; LIJST.forEach(([g]) => st[g].clear()); werk(true); knop.focus(); }
+
+  // Het adres (crit. 9): een onbekende of ongeldige waarde valt weg, de rest geldt.
+  function leesAdres() {
+    const q = new URLSearchParams(location.search), gem = (q.get("gemeente") || "").trim().toLowerCase();
+    st.gemeente = GEMEENTEN.find(g => g.toLowerCase() === gem) || "";
+    for (const [g, p] of LIJST) (q.get(p) || "").split(",").forEach(x => {
+      const w = KEUZES[g].find(k => k.toLowerCase() === x.trim().toLowerCase()); if (w) st[g].add(w); });
+  }
+  function schrijfAdres() {
+    const q = new URLSearchParams(location.search), uit = [];
+    ["gemeente", ...LIJST.map(([, p]) => p)].forEach(p => q.delete(p));
+    const zet = (p, v) => uit.push(p + "=" + encodeURIComponent(v).replace(/%2C/gi, ","));
+    if (st.gemeente) zet("gemeente", st.gemeente);
+    for (const [g, p] of LIJST) { const w = KEUZES[g].filter(k => st[g].has(k)); if (w.length) zet(p, w.join(",")); }
+    const rest = q.toString(), s = uit.concat(rest ? [rest] : []).join("&");
+    history.replaceState(null, "", location.pathname + (s ? "?" + s : "") + location.hash);
+  }
+
+  // Het paneel: open vanaf 801 px (de grens van het menu, VA-63), anders dicht achter "Filters".
+  const zetOpen = open => { knop.setAttribute("aria-expanded", String(open)); paneel.hidden = !open; };
+  const dicht = () => { zetOpen(false); knop.focus(); };
+  knop.addEventListener("click", () => zetOpen(paneel.hidden));
+  toon.addEventListener("click", dicht);
+  paneel.addEventListener("keydown", e => { if (e.key === "Escape" && wl.clientWidth < 600) dicht(); });
+  paneel.addEventListener("change", e => {
+    const t = e.target, o = t.closest(".wl-optie");
+    if (t === kies) st.gemeente = t.value;
+    else if (o) { const set = st[o.dataset.groep]; if (t.checked) set.add(o.dataset.waarde); else set.delete(o.dataset.waarde); }
+    else return;
+    werk(true);
+  });
+  leeg.querySelector(".wl-wis").addEventListener("click", wisAlles);
+  zetOpen(matchMedia("(min-width: 801px)").matches);
+  leesAdres();
+  werk(false);
 })();
 /* ============================ einde WERKLIJST ============================ */
 
@@ -3251,6 +3526,7 @@ function kantoorStart(root, data, opties = {}) {
 
 def render(payload: dict) -> str:
     """Vul het sjabloon. De payload als laatste, zodat zijn inhoud niet wordt vervangen."""
+    payload = {**payload, "kaartfoto": payload.get("kaartfoto") or kaartfoto_tekst()}  # elke kaart (VA-71)
     tip = payload["peildatum_tip"]
     # Zonder 'pagina' (een payload van vóór VA-39, of een test) de teksten van een gebied als Delft.
     pg = payload.get("pagina") or pagina(
@@ -3268,7 +3544,7 @@ def render(payload: dict) -> str:
             .replace("__FEITEN_CAP__", escape(pg["feiten.cap"]))
             .replace("__LIJST_NAAM__", escape(naam))
             .replace("__LIJST__", lijst)
-            .replace("__FILTER__", filter_html(payload.get("filter")))
+            .replace("__FILTER__", filter_html(payload.get("filter"), KAARTFOTO_TEKST["bron"]))
             .replace("__MENU__", menu_html(lijst))
             .replace("__WERKBALK__", werkbalk_html((payload.get("kantoor") or {}).get("tekst"))))
     # De koppen van het lijstdeel ('proefresultaat.*' of 'werklijst.*') gaan naar __KOP_LIJST_*__.
