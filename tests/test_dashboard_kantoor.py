@@ -504,8 +504,7 @@ class EchteNederlandCijfers(unittest.TestCase):
         self.assertEqual(len(leads), t["werklijst"])
         meta = self.payload["koppen"]["werklijst.meta"]
         self.assertEqual(meta, f"{t['werklijst']} panden · {t['werklijst_25']} uit de "
-                               f"{t['aantal_grote_gemeenten']} grootste gemeenten · {t['werklijst_overig']} elders "
-                               "· gesorteerd op score-index")
+                               f"{t['aantal_grote_gemeenten']} grootste gemeenten · {t['werklijst_overig']} elders")
         self.assertEqual(sum(o["aantal"] for g in self.payload["filter"]["groepen"] for o in g["opties"]),
                          len(leads))
 

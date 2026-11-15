@@ -791,6 +791,43 @@ LIJST_TEKST = {
 SIGNALEN = [("leeg", "leeg", "Leegstaand"), ("verbouwing", "bouw", "In verbouwing")]
 GEBIEDEN = ("groot", "elders")  # waarde in het adres; label uit FILTER_TEKST['groep.*']
 
+# De getalfilters (VA-69) en het sorteren (VA-70), Lumi's kopij uit design/filters.html. Grenzen tellen
+# mee. Een jaartal gaat nooit door de puntopmaak: 1939, niet 1.939 ('jaar': het script laat het onbewerkt),
+# en er staat geen 'jaar' achter het veld (Lumi: "1939 jaar" is een leeftijd).
+BEREIK_TEKST = {
+    "hint": "Op de werklijst: {min}–{max}",
+    "van": "van",
+    "vanaf": "vanaf",
+    "tm": "tot en met",
+    "uit": " Dit filter telt nu niet mee.",
+    "omgekeerd": "Van is hoger dan tot en met.",
+    "chip.van.tm": "{naam} {van}–{tm}{eenheid}",
+    "chip.van": "{naam} vanaf {van}{eenheid}",
+    "chip.tm": "{naam} tot en met {tm}{eenheid}",
+}
+# k: sleutel in het paneel; veld: op de kaart (LEADS); url: adresparameters (van, tot en met).
+# Score heeft alleen 'vanaf' en een bovengrens van de index (/100).
+BEREIKEN = [
+    {"k": "score", "veld": "s100", "label": "Score-index (/100)", "url": ["min_score"], "max": 100,
+     "chip": "Score vanaf {van}", "fout": "Vul een score van 0 tot en met 100 in."},
+    {"k": "bj", "veld": "bj", "label": "Bouwjaar", "url": ["bouwjaar_van", "bouwjaar_tm"], "jaar": True,
+     "naam": "Bouwjaar", "eenheid": "", "fout": "Vul een jaartal in, bijvoorbeeld 1939."},
+    {"k": "m2", "veld": "m2", "label": "Oppervlakte (m²)", "url": ["m2_van", "m2_tm"],
+     "naam": "Oppervlakte", "eenheid": " m²", "fout": "Vul een heel getal in, bijvoorbeeld 250."},
+    {"k": "vbo", "veld": "vbo", "label": "Aantal VBO's", "url": ["vbo_van", "vbo_tm"],
+     "naam": "Aantal VBO's", "eenheid": "", "fout": "Vul een heel getal in, bijvoorbeeld 4."},
+    {"k": "adr", "veld": "adr", "label": "Aantal adressen", "url": ["adressen_van", "adressen_tm"],
+     "naam": "Aantal adressen", "eenheid": "", "fout": "Vul een heel getal in, bijvoorbeeld 4."},
+]
+SORTEER_TEKST = {"sorteer": "Sorteer op", "volgorde": "Volgorde"}
+# (waarde in het adres, veld op de kaart, label, standaardrichting, {richting: label}). De standaard
+# staat eerst; zonder 'sorteer' in het adres is het score, hoogste eerst: de volgorde van de werklijst.
+SORTEREN = [
+    ("score", "s100", "Score-index", "af", {"af": "Hoogste eerst", "op": "Laagste eerst"}),
+    ("bouwjaar", "bj", "Bouwjaar", "op", {"op": "Oudste eerst", "af": "Nieuwste eerst"}),
+    ("oppervlakte", "m2", "Oppervlakte", "af", {"af": "Grootste eerst", "op": "Kleinste eerst"}),
+]
+
 
 def lijst_tekst(totaal: int) -> dict:
     """Wat het script van het paneel invult, met het totaal van de werklijst al ingevuld."""
@@ -798,7 +835,37 @@ def lijst_tekst(totaal: int) -> dict:
     return {"actief": t["actief"], "alle": t["telling.alle"].format(totaal=tot),
             "telling": t["telling"].replace("{totaal}", tot), "toon": t["toon"], "toonEen": t["toon.een"],
             "toonNul": t["toon.nul"], "gemAlle": FILTER_TEKST["alle"], "gemOptie": FILTER_TEKST["optie"],
-            "chipGemeente": t["chip.gemeente"], "chipNaam": t["chip.naam"], "wis": t["wis"]}
+            "chipGemeente": t["chip.gemeente"], "chipNaam": t["chip.naam"], "wis": t["wis"],
+            "omgekeerd": BEREIK_TEKST["omgekeerd"] + BEREIK_TEKST["uit"]}
+
+
+def bereik_getal(b: dict, v) -> str:
+    """Een grens zoals de pagina hem toont: een jaartal onbewerkt, de rest met de duizendtallenpunt."""
+    return str(v) if b.get("jaar") else nl_getal(v)
+
+
+def bereik_filter(leads: list[dict]) -> dict:
+    """
+    De getalvelden en het sorteren voor het script (VA-69, VA-70): per veld de hint met wat er op de
+    lijst van deze maand staat, de foutmelding en de chipzinnen met naam en eenheid al ingevuld. Het
+    script vult alleen {van} en {tm} in, een jaartal onbewerkt ('jaar').
+    """
+    t, bereik = BEREIK_TEKST, []
+    for b in BEREIKEN:
+        waarden = [d[b["veld"]] for d in leads if d.get(b["veld"]) is not None]
+        hint = (t["hint"].format(min=bereik_getal(b, min(waarden)), max=bereik_getal(b, max(waarden)))
+                if waarden else "")
+        if "chip" in b:
+            chips = {"van": b["chip"]}
+        else:
+            vul = lambda s: s.replace("{naam}", b["naam"]).replace("{eenheid}", b["eenheid"])  # noqa: E731
+            chips = {"vanTm": vul(t["chip.van.tm"]), "van": vul(t["chip.van"]), "tm": vul(t["chip.tm"])}
+        bereik.append({"k": b["k"], "veld": b["veld"], "url": b["url"], "jaar": bool(b.get("jaar")),
+                       "max": b.get("max"), "label": b["label"], "hint": hint, "chips": chips,
+                       "fout": b["fout"] + t["uit"]})
+    sorteer = {w: {"veld": veld, "label": label, "std": std, "opties": [[r, namen[r]] for r in namen]}
+               for w, veld, label, std, namen in SORTEREN}
+    return {"bereik": bereik, "sorteer": sorteer}
 
 
 def _alfabet(naam: str) -> str:
@@ -835,8 +902,8 @@ def gemeente_filter(werklijst: list[dict], aantal_groot: int | None) -> dict:
 def filter_html(f: dict | None, fotobron: str | None = None) -> str:
     """
     Wat boven de kaarten staat (Lumi, design/filters.html bouwnotitie 1): de balk met de knop
-    Filters en de telling, het paneel, de actieve filters, de bronregel van de kaartfoto's en de
-    lege lijst. Zonder filter (Delft) alleen de bronregel.
+    Filters, de telling en het sorteren (VA-70), het paneel met de getalvelden (VA-69), de actieve
+    filters, de bronregel van de kaartfoto's en de lege lijst. Zonder filter (Delft) alleen de bronregel.
     """
     e = lambda t: escape(str(t), quote=True)  # noqa: E731
     bron = f'<p class="wl-bron">{e(fotobron)}</p>' if fotobron else ""
@@ -864,16 +931,40 @@ def filter_html(f: dict | None, fotobron: str | None = None) -> str:
         f'<optgroup label="{e(g["label"])}">' + "".join(
             f'<option value="{e(o["naam"])}">{e(o["tekst"])}</option>' for o in g["opties"]) + "</optgroup>"
         for g in f["groepen"])
+
+    def bereik(b: dict) -> str:
+        # type="text" en geen type="number": "abc" moet een melding kunnen geven (VA-69 crit. 5).
+        i, bt = f'wl-{b["k"]}', BEREIK_TEKST
+        veld = lambda x, label: (  # noqa: E731
+            f'<div><label for="{i}-{x}">{e(label)}</label><input id="{i}-{x}" data-k="{b["k"]}" data-x="{x}" '
+            'type="text" inputmode="numeric" autocomplete="off" enterkeyhint="done" maxlength="7" '
+            f'aria-describedby="{i}-hint {i}-fout"></div>')
+        enkel = len(b["url"]) == 1
+        velden = veld("van", bt["vanaf"]) if enkel else veld("van", bt["van"]) + veld("tm", bt["tm"])
+        return (f'<fieldset class="wl-bereik{" enkel" if enkel else ""}" data-k="{b["k"]}"><legend>{e(b["label"])}'
+                f'</legend><p class="wl-hint" id="{i}-hint">{e(b["hint"])}</p><div class="wl-invoer">{velden}</div>'
+                f'<p class="wl-fout" id="{i}-fout" hidden></p></fieldset>')
+
+    bereiken = "".join(bereik(b) for b in f.get("bereik") or [])
+    bereiken = f'<div class="wl-bereiken">{bereiken}</div>' if bereiken else ""
+    s = f.get("sorteer")
+    sorteer = ('<div class="wl-sorteer"><div class="wl-veld"><label for="wl-sorteer">'
+               f'{e(SORTEER_TEKST["sorteer"])}</label><select id="wl-sorteer">'
+               + "".join(f'<option value="{w}">{e(x["label"])}</option>' for w, x in s.items())
+               + f'</select></div><div class="wl-veld"><label for="wl-volgorde">{e(SORTEER_TEKST["volgorde"])}'
+               '</label><select id="wl-volgorde">'
+               + "".join(f'<option value="{r}">{e(n)}</option>' for r, n in next(iter(s.values()))["opties"])
+               + '</select></div></div>') if s else ""
     return ('<div class="wl-balk"><button type="button" class="wl-knop" id="wl-knop" aria-expanded="false" '
             'aria-controls="wl-paneel"><span class="wl-ico" aria-hidden="true"></span>'
             f'<span>{e(t["knop"])}</span><span class="wl-aantal" aria-hidden="true" hidden></span>'
             '<span class="vh wl-actief"></span><span class="wl-pijl" aria-hidden="true"></span></button>'
-            f'<p class="wl-telling" aria-live="polite">{e(f["tekst"]["alle"])}</p></div>'
+            f'<p class="wl-telling" aria-live="polite">{e(f["tekst"]["alle"])}</p>{sorteer}</div>'
             '<div class="wl-paneel" id="wl-paneel" role="group" aria-labelledby="wl-knop" hidden>'
             f'<div class="wl-keuzes">{groep(t["categorie"], cats, heel=True)}{groep(t["signaal"], sigs)}'
             f'<div class="wl-veld wl-gem"><label for="gemeente">{e(f["label"])}</label>'
             f'<select id="gemeente"><option value="">{e(f["alle"])}</option>{gemeenten}</select></div>'
-            f'{groep(t["gebied"], gebs)}</div>'
+            f'{groep(t["gebied"], gebs)}</div>{bereiken}'
             '<div class="wl-paneelvoet"><button type="button" class="wl-toon"></button></div></div>'
             f'<div class="wl-chips" role="group" aria-label="{e(t["chips"])}" hidden></div>{bron}'
             f'<div class="wl-leeg" hidden><p>{e(t["leeg"])}</p>'
@@ -1075,7 +1166,8 @@ def bouw_payload_landelijk(cfg: dict) -> dict:
     return {"kpi": kpi, "cats": cats, "facts": facts, "leads": leads,
             "velden": detail_labels((cfg.get("drempels") or {}).get("aantal_grote_gemeenten")),
             "criteria": criteria, "waarden": waarden, "plek": PLEK_SJABLOON,
-            "filter": gemeente_filter(lijst, groot) if lijst else None, "kaartfoto": kaartfoto_tekst(),
+            "filter": {**gemeente_filter(lijst, groot), **bereik_filter(leads)} if lijst else None,
+            "kaartfoto": kaartfoto_tekst(),
             "budget": cfg["score"].get("schaal_max", 26), "gebied": label,
             "koppen": koppen(label, drempel, n if gelezen is not None else None,
                              {"maand": maand_voluit(t.get("maand")), "n_groot": nl_getal(n_groot),
@@ -1128,8 +1220,8 @@ KOP_TEKST_LANDELIJK = {
     "werklijst.titel": "Werklijst {maand}",
     "werklijst.zin": "De {n} hoogst scorende panden van {gebied}, klaar voor je visuele controle. Open een "
                      "pand voor alle gegevens.",
-    "werklijst.meta": "{n} panden · {n_groot} uit de {aantal} grootste gemeenten · {n_rest} elders · "
-                      "gesorteerd op score-index",
+    # Lumi, VA-70: "· gesorteerd op score-index" vervalt; het sorteerveld zegt het nu zelf.
+    "werklijst.meta": "{n} panden · {n_groot} uit de {aantal} grootste gemeenten · {n_rest} elders",
 }
 
 
@@ -1634,7 +1726,7 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   }
   /* ===================== einde PAND OPENEN ===================== */
   /* =====================================================================
-     WERKLIJSTFILTERS (VA-68, Lumi: design/filters.html). Breed of smal hangt af van de breedte
+     WERKLIJSTFILTERS (VA-68, VA-69, VA-70; Lumi: design/filters.html). Breed of smal hangt af van de breedte
      van de werklijst zelf (container), niet van het scherm.
      ===================================================================== */
   :root{--knop:#12233b;--knop-rand:transparent}
@@ -1656,6 +1748,7 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   .wl-pijl{width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:translateY(-2px) rotate(45deg);margin-left:2px}
   .wl-knop[aria-expanded="true"] .wl-pijl{transform:translateY(2px) rotate(-135deg)}
   .wl-telling{margin:0 0 10px;font-size:13px;font-weight:650;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .wl-sorteer{margin-left:auto;display:flex;gap:10px;align-items:flex-end}
   .wl-veld{display:flex;flex-direction:column;gap:4px;min-width:0}
   .wl-veld label,.wl legend{font-size:12px;font-weight:700;color:var(--ink-2)}
   .wl select{font:inherit;font-size:13.5px;color:var(--ink);background:var(--surface-2);border:1px solid var(--muted);
@@ -1683,6 +1776,17 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     .wl-optie:has(input:focus-visible){outline:2px solid var(--s1);outline-offset:2px}
     .wl-optie input:focus-visible{outline:none}
   }
+  /* getalvelden (VA-69): type="text" met 16 px, anders zoomt iOS in */
+  .wl-bereiken{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px 20px;align-items:start;
+    margin-top:16px;padding-top:14px;border-top:1px solid var(--grid)}
+  .wl-hint{margin:-2px 0 6px;font-size:11.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .wl-invoer{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+  .wl-invoer label{display:block;font-size:11.5px;color:var(--ink-2);margin-bottom:3px}
+  .wl-invoer input{width:100%;min-width:0;font:inherit;font-size:16px;min-height:40px;padding:6px 10px;color:var(--ink);
+    background:var(--surface-2);border:1px solid var(--muted);border-radius:9px;font-variant-numeric:tabular-nums}
+  .wl-invoer input[aria-invalid="true"]{border:2px solid var(--crit);padding:5px 9px}
+  .wl-fout{margin:6px 0 0;font-size:12px;line-height:1.35;font-weight:600;color:var(--crit)}
+  .wl-fout[hidden]{display:none}
   .wl-paneelvoet{display:none}
   .wl-toon{flex:1;min-height:44px;font:inherit;font-size:14px;font-weight:700;color:#fff;background:var(--knop);
     border:1px solid var(--knop-rand);border-radius:10px;cursor:pointer}
@@ -1705,11 +1809,14 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   .wl .grid[hidden]{display:none}
   @container wl (min-width:720px){ .wl .grid{grid-template-columns:repeat(2,minmax(0,1fr))} }
   @container wl (max-width:599.98px){
+    .wl-sorteer{margin-left:0;flex-basis:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+    .wl-sorteer select{width:100%}
     .wl-telling{flex:1}
     .wl-paneel{padding:14px 14px 0}
     .wl-keuzes > *{flex-basis:100%}
     .wl-gem select{width:100%}
     .wl-optie{min-height:44px}
+    .wl-bereiken{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px 14px}
     .wl-paneelvoet{display:flex;position:sticky;bottom:0;margin:14px -14px 0;padding:12px 14px;background:var(--surface);
       border-top:1px solid var(--grid);border-radius:0 0 14px 14px}
   }
@@ -2037,13 +2144,13 @@ function maakOpenbaar(card, d) {
 }
 /* ============================ einde PAND OPENEN ============================ */
 
-/* ============================ WERKLIJST (VA-39, VA-68) ============================
+/* ============================ WERKLIJST (VA-39, VA-68 t/m VA-70) ============================
    Tot 500 kaarten: de eerste STAP meteen, de volgende pas als je in de buurt scrolt, zodat de
    pagina op een telefoon snel staat. Elke kaart wordt één keer gebouwd en daarna teruggehangen,
    zodat zijn luchtfoto maar één keer wordt opgevraagd (VA-71 crit. 3).
-   De filters (gemeente, categorie, signaal, gebied) rekenen in de browser op de panden van de
-   lijst: tussen filters EN, binnen een filter OF; het aantal bij een keuze telt de panden die alle
-   andere filters halen. Elke zin komt uit Python (filter_html(), PAYLOAD.filter.tekst); het script
+   De filters (gemeente, categorie, signaal, gebied, en de getalvelden van VA-69) rekenen in de browser
+   op de panden van de lijst: tussen filters EN, binnen een filter OF; het aantal bij een keuze telt de
+   panden die alle andere filters halen. Sorteren (VA-70) hangt dezelfde kaarten in een andere volgorde. Elke zin komt uit Python (filter_html(), PAYLOAD.filter.tekst); het script
    vult alleen getallen in. De stand staat in het adres, zodat herladen en delen dezelfde lijst geven. */
 (() => {
   const STAP = 40, wacht = document.querySelector(".schildwacht"), gebouwd = new Map();
@@ -2066,6 +2173,7 @@ function maakOpenbaar(card, d) {
 
   const wl = document.querySelector(".wl"), kies = document.getElementById("gemeente");
   if (!kies || !PAYLOAD.filter) { teken(LEADS); return; }
+  const F = PAYLOAD.filter;
   const T = PAYLOAD.filter.tekst, $ = s => wl.querySelector(s);
   const knop = $(".wl-knop"), paneel = $(".wl-paneel"), telling = $(".wl-telling"), chipsEl = $(".wl-chips");
   const leeg = $(".wl-leeg"), toon = $(".wl-toon"), opties = [...wl.querySelectorAll(".wl-optie")];
@@ -2075,13 +2183,45 @@ function maakOpenbaar(card, d) {
   const LIJST = [["cat", "categorie"], ["sig", "signaal"], ["geb", "gebied"]];   // groep, adresparameter
   const KEUZES = Object.fromEntries(LIJST.map(([g]) => [g, opties.filter(o => o.dataset.groep === g).map(o => o.dataset.waarde)]));
   const GEMEENTEN = [...kies.options].map(o => o.value).filter(Boolean);
-  const st = {gemeente: "", cat: new Set(), sig: new Set(), geb: new Set()};
+  // Getalvelden (VA-69) en sorteren (VA-70): de velden, zinnen en richtingen komen uit bereik_filter() in Python.
+  const BEREIK = F.bereik || [], SORT = F.sorteer || {}, STD = Object.keys(SORT)[0];
+  const sortEl = document.getElementById("wl-sorteer"), dirEl = document.getElementById("wl-volgorde");
+  const EIGEN = ["gemeente", ...LIJST.map(([, p]) => p), ...BEREIK.flatMap(b => b.url), "sorteer", "richting"];
+  const leegRuw = () => Object.fromEntries(BEREIK.map(b => [b.k, {van: "", tm: ""}]));
+  const st = {gemeente: "", cat: new Set(), sig: new Set(), geb: new Set(), ruw: leegRuw(),
+              sort: STD, dir: STD ? SORT[STD].std : "af"};
+  let B = {};   // per getalveld wat telt: {aan, van, tm}, of {aan: false, fout, veld} bij een ongeldige invoer
   const vul = (zin, n) => zin.replace("{n}", nl(n));
+  const grens = (b, v) => b.jaar ? String(v) : nl(v);   // een jaartal nooit door nl(): 1939, niet 1.939
+
+  // "1.200" en "1 200" worden 1200; een komma of een letter is ongeldig (Lumi, bouwnotitie 4).
+  function getal(s) { s = String(s).trim(); if (!s) return null; const t = s.replace(/[.\s]/g, ""); return /^\d{1,6}$/.test(t) ? Number(t) : NaN; }
+  // Een ongeldig getal of van > tot en met zet alleen dat veld uit, met een melding; de rest werkt door (crit. 5).
+  function bereik(b, r) {
+    const v = getal(r.van), t = b.url.length > 1 ? getal(r.tm) : null;
+    const fv = Number.isNaN(v) || (b.max != null && v !== null && v > b.max), ft = Number.isNaN(t);
+    if (fv || ft) return {aan: false, fout: b.fout, veld: fv && ft ? "beide" : fv ? "van" : "tm"};
+    if (v === null && t === null) return {aan: false};
+    if (v !== null && t !== null && v > t) return {aan: false, fout: T.omgekeerd, veld: "beide"};
+    return {aan: true, van: v, tm: t};
+  }
 
   function past(d, behalve) {
     if (behalve !== "gemeente" && st.gemeente && d.g !== st.gemeente) return false;
     for (const [g] of LIJST) if (g !== behalve && st[g].size && ![...st[g]].some(w => HEEFT[g](d, w))) return false;
+    // Grenzen tellen mee; een pand zonder waarde valt weg zolang er een grens staat (VA-69 crit. 4).
+    for (const b of BEREIK) { const x = B[b.k], v = d[b.veld]; if (!x.aan) continue;
+      if (v == null || (x.van !== null && v < x.van) || (x.tm !== null && v > x.tm)) return false; }
     return true;
+  }
+  // Gelijk blijft in de volgorde van de werklijst (score, dan VA-32); zonder waarde altijd achteraan (VA-70 crit. 3).
+  const PLAATS = new Map(LEADS.map((d, i) => [d, i]));
+  function sorteer(lijst) {
+    if (!STD) return lijst;
+    const k = SORT[st.sort].veld, op = st.dir === "op", na = (a, b) => PLAATS.get(a) - PLAATS.get(b);
+    return lijst.slice().sort((a, b) => { const x = a[k], y = b[k];
+      if (x == null || y == null) return x == null && y == null ? na(a, b) : x == null ? 1 : -1;
+      return x === y ? na(a, b) : op ? x - y : y - x; });
   }
   // Beide gebieden aan is hetzelfde als geen van beide (crit. 3): dat is geen actief filter.
   const telt = g => st[g].size > 0 && !(g === "geb" && st.geb.size === KEUZES.geb.length);
@@ -2091,11 +2231,22 @@ function maakOpenbaar(card, d) {
     if (st.gemeente) c.push([T.chipGemeente.replace("{gemeente}", () => st.gemeente), () => { st.gemeente = ""; }]);
     for (const g of ["geb", "cat", "sig"]) if (telt(g))
       opties.forEach(o => { const w = o.dataset.waarde; if (o.dataset.groep === g && st[g].has(w)) c.push([o.dataset.chip, () => st[g].delete(w)]); });
+    for (const b of BEREIK) { const x = B[b.k]; if (!x.aan) continue;   // geen chip voor de sortering: dat is geen filter
+      const zin = x.van !== null && x.tm !== null ? b.chips.vanTm : x.van !== null ? b.chips.van : b.chips.tm;
+      c.push([zin.replace("{van}", () => grens(b, x.van)).replace("{tm}", () => grens(b, x.tm)), () => { st.ruw[b.k] = {van: "", tm: ""}; }]); }
     return c;
   }
   function knopje(cls, tekst, klik) { const b = maak("button", cls, tekst); b.type = "button"; b.addEventListener("click", klik); return b; }
+  let volgordeVan = STD;   // voor welk veld de opties van Volgorde nu staan (de HTML begint bij score)
+  function zetSortering() {
+    if (!sortEl || !dirEl) return;
+    if (volgordeVan !== st.sort) {   // een ander veld: de richtingen van dat veld, de standaard eerst
+      dirEl.textContent = ""; SORT[st.sort].opties.forEach(([r, n]) => dirEl.add(new Option(n, r))); volgordeVan = st.sort; }
+    sortEl.value = st.sort; dirEl.value = st.dir;
+  }
 
   function werk(schrijf) {
+    B = Object.fromEntries(BEREIK.map(b => [b.k, bereik(b, st.ruw[b.k])]));
     const treffers = LEADS.filter(d => past(d, null)), n = treffers.length;
     const zonder = g => LEADS.filter(d => past(d, g));
     const basis = {gemeente: zonder("gemeente"), cat: zonder("cat"), sig: zonder("sig"), geb: zonder("geb")};
@@ -2111,6 +2262,14 @@ function maakOpenbaar(card, d) {
       ? T.gemOptie.replace("{gemeente}", () => o.value).replace("{aantal}", nl(perGemeente[o.value] || 0))
       : vul(T.gemAlle, basis.gemeente.length);
     kies.value = st.gemeente;
+    BEREIK.forEach(b => {
+      const x = B[b.k], fout = $(`#wl-${b.k}-fout`);
+      for (const k of ["van", "tm"]) { const inp = $(`#wl-${b.k}-${k}`); if (!inp) continue;
+        if (inp.value !== st.ruw[b.k][k]) inp.value = st.ruw[b.k][k];
+        if (x.fout && (x.veld === "beide" || x.veld === k)) inp.setAttribute("aria-invalid", "true"); else inp.removeAttribute("aria-invalid"); }
+      fout.textContent = x.fout || ""; fout.hidden = !x.fout;
+    });
+    zetSortering();
 
     const lijst = chips(), a = lijst.length, bol = $(".wl-aantal");
     bol.hidden = !a; bol.textContent = nl(a); $(".wl-actief").textContent = a ? vul(T.actief, a) : "";
@@ -2129,10 +2288,11 @@ function maakOpenbaar(card, d) {
     });
     if (a) chipsEl.append(knopje("wl-wis", T.wis, wisAlles));
     leeg.hidden = n > 0; lb.hidden = n === 0;
-    teken(treffers);
+    teken(sorteer(treffers));   // dezelfde kaarten uit 'gebouwd', in de nieuwe volgorde: geen tweede PDOK-verzoek
     if (schrijf) schrijfAdres();
   }
-  function wisAlles() { st.gemeente = ""; LIJST.forEach(([g]) => st[g].clear()); werk(true); knop.focus(); }
+  // De sortering blijft staan: die knop wist alleen de filters (Lumi, kopij 'wis').
+  function wisAlles() { st.gemeente = ""; LIJST.forEach(([g]) => st[g].clear()); st.ruw = leegRuw(); werk(true); knop.focus(); }
 
   // Het adres (crit. 9): een onbekende of ongeldige waarde valt weg, de rest geldt.
   function leesAdres() {
@@ -2140,13 +2300,24 @@ function maakOpenbaar(card, d) {
     st.gemeente = GEMEENTEN.find(g => g.toLowerCase() === gem) || "";
     for (const [g, p] of LIJST) (q.get(p) || "").split(",").forEach(x => {
       const w = KEUZES[g].find(k => k.toLowerCase() === x.trim().toLowerCase()); if (w) st[g].add(w); });
+    // Een ongeldig getal laat het veld leeg; van > tot en met krijgt de waarden en de melding, net als bij typen.
+    for (const b of BEREIK) b.url.forEach((p, j) => { const v = (q.get(p) || "").trim();
+      if (/^\d{1,6}$/.test(v) && !(b.max != null && Number(v) > b.max)) st.ruw[b.k][j ? "tm" : "van"] = v; });
+    const s = (q.get("sorteer") || "").trim().toLowerCase(), r = (q.get("richting") || "").trim().toLowerCase();
+    if (Object.keys(SORT).includes(s)) st.sort = s;
+    if (STD) st.dir = r === "op" || r === "af" ? r : SORT[st.sort].std;
   }
+  // In de volgorde van Lumi's tabel, alleen wat meetelt; de standaardsortering staat er niet in.
   function schrijfAdres() {
     const q = new URLSearchParams(location.search), uit = [];
-    ["gemeente", ...LIJST.map(([, p]) => p)].forEach(p => q.delete(p));
+    EIGEN.forEach(p => q.delete(p));
     const zet = (p, v) => uit.push(p + "=" + encodeURIComponent(v).replace(/%2C/gi, ","));
     if (st.gemeente) zet("gemeente", st.gemeente);
     for (const [g, p] of LIJST) { const w = KEUZES[g].filter(k => st[g].has(k)); if (w.length) zet(p, w.join(",")); }
+    for (const b of BEREIK) { const x = B[b.k]; if (!x.aan) continue;
+      if (x.van !== null) zet(b.url[0], x.van); if (x.tm !== null) zet(b.url[1], x.tm); }
+    if (STD && st.sort !== STD) zet("sorteer", st.sort);
+    if (STD && st.dir !== SORT[st.sort].std) zet("richting", st.dir);
     const rest = q.toString(), s = uit.concat(rest ? [rest] : []).join("&");
     history.replaceState(null, "", location.pathname + (s ? "?" + s : "") + location.hash);
   }
@@ -2157,13 +2328,23 @@ function maakOpenbaar(card, d) {
   knop.addEventListener("click", () => zetOpen(paneel.hidden));
   toon.addEventListener("click", dicht);
   paneel.addEventListener("keydown", e => { if (e.key === "Escape" && wl.clientWidth < 600) dicht(); });
+  // Vakjes en selects gelden meteen; een getalveld 400 ms na de laatste toets, en meteen bij change.
+  const typen = new Map();
+  paneel.addEventListener("input", e => {
+    const t = e.target; if (!t.dataset.k) return;
+    st.ruw[t.dataset.k][t.dataset.x] = t.value; clearTimeout(typen.get(t)); typen.set(t, setTimeout(() => werk(true), 400));
+  });
   paneel.addEventListener("change", e => {
     const t = e.target, o = t.closest(".wl-optie");
     if (t === kies) st.gemeente = t.value;
     else if (o) { const set = st[o.dataset.groep]; if (t.checked) set.add(o.dataset.waarde); else set.delete(o.dataset.waarde); }
+    else if (t.dataset.k) { clearTimeout(typen.get(t)); st.ruw[t.dataset.k][t.dataset.x] = t.value; }
     else return;
     werk(true);
   });
+  // Een ander veld springt naar zijn eigen standaardrichting (Lumi, VA-70).
+  if (sortEl) sortEl.addEventListener("change", () => { st.sort = sortEl.value; st.dir = SORT[st.sort].std; werk(true); });
+  if (dirEl) dirEl.addEventListener("change", () => { st.dir = dirEl.value; werk(true); });
   leeg.querySelector(".wl-wis").addEventListener("click", wisAlles);
   zetOpen(matchMedia("(min-width: 801px)").matches);
   leesAdres();
