@@ -69,10 +69,12 @@ struck through with the reason, never deleted.
 - **Make a dialog with a header a flex column with `min-height:0` on its body.** Capping the body
   with `calc(100dvh - N)` cut off 66 px at 375 px when the header wrapped; measure the scrolled
   bottom, not only `scrollWidth`. *(2026-11-09, Vera, VA-61)*
-- **Headless Chrome cannot make a 375 px window; measure 375 inside an iframe.** *(2026-11-09,
-  Vera, VA-61)*
-- ~~**A pand's x,y is not its hoofdadres point.** 11 of 20 Delft leads are 5,7–18,3 m off, because
-  x,y, postcode and huisnummer come from another VBO of the pand. *(2026-11-09, Vera, VA-62)*~~
+- ~~**Headless Chrome cannot make a 375 px window; measure 375 inside an iframe.** *(2026-11-09,
+  Vera, VA-61)*~~ Struck 2026-11-15: it can, see the CDP `Emulation.setDeviceMetricsOverride`
+  line (VA-63) below.
+- ~~**A pand's x,y is not its hoofdadres point.**~~ ~~11 of 20 Delft leads are 5,7–18,3 m off,~~
+  9 of 20, 3,4–26,3 m (VA-78, 2026-11-14), ~~because x,y, postcode and huisnummer come from
+  another VBO of the pand. *(2026-11-09, Vera, VA-62)*~~
   Superseded by VA-78 (2026-11-13): the address fields and x,y now come from the hoofdadres VBO.
 - **A fixed `data-theme="light"` on `<html>` overrides `prefers-color-scheme`.** Ayman wants the
   dashboard to open light on every computer; only the Thema button sets the theme. A design file
@@ -122,3 +124,28 @@ struck through with the reason, never deleted.
   never re-requests the PDOK photos (500 cards scrolled = 500 requests; filtering after that = 0).
   Screenshot the dashboard headless with CDP `captureScreenshot` and a clip, and test lazy
   rendering with reduced motion on. *(2026-11-13, Ada and Vera, VA-68/VA-71)*
+- **The KVK test key is in the public history of `ea91e7f` by Ayman's "Push as is" (2026-11-06), and
+  in no tree since `2bef49f`.** A history scan that finds it in those two commits is expected; a
+  third hit is a new leak. *(2026-11-13, Vera, VA-1)*
+- **`requirements.txt` is also what makes Railpack detect Python; without it every build fails
+  ("Railpack failed to prepare the build", `9efe917`).** It pins only `requests` and `pyyaml` to
+  `pip show` on this laptop; any new line, pytest included, is an escalation to Ayman.
+  *(2026-11-13, Vera, VA-10)*
+- **Headless Chrome can measure 375 px after all: CDP `Emulation.setDeviceMetricsOverride`
+  {width:375} gives innerWidth 375 and fires the max-width media queries; `setEmulatedMedia`
+  covers dark mode and reduced motion.** *(2026-11-13, Vera, VA-63)*
+- **To test page code against data the pipeline cannot make, edit the built PAYLOAD, not
+  `panden_*.json`: `build_dashboard.py` stops on a missing bouwjaar or oppervlakte before the page
+  exists.** *(2026-11-14, Vera, VA-69)*
+- **A full-page or element screenshot does not show where a sticky element sits: the capture draws
+  beyond the viewport without resizing it, so `position: sticky; bottom: 0` lands mid-page.** Judge
+  sticky controls from viewport screenshots at the start, middle and end of their container.
+  *(2026-11-14, Lumi, VA-69)*
+- **A finding's figures go on record with their per-item list. VA-78's "11 of 20, 5,7–18,3 m" had
+  none and did not reproduce (9 of 20, 3,4–26,3 m).** *(2026-11-14, Vera, VA-78)*
+- **Locatieserver's free search returns the closest match, not always the exact address: 2 of 20
+  Delft hoofdadressen came back as 18A or 9A.** Check `weergavenaam` before measuring a distance
+  to it. *(2026-11-14, Vera, VA-78)*
+- **An output built in a scratch run matches its commit when three checks agree:** the code copy's
+  hashes equal the commit's, the output equals the commit after CRLF normalisation, and a cheap
+  independent recompute agrees. *(2026-11-14, Vera, VA-78/VA-79)*
