@@ -153,7 +153,8 @@ class DraaiMetStub(unittest.TestCase):
         from unittest import mock
         with mock.patch.object(selectie, "stroom_panden", self.stroom(codes)):
             return nederland.draai(self.cfg, None, self.run_proef.KOLOMMEN, self.run_proef.csv_rij,
-                                   self.map / "uit", self.map / "data")
+                                   self.map / "uit", self.map / "data",
+                                   register_bestand=self.map / "register.csv")
 
     def test_lead_ids_uniek_en_verdeling(self):
         import csv
@@ -164,6 +165,18 @@ class DraaiMetStub(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
         self.assertTrue(all(i.startswith("LEV-NL-") and len(i) == 7 + 16 for i in ids))
         self.assertEqual({r[nederland.IN_GROOT] for r in rijen}, {"ja", "nee"})
+
+    def test_csvs_zeggen_ja_nee(self):
+        # VA-79: ook de landelijke CSV's schrijven nooit True/False in de ja/nee-kolommen.
+        import csv
+        self.assertEqual(self.draai(self.groot + ["9999"] * 3), 0)
+        for naam in ("mastervoorraad_nederland.csv", "werklijst_nederland_2026-11.csv",
+                     "proefresultaat_20_nederland.csv"):
+            with open(self.map / "uit" / naam, encoding="utf-8-sig") as fh:
+                rijen = list(csv.DictReader(fh, delimiter=";"))
+            self.assertTrue(rijen, naam)
+            for kolom in selectie.JANEE_KOLOMMEN:
+                self.assertEqual({r[kolom] for r in rijen}, {"nee"}, (naam, kolom))
 
     def test_ontbrekende_grote_gemeente_schrijft_niets(self):
         with self.assertRaises(nederland.NederlandFout) as fout:

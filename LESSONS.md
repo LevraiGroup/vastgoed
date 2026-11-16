@@ -69,10 +69,13 @@ struck through with the reason, never deleted.
 - **Make a dialog with a header a flex column with `min-height:0` on its body.** Capping the body
   with `calc(100dvh - N)` cut off 66 px at 375 px when the header wrapped; measure the scrolled
   bottom, not only `scrollWidth`. *(2026-11-09, Vera, VA-61)*
-- **Headless Chrome cannot make a 375 px window; measure 375 inside an iframe.** *(2026-11-09,
-  Vera, VA-61)*
-- **A pand's x,y is not its hoofdadres point.** 11 of 20 Delft leads are 5,7–18,3 m off, because
-  x,y, postcode and huisnummer come from another VBO of the pand. *(2026-11-09, Vera, VA-62)*
+- ~~**Headless Chrome cannot make a 375 px window; measure 375 inside an iframe.** *(2026-11-09,
+  Vera, VA-61)*~~ Struck 2026-11-15: it can, see the CDP `Emulation.setDeviceMetricsOverride`
+  line (VA-63) below.
+- ~~**A pand's x,y is not its hoofdadres point.**~~ ~~11 of 20 Delft leads are 5,7–18,3 m off,~~
+  9 of 20, 3,4–26,3 m (VA-78, 2026-11-14), ~~because x,y, postcode and huisnummer come from
+  another VBO of the pand. *(2026-11-09, Vera, VA-62)*~~
+  Superseded by VA-78 (2026-11-13): the address fields and x,y now come from the hoofdadres VBO.
 - **A fixed `data-theme="light"` on `<html>` overrides `prefers-color-scheme`.** Ayman wants the
   dashboard to open light on every computer; only the Thema button sets the theme. A design file
   that follows the OS colour scheme quietly decides the default. *(2026-11-09, Vera, VA-66)*
@@ -103,3 +106,69 @@ struck through with the reason, never deleted.
   record numbers** (2 MB went to 0,89 MB for 500 panden); a test unfolds the short form back to
   the full one. When measuring Fast 4G, report warm and cold runs apart: a cold headless start adds
   about 2 s at any page size. *(2026-11-12, Ada and Vera, VA-39)*
+- **A test that pins committed bytes must be told which columns a story is allowed to move, and
+  check those columns by their meaning.** VA-79's `ja`/`nee` turned the byte-for-byte Delft check
+  in `test_werklijst.py` red even though `VERWACHT` held; it now compares column by column and reads
+  ja/nee and the August `True`/`False` alike (`selectie.lees_janee`). *(2026-11-13, Rex, VA-79)*
+- **Fields shown together must come from one record.** `hoofdadres` was the first address in sorted
+  order but postcode and x,y came from the first VBO in input order; VA-78 takes them from the
+  hoofdadres VBO. Nationally 31.946 postcodes and 156.407 locations moved, and no gemeentecode or
+  werklijst ID did. A hoofdadres VBO can lack a postcode (8 national werklijst/proef rows, 2
+  Delft proof leads), so the Postcode row can go empty. *(2026-11-13, Rex, VA-78)*
+- **Take a download's date from its own entry, never from the feed header.** PDOK's BAG feed says
+  `<updated>2026-11-08</updated>` at the top because of the zip; the GeoPackage entry still says
+  11-01. A partial download gets a name the ingest pattern cannot match, and a live check of a
+  real folder runs with an impossible disk floor, so it can never start a 7,8 GB download by
+  accident. *(2026-11-13, Rex, VA-72)*
+- **Keep built cards in a Map keyed by ID and hang them back on redraw,** so a filter change
+  never re-requests the PDOK photos (500 cards scrolled = 500 requests; filtering after that = 0).
+  Screenshot the dashboard headless with CDP `captureScreenshot` and a clip, and test lazy
+  rendering with reduced motion on. *(2026-11-13, Ada and Vera, VA-68/VA-71)*
+- **The KVK test key is in the public history of `ea91e7f` by Ayman's "Push as is" (2026-11-06), and
+  in no tree since `2bef49f`.** A history scan that finds it in those two commits is expected; a
+  third hit is a new leak. *(2026-11-13, Vera, VA-1)*
+- **`requirements.txt` is also what makes Railpack detect Python; without it every build fails
+  ("Railpack failed to prepare the build", `9efe917`).** It pins only `requests` and `pyyaml` to
+  `pip show` on this laptop; any new line, pytest included, is an escalation to Ayman.
+  *(2026-11-13, Vera, VA-10)*
+- **Headless Chrome can measure 375 px after all: CDP `Emulation.setDeviceMetricsOverride`
+  {width:375} gives innerWidth 375 and fires the max-width media queries; `setEmulatedMedia`
+  covers dark mode and reduced motion.** *(2026-11-13, Vera, VA-63)*
+- **To test page code against data the pipeline cannot make, edit the built PAYLOAD, not
+  `panden_*.json`: `build_dashboard.py` stops on a missing bouwjaar or oppervlakte before the page
+  exists.** *(2026-11-14, Vera, VA-69)*
+- **A full-page or element screenshot does not show where a sticky element sits: the capture draws
+  beyond the viewport without resizing it, so `position: sticky; bottom: 0` lands mid-page.** Judge
+  sticky controls from viewport screenshots at the start, middle and end of their container.
+  *(2026-11-14, Lumi, VA-69)*
+- **A finding's figures go on record with their per-item list. VA-78's "11 of 20, 5,7–18,3 m" had
+  none and did not reproduce (9 of 20, 3,4–26,3 m).** *(2026-11-14, Vera, VA-78)*
+- **Locatieserver's free search returns the closest match, not always the exact address: 2 of 20
+  Delft hoofdadressen came back as 18A or 9A.** Check `weergavenaam` before measuring a distance
+  to it. *(2026-11-14, Vera, VA-78)*
+- **An output built in a scratch run matches its commit when three checks agree:** the code copy's
+  hashes equal the commit's, the output equals the commit after CRLF normalisation, and a cheap
+  independent recompute agrees. *(2026-11-14, Vera, VA-78/VA-79)*
+- **A headless browser never makes `document.hidden` true, even when a second tab is in front; prove
+  "pauses when the tab is hidden" by overriding `document.hidden` and firing `visibilitychange`, then
+  counting frames, and say in the close-out that it was simulated.** *(2026-11-16, Vera, VA-85)*
+- **A closed `<dialog>` keeps its children in the page: `isConnected` stays true but they cannot take focus, so
+  focus sent there lands on `<body>`.** Check `closest("dialog").open` before focusing inside one. *(2026-11-16, Ada,
+  VA-90)*
+- **The dedup register is the only state the pipeline must never rebuild: it lives in git
+  (`register/geleverde_panden.csv`), not in `data/`, and a test that runs `run_proef.main()` must point it
+  elsewhere.** `nederland.draai()` takes it as a required keyword so a forgotten test fails instead of
+  writing the real register; the Delft route follows `run_proef.BASE`. *(2026-11-16, Rex, VA-6)*
+- **Evidence taken from a working tree only counts for the commit it was taken at: compare the run time
+  with the branch's reflog, and if the commit is newer, redo the evidence on a `git archive` export.**
+  *(2026-11-16, Vera, VA-6)*
+- **A CDP key event sent to a background tab closes a `<dialog>`, but the page's `focus()` is lost, so focus
+  reads as `<body>`.** In multi-tab tests, `Page.bringToFront` the tab that gets the keys before trusting a
+  focus result. *(2026-11-16, Vera, VA-90)*
+- **A copy pin that only checks "occurs somewhere in the copy table" also accepts the superseded draft
+  column.** Pin to the approved column, and prove it with one mutant. *(2026-11-16, Vera, VA-90)*
+- **A login behind a proxy is attacked with raw sockets, not a browser: send the proxy's headers
+  yourself, put non-ASCII bytes in every header the handler reads, and check no-store on every status,
+  errors included.** On Railway the client address is the last `X-Real-IP` line, never
+  `X-Forwarded-For`, and only five wrong logins after the first deploy prove it. *(2026-11-13, Vera,
+  VA-50)*

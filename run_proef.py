@@ -22,7 +22,8 @@ from selectie import (
     werklijst_maand, werklijst_waarschuwing,
 )
 import nederland
-from selectie import controleer_drempels, nl_tal
+import register
+from selectie import JANEE_KOLOMMEN, controleer_drempels, janee, nl_tal
 from snapshots import SnapshotFout
 
 BASE = Path(__file__).parent
@@ -41,11 +42,13 @@ KOLOMMEN = [
 
 
 def csv_rij(p: dict) -> dict:
-    """Eén pand als CSV-rij: lijsten met ' | ', woordenboeken als 'a=b; c=d'."""
+    """Eén pand als CSV-rij: lijsten met ' | ', woordenboeken als 'a=b; c=d', ja/nee als 'ja'/'nee'."""
     r = {}
     for k in KOLOMMEN:
         v = p.get(k, "")
-        if isinstance(v, list):
+        if k in JANEE_KOLOMMEN:
+            v = janee(p.get(k, False))  # VA-79: nooit Pythons True/False in de CSV
+        elif isinstance(v, list):
             v = " | ".join(str(x) for x in v)
         elif isinstance(v, dict):
             v = "; ".join(f"{a}={b}" for a, b in sorted(v.items()))
@@ -71,8 +74,9 @@ def main() -> int:
     if nederland.is_nederland(cfg):
         # VA-37: heel Nederland uit de landelijke snapshot, pand voor pand.
         try:
-            return nederland.draai(cfg, args.snapshot, KOLOMMEN, csv_rij, UIT, DATA)
-        except (SnapshotFout, nederland.NederlandFout, FileNotFoundError) as fout:
+            return nederland.draai(cfg, args.snapshot, KOLOMMEN, csv_rij, UIT, DATA,
+                                   register_bestand=register.pad(BASE))
+        except (SnapshotFout, nederland.NederlandFout, register.RegisterFout, FileNotFoundError) as fout:
             print(f"FOUT: {fout}", file=sys.stderr)
             return 1
     label, woonplaatsen = resolve(cfg)
@@ -85,6 +89,27 @@ def main() -> int:
     except SnapshotFout as fout:
         print(f"FOUT: {fout}", file=sys.stderr)
         return 1
+
+    # Maandelijkse werklijst (VA-5): de hoogst scorende panden boven de werklijstdrempel,
+    # hoogstens drempels.werklijst_max. De maand in de naam is die van de snapshot; bij
+    # gelijke score bepaalt die maand ook de volgorde (VA-32). Een pand dat in een andere
+    # werklijst is geleverd, staat in het dedup-register en komt er niet meer in (VA-6).
+    # Is deze werklijst al geleverd en geeft de run nu een andere lijst, dan stopt hij
+    # hier, voordat er iets is geschreven (VA-6 crit. 8).
+    maand = werklijst_maand(gekozen)
+    werklijst_csv = UIT / f"werklijst_{sl}_{maand}.csv"
+    try:
+        reg = register.Register(register.pad(BASE))
+        geleverd = reg.elders(werklijst_csv.name)
+        lijst, n_geschikt = werklijst(panden, cfg, maand, geleverd)
+        reg.controleer(werklijst_csv.name, maand, [p["bag_pand_id"] for p in lijst])
+    except register.RegisterFout as fout:
+        print(f"FOUT: {fout}", file=sys.stderr)
+        return 1
+    # eerder_geselecteerd: in een eerdere (andere) werklijst geleverd. Dus nooit in de werklijst zelf.
+    for p in panden:
+        p["eerder_geselecteerd"] = p["bag_pand_id"] in geleverd
+    n_uitgesloten = sum(p["eerder_geselecteerd"] for p in panden)
 
     actief = [p for p in panden if not p["uitgesloten"]]
     in_cat = [p for p in actief if p["categorieen"]]
@@ -138,6 +163,10 @@ def main() -> int:
         print(f"    Selectiereden: {p['selectiereden']}")
         print(f"    BAG-viewer  : {BAG_VIEWER}{p['bag_pand_id']}")
 
+    # Eerst het register, dan de bestanden: valt het schrijven daarna uit, dan geeft een
+    # nieuwe run dezelfde lijst en registreert hij niets dubbel (VA-6 crit. 3).
+    nieuw_geregistreerd = reg.leg_vast(werklijst_csv.name, maand, [p["bag_pand_id"] for p in lijst])
+
     # CSV-export van het proefresultaat.
     kolommen, _rij = KOLOMMEN, csv_rij
 
@@ -155,12 +184,6 @@ def main() -> int:
         for p in sorted(in_cat, key=mastervolgorde):
             w.writerow(_rij(p))
 
-    # Maandelijkse werklijst (VA-5): de hoogst scorende panden boven de werklijstdrempel,
-    # hoogstens drempels.werklijst_max. De maand in de naam is die van de snapshot; bij
-    # gelijke score bepaalt die maand ook de volgorde (VA-32).
-    maand = werklijst_maand(gekozen)
-    lijst, n_geschikt = werklijst(panden, cfg, maand)
-    werklijst_csv = UIT / f"werklijst_{sl}_{maand}.csv"
     with open(werklijst_csv, "w", newline="", encoding="utf-8-sig") as fh:
         w = csv.DictWriter(fh, fieldnames=kolommen + ["bag_viewer_url"], delimiter=";")
         w.writeheader()
@@ -184,8 +207,10 @@ def main() -> int:
     print(f"Mastervoorraad  -> {master_csv.relative_to(BASE)}  ({nl_tal(len(in_cat))} panden)")
     print(
         f"Werklijst       -> {werklijst_csv.relative_to(BASE)}  ({nl_tal(len(lijst))} van "
-        f"{nl_tal(n_geschikt)} panden met leadscore >= {cfg['drempels']['score_min_voor_werklijst']})"
+        f"{nl_tal(n_geschikt)} nog niet geleverde panden met leadscore >= "
+        f"{cfg['drempels']['score_min_voor_werklijst']})"
     )
+    print(register.regel(reg, nieuw_geregistreerd, n_uitgesloten))
     for s in gekozen:
         print(f"Snapshot        -> {s.omschrijving()}")
     waarschuwing = werklijst_waarschuwing(n_geschikt, cfg)

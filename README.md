@@ -159,6 +159,40 @@ Alle grenswaarden en scoregewichten staan ook in `config.yaml` en zijn configure
 zoals de briefing vereist. Bestandsnamen en dashboard-titel volgen automatisch het
 gekozen gebied.
 
+## Dedup-register: een geleverd pand komt nooit terug
+
+Elke werklijstrun legt zijn panden vast in `register/geleverde_panden.csv`, buiten `output/`
+en `data/`, zodat het opnieuw maken van de uitvoer het register nooit wist. Het bestand staat
+in git. Per pand één regel met drie kolommen, gescheiden door `;`:
+
+    bag_pand_id;maand;werklijst
+    0503100000026198;2026-08;werklijst_delft_2026-08.csv
+
+Er is één register voor alle gebieden (Delft, een provincie, heel Nederland): een pand dat in
+een werklijst is geleverd, komt in geen enkele andere werklijst meer, en de lijst vult aan met
+de volgende hoogste scores. In de mastervoorraad, het proefresultaat en `panden_<gebied>.json`
+zegt `eerder_geselecteerd` `ja` bij elk pand dat in een *andere* werklijst is geleverd; in de
+werklijst zelf staat dus altijd `nee`.
+
+Dezelfde maand nog eens draaien geeft hetzelfde bestand en registreert niets dubbel. Staat de
+werklijst van die maand al in het register en zou een nieuwe run een andere lijst geven
+(bijvoorbeeld omdat `werklijst_max` in `config.yaml` is veranderd), dan stopt `run_proef.py`
+met een melding en verandert hij niets: niet het werklijstbestand, niet het register. Een
+geleverde lijst verandert nooit stil.
+
+**Met de hand verbeteren.** Open het register in Kladblok (niet in Excel: Excel haalt de `0`
+vooraan het BAG-pand-ID weg, en dan stopt de volgende run met een melding over die regel).
+- *Een pand per ongeluk geleverd?* Verwijder zijn regel en sla op. Vanaf de volgende maand
+  kan het weer op een werklijst komen. De werklijst van de maand waarin het stond, kan daarna
+  niet meer opnieuw gemaakt worden; het bestand dat Levrai kreeg, blijft zoals het was.
+- *Een pand buiten het systeem om geleverd?* Voeg een regel toe met zijn BAG-pand-ID (16
+  cijfers), de maand (`JJJJ-MM`) en een naam voor de levering, bijvoorbeeld `handmatig`.
+- Een extra kolom (bijvoorbeeld `opmerking`) en lege regels mogen. Een regel die niet klopt,
+  stopt de run met het regelnummer; het register wordt nooit stil als leeg gelezen.
+
+Tests en proefruns op een kopie kunnen een ander register aanwijzen met de omgevingsvariabele
+`VASTGOED_REGISTER`.
+
 ## De 25 grootste gemeenten (CBS)
 
 Welke gemeenten "de 25 grootste" zijn, staat in `referentie/gemeenten_cbs_<peiljaar>.csv`: alle
@@ -258,9 +292,9 @@ blijft het signaal inactief en verandert de score niet.
 (koppeling getest en werkend, wacht op productiesleutel) en verkoophistorie via Kadaster
 Koopsom (betaald). Het budget voor de /100-index (`schaal_max`) is nu **26**.
 
-Verder nog te bouwen na goedkeuring: het **dedup-register** van eerder behandelde
-panden (briefing sectie 7 stap 4) en de maandelijkse mutatiedetectie. De datastructuur
-ondersteunt dit al via `eerder_geselecteerd` en `laatst_beoordeeld`.
+Het **dedup-register** (briefing sectie 7 stap 4) is gebouwd: zie "Dedup-register" hierboven.
+Verder nog te bouwen: de maandelijkse mutatiedetectie. Het veld `laatst_beoordeeld` staat al
+in de CSV's.
 
 ## Beheerkosten per maand
 

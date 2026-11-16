@@ -16,10 +16,13 @@ het bestand, dan staat er dat de bron onbekend is.
 from __future__ import annotations
 
 import json
+import math
 from datetime import date
 from html import escape
 from pathlib import Path
 
+import cbs_gemeenten
+import kaart_nl
 import nederland
 import snapshots
 from gebieden import resolve, slug
@@ -588,14 +591,24 @@ def rd_naar_wgs84(x: float, y: float) -> tuple[float, float]:
 
 
 LUCHTFOTO_WMS = "https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0"
+LUCHTFOTO_LAAG = "Actueel_orthoHR"
 LUCHTFOTO_HALF_M = 40  # 80 m breed: pand en straat zichtbaar (VA-62 crit. 1: 50-150 m)
+LUCHTFOTO_PX = 640  # de grote foto in 'Open pand' (VA-62)
+KAARTFOTO_PX = 200  # de kleine foto op elke kaart (VA-71 crit. 2: hooguit 240 px; Nova mat 9-11 KB)
 
 
-# De drie adressen per pand, met {b} (BBOX in RD) en {ll} (breedte,lengte). Ze staan één keer in
-# de payload; per pand gaan alleen {b} en {ll} mee (VA-39 crit. 5: 500 panden houden de pagina licht).
+def luchtfoto_sjabloon(px: int) -> str:
+    """Het GetMap-adres van PDOK voor een vierkante foto van px pixels, met {b} voor de BBOX."""
+    return (f"{LUCHTFOTO_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS={LUCHTFOTO_LAAG}"
+            f"&STYLES=&CRS=EPSG:28992&BBOX={{b}}&WIDTH={px}&HEIGHT={px}&FORMAT=image/jpeg")
+
+
+# De adressen per pand, met {b} (BBOX in RD) en {ll} (breedte,lengte). Ze staan één keer in de
+# payload; per pand gaan alleen {b} en {ll} mee (VA-39 crit. 5: 500 panden houden de pagina licht).
+# 'mini' is de kaartfoto (VA-71): dezelfde dienst, laag en BBOX als 'foto', alleen kleiner.
 PLEK_SJABLOON = {
-    "foto": (f"{LUCHTFOTO_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=Actueel_orthoHR"
-             "&STYLES=&CRS=EPSG:28992&BBOX={b}&WIDTH=640&HEIGHT=640&FORMAT=image/jpeg"),
+    "foto": luchtfoto_sjabloon(LUCHTFOTO_PX),
+    "mini": luchtfoto_sjabloon(KAARTFOTO_PX),
     "maps": "https://www.google.com/maps/search/?api=1&query={ll}",
     "streetview": "https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={ll}",
 }
@@ -702,6 +715,7 @@ def maak_leads(top: list[dict], landelijk: bool) -> tuple[list[dict], list[list]
     """
     criteria, waarden = Tabel(), Tabel()
     leads = []
+    dp0 = gangbare_peildatum(top)
     for p in top:
         f = {k: round(v) for k, v in p["opp_per_functie"].items() if v}
         sig = [{"t": QUAL_TAG[it["label"]][0], "k": QUAL_TAG[it["label"]][1], "d": it["detail"]}
@@ -727,8 +741,73 @@ def maak_leads(top: list[dict], landelijk: bool) -> tuple[list[dict], list[list]
         }
         if landelijk:
             lead["g"] = gemeente_naam(p.get("gemeente"))  # waarop het gemeentefilter kiest
+            lead["gg"] = 1 if p.get(nederland.IN_GROOT) == "ja" else 0  # filter Gebied (VA-68 crit. 3)
+        # VA-90 bewaart per pand ook zijn pandcategorie en datapeildatum. Meestal is dat de eerste
+        # categorie en de peildatum van de hele lijst (PAYLOAD.bewaar.dp); alleen een afwijking gaat mee.
+        if p.get("pandcategorie") and p["pandcategorie"] != (p["categorieen"] or [None])[0]:
+            lead["pc"] = p["pandcategorie"]
+        if p.get("datapeildatum") != dp0:
+            lead["dp"] = p.get("datapeildatum")
         leads.append(lead)
     return leads, criteria.lijst, waarden.lijst
+
+
+# --------------------------------------------------------------- bewaren en verbergen (VA-90)
+# Ayman: "every pand needs to have a bewaar or verberg button". Bewaard en verborgen staan alleen in
+# de browser (localStorage), op dit apparaat, tot Q35 zegt waar het anders moet (VA-92). Er gaat
+# niets de pagina uit, en niets in de pijplijn leest het: verbergen is geen leveren (VA-6), het
+# verandert geen cijfer. Kopij: Lumi, design/copy-va90.md. Het script vult alleen {adres},
+# {n}, {m} en {totaal} in; het maakt zelf geen zinnen.
+BEWAAR_TEKST = {
+    "bewaar": "Bewaar",
+    "bewaard": "Bewaard",
+    "verberg": "Verberg",
+    "verborgen": "Verborgen",
+    "terug.bewaard": "Druk om niet meer te bewaren",
+    "terug.verborgen": "Druk om weer te tonen",
+    "label.bewaard": "Bewaard",
+    "label.verborgen": "Verborgen",
+    # De toegankelijke naam van de knoppen (aria-label), per stand; aria-pressed blijft.
+    "naam.bewaar": "Bewaar {adres}",
+    "naam.bewaard": "Bewaard, druk om niet meer te bewaren: {adres}",
+    "naam.verberg": "Verberg {adres}",
+    "naam.verborgen": "Verborgen, druk om weer te tonen: {adres}",
+    "apparaat": "Wat je bewaart of verbergt, staat alleen op dit apparaat, in deze browser. Op een ander apparaat "
+                "zie je het niet, ook niet met dezelfde inlog. Wis je de browsergegevens, dan ben je het kwijt.",
+    "apparaat.kort": "Alleen op dit apparaat, in deze browser. Een ander apparaat ziet het niet.",
+    "status.bewaard": "{adres} is bewaard.",
+    "status.niet_bewaard": "{adres} is niet meer bewaard.",
+    "status.verborgen": "{adres} is verborgen.",
+    "status.terug": "{adres} staat weer op de werklijst.",
+    "ongedaan": "Ongedaan maken",
+    "aantal": "{n} panden verborgen",
+    "aantal.een": "1 pand verborgen",
+    "toon": "Toon verborgen panden",
+    "toon.een": "Toon het verborgen pand",
+    "toon.uit": "Verberg ze weer",
+    "toon.uit.een": "Verberg het weer",
+    "geen_opslag": "Deze browser laat het dashboard niets opslaan, dus Bewaar en Verberg werken hier niet. Dat "
+                   "gebeurt bijvoorbeeld in een privévenster, of als opslag voor websites uit staat. Open het "
+                   "dashboard in een gewoon venster om panden te bewaren. De rest van het dashboard werkt gewoon.",
+    # Een lege werklijst omdat alles verborgen is (Lumi §7). m: de panden die de filters halen, verborgen meegeteld.
+    "leeg.verborgen": "Je hebt alle {m} panden verborgen die bij deze filters passen.",
+    "leeg.verborgen.een": "Het enige pand dat bij deze filters past, heb je verborgen.",
+    "leeg.alles_verborgen": "Je hebt alle {totaal} panden van de werklijst van deze maand verborgen.",
+}
+
+
+def gangbare_peildatum(top: list[dict]) -> str | None:
+    """De datapeildatum die de meeste panden van de lijst hebben (bij gelijk: de eerste in de lijst)."""
+    tellen: dict = {}
+    for p in top:
+        tellen[p.get("datapeildatum")] = tellen.get(p.get("datapeildatum"), 0) + 1
+    return max(tellen, key=tellen.get) if tellen else None
+
+
+def bewaar_blok(top: list[dict]) -> dict:
+    """PAYLOAD.bewaar: de teksten en de peildatum die een lead zonder eigen 'dp' heeft."""
+    return {"tekst": BEWAAR_TEKST, "dp": gangbare_peildatum(top)}
+# --------------------------------------------------------------- einde bewaren en verbergen (VA-90)
 
 
 def lijst_feiten(top: list[dict]) -> list[dict]:
@@ -743,19 +822,118 @@ def lijst_feiten(top: list[dict]) -> list[dict]:
     ]
 
 
-# --------------------------------------------------------------- gemeentefilter (VA-39 crit. 3)
-# Lumi's kopij VA-39. Alleen gemeenten die op de werklijst staan; per groep op alfabet.
+# --------------------------------------------------------------- werklijstfilters (VA-39, VA-68)
+# Lumi's kopij VA-39 en design/filters.html (VA-68). Alleen gemeenten die op de werklijst staan;
+# per groep op alfabet.
 FILTER_TEKST = {
     "label": "Gemeente",
     "alle": "Alle gemeenten ({n})",
     "optie": "{gemeente} ({aantal})",
     "groep.groot": "De {aantal_groot} grootste gemeenten",
     "groep.elders": "Elders in Nederland",
-    "resultaat": "{aantal} panden in {gemeente} · Alle gemeenten: {n} panden",
-    "resultaat.een": "1 pand in {gemeente}",
-    "leeg": "Er staan geen panden uit {gemeente} op de werklijst van deze maand.",
-    "terug": "Toon alle gemeenten",
 }
+# De zinnen van het filterpaneel. Hoeveel panden een combinatie geeft, weet Python niet vooraf:
+# het script vult alleen {n} (en {aantal} bij een gemeente) in, met nl(), en kiest de vorm voor
+# 1 en 0 uit wat hier staat (Lumi, bouwnotitie 2). {totaal} vult lijst_tekst() hier al in.
+LIJST_TEKST = {
+    "knop": "Filters",
+    "actief": " ({n} actief)",
+    "telling.alle": "Alle {totaal} panden",
+    "telling": "{n} van {totaal} panden",
+    "toon": "Toon {n} panden",
+    "toon.een": "Toon 1 pand",
+    "toon.nul": "Sluit filters",
+    "categorie": "Categorie",
+    "signaal": "Signaal",
+    "gebied": "Gebied",
+    "optie.aantal": " panden",
+    "chips": "Actieve filters",
+    "chip.gemeente": "Gemeente {gemeente}",
+    "chip.categorie": "Categorie {letter}",
+    "chip.naam": "Verwijder filter: {chip}",
+    "wis": "Wis alle filters",
+    "leeg": "Geen enkel pand op de werklijst van deze maand past bij deze filters. Verwijder hierboven "
+            "een filter, of wis ze allemaal.",
+}
+# Signaal: (waarde in het adres, sig.k van de kaart, label). Gefilterd op de sleutel, nooit op de tekst.
+SIGNALEN = [("leeg", "leeg", "Leegstaand"), ("verbouwing", "bouw", "In verbouwing")]
+GEBIEDEN = ("groot", "elders")  # waarde in het adres; label uit FILTER_TEKST['groep.*']
+
+# De getalfilters (VA-69) en het sorteren (VA-70), Lumi's kopij uit design/filters.html. Grenzen tellen
+# mee. Een jaartal gaat nooit door de puntopmaak: 1939, niet 1.939 ('jaar': het script laat het onbewerkt),
+# en er staat geen 'jaar' achter het veld (Lumi: "1939 jaar" is een leeftijd).
+BEREIK_TEKST = {
+    "hint": "Op de werklijst: {min}–{max}",
+    "van": "van",
+    "vanaf": "vanaf",
+    "tm": "tot en met",
+    "uit": " Dit filter telt nu niet mee.",
+    "omgekeerd": "Van is hoger dan tot en met.",
+    "chip.van.tm": "{naam} {van}–{tm}{eenheid}",
+    "chip.van": "{naam} vanaf {van}{eenheid}",
+    "chip.tm": "{naam} tot en met {tm}{eenheid}",
+}
+# k: sleutel in het paneel; veld: op de kaart (LEADS); url: adresparameters (van, tot en met).
+# Score heeft alleen 'vanaf' en een bovengrens van de index (/100).
+BEREIKEN = [
+    {"k": "score", "veld": "s100", "label": "Score-index (/100)", "url": ["min_score"], "max": 100,
+     "chip": "Score vanaf {van}", "fout": "Vul een score van 0 tot en met 100 in."},
+    {"k": "bj", "veld": "bj", "label": "Bouwjaar", "url": ["bouwjaar_van", "bouwjaar_tm"], "jaar": True,
+     "naam": "Bouwjaar", "eenheid": "", "fout": "Vul een jaartal in, bijvoorbeeld 1939."},
+    {"k": "m2", "veld": "m2", "label": "Oppervlakte (m²)", "url": ["m2_van", "m2_tm"],
+     "naam": "Oppervlakte", "eenheid": " m²", "fout": "Vul een heel getal in, bijvoorbeeld 250."},
+    {"k": "vbo", "veld": "vbo", "label": "Aantal VBO's", "url": ["vbo_van", "vbo_tm"],
+     "naam": "Aantal VBO's", "eenheid": "", "fout": "Vul een heel getal in, bijvoorbeeld 4."},
+    {"k": "adr", "veld": "adr", "label": "Aantal adressen", "url": ["adressen_van", "adressen_tm"],
+     "naam": "Aantal adressen", "eenheid": "", "fout": "Vul een heel getal in, bijvoorbeeld 4."},
+]
+SORTEER_TEKST = {"sorteer": "Sorteer op", "volgorde": "Volgorde"}
+# (waarde in het adres, veld op de kaart, label, standaardrichting, {richting: label}). De standaard
+# staat eerst; zonder 'sorteer' in het adres is het score, hoogste eerst: de volgorde van de werklijst.
+SORTEREN = [
+    ("score", "s100", "Score-index", "af", {"af": "Hoogste eerst", "op": "Laagste eerst"}),
+    ("bouwjaar", "bj", "Bouwjaar", "op", {"op": "Oudste eerst", "af": "Nieuwste eerst"}),
+    ("oppervlakte", "m2", "Oppervlakte", "af", {"af": "Grootste eerst", "op": "Kleinste eerst"}),
+]
+
+
+def lijst_tekst(totaal: int) -> dict:
+    """Wat het script van het paneel invult, met het totaal van de werklijst al ingevuld."""
+    t, tot = LIJST_TEKST, nl_getal(totaal)
+    return {"actief": t["actief"], "alle": t["telling.alle"].format(totaal=tot),
+            "telling": t["telling"].replace("{totaal}", tot), "toon": t["toon"], "toonEen": t["toon.een"],
+            "toonNul": t["toon.nul"], "gemAlle": FILTER_TEKST["alle"], "gemOptie": FILTER_TEKST["optie"],
+            "chipGemeente": t["chip.gemeente"], "chipNaam": t["chip.naam"], "wis": t["wis"],
+            "omgekeerd": BEREIK_TEKST["omgekeerd"] + BEREIK_TEKST["uit"]}
+
+
+def bereik_getal(b: dict, v) -> str:
+    """Een grens zoals de pagina hem toont: een jaartal onbewerkt, de rest met de duizendtallenpunt."""
+    return str(v) if b.get("jaar") else nl_getal(v)
+
+
+def bereik_filter(leads: list[dict]) -> dict:
+    """
+    De getalvelden en het sorteren voor het script (VA-69, VA-70): per veld de hint met wat er op de
+    lijst van deze maand staat, de foutmelding en de chipzinnen met naam en eenheid al ingevuld. Het
+    script vult alleen {van} en {tm} in, een jaartal onbewerkt ('jaar').
+    """
+    t, bereik = BEREIK_TEKST, []
+    for b in BEREIKEN:
+        waarden = [d[b["veld"]] for d in leads if d.get(b["veld"]) is not None]
+        hint = (t["hint"].format(min=bereik_getal(b, min(waarden)), max=bereik_getal(b, max(waarden)))
+                if waarden else "")
+        if "chip" in b:
+            chips = {"van": b["chip"]}
+        else:
+            vul = lambda s: s.replace("{naam}", b["naam"]).replace("{eenheid}", b["eenheid"])  # noqa: E731
+            chips = {"vanTm": vul(t["chip.van.tm"]), "van": vul(t["chip.van"]), "tm": vul(t["chip.tm"])}
+        bereik.append({"k": b["k"], "veld": b["veld"], "url": b["url"], "jaar": bool(b.get("jaar")),
+                       "max": b.get("max"), "label": b["label"], "hint": hint, "chips": chips,
+                       "fout": b["fout"] + t["uit"]})
+    sorteer = {w: {"veld": veld, "label": label, "std": std, "opties": [[r, namen[r]] for r in namen]}
+               for w, veld, label, std, namen in SORTEREN}
+    return {"bereik": bereik, "sorteer": sorteer}
 
 
 def _alfabet(naam: str) -> str:
@@ -765,47 +943,114 @@ def _alfabet(naam: str) -> str:
 
 def gemeente_filter(werklijst: list[dict], aantal_groot: int | None) -> dict:
     """
-    De keuzes van het filter: per groep (de grote gemeenten, de rest) elke gemeente op de lijst,
-    met hoeveel panden en de zin die het filter dan toont. Alle tellingen hier, niet in de pagina.
+    De keuzes van de filters: per groep (de grote gemeenten, de rest) elke gemeente op de lijst met
+    hoeveel panden, de twee gebieden en de teksten voor het script. De tellingen hier gelden voor de
+    hele lijst; zodra een ander filter aan staat, telt het script opnieuw (VA-68 crit. 6).
     """
     n = len(werklijst)
     tellen: dict[tuple[str, bool], int] = {}
     for p in werklijst:
         sleutel = (gemeente_naam(p.get("gemeente")), p.get(nederland.IN_GROOT) == "ja")
         tellen[sleutel] = tellen.get(sleutel, 0) + 1
+    gebied = {"groot": FILTER_TEKST["groep.groot"].format(aantal_groot=nl_getal(aantal_groot)),
+              "elders": FILTER_TEKST["groep.elders"]}
     groepen = []
-    for groot, label in ((True, FILTER_TEKST["groep.groot"]), (False, FILTER_TEKST["groep.elders"])):
+    for groot, label in ((True, gebied["groot"]), (False, gebied["elders"])):
         namen = sorted((g for g, gr in tellen if gr == groot), key=_alfabet)
         if not namen:
             continue
-        opties = []
-        for g in namen:
-            a = tellen[(g, groot)]
-            uitkomst = (FILTER_TEKST["resultaat.een"] if a == 1 else FILTER_TEKST["resultaat"]).format(
-                aantal=nl_getal(a), gemeente=g, n=nl_getal(n))
-            opties.append({"naam": g, "aantal": a,
-                           "tekst": FILTER_TEKST["optie"].format(gemeente=g, aantal=nl_getal(a)),
-                           "uitkomst": uitkomst})
-        groepen.append({"label": label.format(aantal_groot=nl_getal(aantal_groot)), "opties": opties})
+        opties = [{"naam": g, "aantal": tellen[(g, groot)],
+                   "tekst": FILTER_TEKST["optie"].format(gemeente=g, aantal=nl_getal(tellen[(g, groot)]))}
+                  for g in namen]
+        groepen.append({"label": label, "opties": opties})
     return {"label": FILTER_TEKST["label"], "alle": FILTER_TEKST["alle"].format(n=nl_getal(n)),
-            "groepen": groepen, "leeg": FILTER_TEKST["leeg"], "terug": FILTER_TEKST["terug"]}
+            "groepen": groepen, "gebied": [[w, gebied[w]] for w in GEBIEDEN], "tekst": lijst_tekst(n)}
 
 
-def filter_html(f: dict | None) -> str:
-    """Het filter boven de werklijst; zonder filter (Delft) niets."""
-    if not f:
-        return ""
+def filter_html(f: dict | None, fotobron: str | None = None) -> str:
+    """
+    Wat boven de kaarten staat (Lumi, design/filters.html bouwnotitie 1): de balk met de knop
+    Filters, de telling en het sorteren (VA-70), het paneel met de getalvelden (VA-69), de actieve
+    filters, de bronregel van de kaartfoto's en de lege lijst. Zonder filter (Delft) alleen de bronregel.
+    """
     e = lambda t: escape(str(t), quote=True)  # noqa: E731
-    groepen = "".join(
+    bron = f'<p class="wl-bron">{e(fotobron)}</p>' if fotobron else ""
+    if not f:
+        return bron
+    t = LIJST_TEKST
+
+    def optie(groep: str, waarde: str, naam: str, chip: str, kleur: str | None = None) -> str:
+        merk = (f'<i class="wl-kleur" style="background:{kleur}" aria-hidden="true"></i>'
+                f'<b class="wl-letter">{waarde}</b>') if kleur else ""
+        return (f'<label class="wl-optie" data-groep="{groep}" data-waarde="{waarde}" data-chip="{e(chip)}">'
+                f'<input type="checkbox" name="wl-{groep}" value="{waarde}">{merk}'
+                f'<span class="wl-naam">{e(naam)}</span><span class="wl-n"><span class="wl-getal"></span>'
+                f'<span class="vh">{e(t["optie.aantal"])}</span></span></label>')
+
+    def groep(naam: str, opties: str, heel: bool = False) -> str:
+        return (f'<fieldset class="wl-groep{" wl-heel" if heel else ""}"><legend>{e(naam)}</legend>'
+                f'<div class="wl-opties">{opties}</div></fieldset>')
+
+    cats = "".join(optie("cat", k, CATEGORIE_NAAM[k], t["chip.categorie"].format(letter=k), CATEGORIE_KLEUR[k])
+                   for k in "ABCDE")
+    sigs = "".join(optie("sig", w, label, label) for w, _, label in SIGNALEN)
+    gebs = "".join(optie("geb", w, label, label) for w, label in f["gebied"])
+    gemeenten = "".join(
         f'<optgroup label="{e(g["label"])}">' + "".join(
-            f'<option value="{e(o["naam"])}" data-uitkomst="{e(o["uitkomst"])}">{e(o["tekst"])}</option>'
-            for o in g["opties"]) + "</optgroup>"
+            f'<option value="{e(o["naam"])}">{e(o["tekst"])}</option>' for o in g["opties"]) + "</optgroup>"
         for g in f["groepen"])
-    return (f'<div class="filter"><label for="gemeente">{e(f["label"])}</label>'
-            f'<select id="gemeente"><option value="">{e(f["alle"])}</option>{groepen}</select>'
-            '<p class="filter-uitkomst" id="gemeente-uitkomst" aria-live="polite"></p></div>'
-            f'<div class="filter-leeg" id="gemeente-leeg" data-tekst="{e(f["leeg"])}" hidden>'
-            f'<p></p><button class="filter-terug" type="button">{e(f["terug"])}</button></div>')
+
+    def bereik(b: dict) -> str:
+        # type="text" en geen type="number": "abc" moet een melding kunnen geven (VA-69 crit. 5).
+        i, bt = f'wl-{b["k"]}', BEREIK_TEKST
+        veld = lambda x, label: (  # noqa: E731
+            f'<div><label for="{i}-{x}">{e(label)}</label><input id="{i}-{x}" data-k="{b["k"]}" data-x="{x}" '
+            'type="text" inputmode="numeric" autocomplete="off" enterkeyhint="done" maxlength="7" '
+            f'aria-describedby="{i}-hint {i}-fout"></div>')
+        enkel = len(b["url"]) == 1
+        velden = veld("van", bt["vanaf"]) if enkel else veld("van", bt["van"]) + veld("tm", bt["tm"])
+        return (f'<fieldset class="wl-bereik{" enkel" if enkel else ""}" data-k="{b["k"]}"><legend>{e(b["label"])}'
+                f'</legend><p class="wl-hint" id="{i}-hint">{e(b["hint"])}</p><div class="wl-invoer">{velden}</div>'
+                f'<p class="wl-fout" id="{i}-fout" hidden></p></fieldset>')
+
+    bereiken = "".join(bereik(b) for b in f.get("bereik") or [])
+    bereiken = f'<div class="wl-bereiken">{bereiken}</div>' if bereiken else ""
+    s = f.get("sorteer")
+    sorteer = ('<div class="wl-sorteer"><div class="wl-veld"><label for="wl-sorteer">'
+               f'{e(SORTEER_TEKST["sorteer"])}</label><select id="wl-sorteer">'
+               + "".join(f'<option value="{w}">{e(x["label"])}</option>' for w, x in s.items())
+               + f'</select></div><div class="wl-veld"><label for="wl-volgorde">{e(SORTEER_TEKST["volgorde"])}'
+               '</label><select id="wl-volgorde">'
+               + "".join(f'<option value="{r}">{e(n)}</option>' for r, n in next(iter(s.values()))["opties"])
+               + '</select></div></div>') if s else ""
+    return ('<div class="wl-balk"><button type="button" class="wl-knop" id="wl-knop" aria-expanded="false" '
+            'aria-controls="wl-paneel"><span class="wl-ico" aria-hidden="true"></span>'
+            f'<span>{e(t["knop"])}</span><span class="wl-aantal" aria-hidden="true" hidden></span>'
+            '<span class="vh wl-actief"></span><span class="wl-pijl" aria-hidden="true"></span></button>'
+            f'<p class="wl-telling" aria-live="polite">{e(f["tekst"]["alle"])}</p>{sorteer}</div>'
+            '<div class="wl-paneel" id="wl-paneel" role="group" aria-labelledby="wl-knop" hidden>'
+            f'<div class="wl-keuzes">{groep(t["categorie"], cats, heel=True)}{groep(t["signaal"], sigs)}'
+            f'<div class="wl-veld wl-gem"><label for="gemeente">{e(f["label"])}</label>'
+            f'<select id="gemeente"><option value="">{e(f["alle"])}</option>{gemeenten}</select></div>'
+            f'{groep(t["gebied"], gebs)}</div>{bereiken}'
+            '<div class="wl-paneelvoet"><button type="button" class="wl-toon"></button></div></div>'
+            f'<div class="wl-chips" role="group" aria-label="{e(t["chips"])}" hidden></div>{bron}'
+            f'<div class="wl-leeg" hidden><p>{e(t["leeg"])}</p>'
+            f'<button type="button" class="wl-wis">{e(t["wis"])}</button></div>')
+
+
+# De kleine luchtfoto op elke kaart (VA-71, Lumi's kopij). De bronregel staat één keer boven de lijst.
+KAARTFOTO_TEKST = {
+    "alt": "Luchtfoto van {adres}",
+    "mislukt": "Luchtfoto kon niet laden",
+    "geen": "Locatie onbekend",
+    "bron": "Luchtfoto's: Beeldmateriaal.nl, via PDOK · open data (CC BY 4.0).",
+}
+
+
+def kaartfoto_tekst() -> dict:
+    """De teksten die het script op een kaart zet; de bronregel staat al in de HTML."""
+    return {k: v for k, v in KAARTFOTO_TEKST.items() if k != "bron"}
 
 
 CATEGORIE_NAAM = {"A": "Winkel + wonen", "B": "Bedrijf/kantoor + wonen",
@@ -905,7 +1150,7 @@ def bouw_payload_gebied(cfg: dict) -> dict:
     budget = cfg["score"].get("schaal_max", 26)
     return {"kpi": kpi, "cats": cats, "facts": facts, "leads": leads,
             "velden": detail_labels(aantal_groot), "criteria": criteria, "waarden": waarden, "plek": PLEK_SJABLOON,
-            "filter": None,
+            "filter": None, "kaartfoto": kaartfoto_tekst(), "bewaar": bewaar_blok(top),
             "budget": budget, "gebied": label, "koppen": koppen(label, drempel, len(leads)),
             "pagina": pagina("proefresultaat", f"Levrai · Pandenselectie Dashboard — {label}",
                              "Proefselectie in cijfers",
@@ -989,7 +1234,8 @@ def bouw_payload_landelijk(cfg: dict) -> dict:
     return {"kpi": kpi, "cats": cats, "facts": facts, "leads": leads,
             "velden": detail_labels((cfg.get("drempels") or {}).get("aantal_grote_gemeenten")),
             "criteria": criteria, "waarden": waarden, "plek": PLEK_SJABLOON,
-            "filter": gemeente_filter(lijst, groot) if lijst else None,
+            "filter": {**gemeente_filter(lijst, groot), **bereik_filter(leads)} if lijst else None,
+            "kaartfoto": kaartfoto_tekst(), "bewaar": bewaar_blok(lijst),
             "budget": cfg["score"].get("schaal_max", 26), "gebied": label,
             "koppen": koppen(label, drempel, n if gelezen is not None else None,
                              {"maand": maand_voluit(t.get("maand")), "n_groot": nl_getal(n_groot),
@@ -1001,7 +1247,10 @@ def bouw_payload_landelijk(cfg: dict) -> dict:
             "bron": bron, "bron_regels": bron_regels(bron), "bron_reden": bron_reden,
             "peildatum": peildatum(bron), "peildatum_tip": peildatum_tip(bron, bron_reden),
             "kantoor": kantoor_landelijk(bron, t if gelezen is not None else None,
-                                         n if gelezen is not None else None, cfg)}
+                                         n if gelezen is not None else None, cfg),
+            # VA-85: de landkaart boven het kantoor; de 25 grootste uit het CBS-bestand van VA-65.
+            "kaart": (landkaart(lijst, t, bron, cbs_gemeenten.grootste(groot), lees_kaart())
+                      if gelezen is not None and groot else None)}
 
 
 # --------------------------------------------------------------- menu en koppen (VA-63, VA-64)
@@ -1018,9 +1267,8 @@ MENU = [
 KANTOORMANAGER = "Kantoormanager"
 # {gebied}, {drempel} en {n} vult koppen() in; het script plaatst niets.
 KOP_TEKST = {
-    "kantoor.titel": "Zo loopt de pandenselectie",
-    "kantoor.zin": "Elke medewerker is een stap van de pandenselectie. Wat ze zeggen, komt uit de "
-                   "cijfers van dit dashboard.",
+    # Op Ayman's verzoek geen zichtbare kop of uitlegzin boven de band; de kop is er voor schermlezers.
+    "kantoor.titel": "Kantoor",
     "kerncijfers.titel": "{gebied} in vier cijfers",
     "kerncijfers.zin": "Van de ingelezen verblijfsobjecten tot de werklijst met score {drempel} of hoger.",
     "voorraad.titel": "Voorraad en proefselectie",
@@ -1042,8 +1290,8 @@ KOP_TEKST_LANDELIJK = {
     "werklijst.titel": "Werklijst {maand}",
     "werklijst.zin": "De {n} hoogst scorende panden van {gebied}, klaar voor je visuele controle. Open een "
                      "pand voor alle gegevens.",
-    "werklijst.meta": "{n} panden · {n_groot} uit de {aantal} grootste gemeenten · {n_rest} elders · "
-                      "gesorteerd op score-index",
+    # Lumi, VA-70: "· gesorteerd op score-index" vervalt; het sorteerveld zegt het nu zelf.
+    "werklijst.meta": "{n} panden · {n_groot} uit de {aantal} grootste gemeenten · {n_rest} elders",
 }
 
 
@@ -1111,6 +1359,145 @@ def werkbalk_html(tekst: dict | None) -> str:
     return "".join(uit)
 
 
+# --------------------------------------------------------------- landkaart (VA-85)
+# Lumi's drie richtingen uit design/richting.html samen in één navy band, alleen voor heel Nederland
+# (Ayman: "combineer ze", spectaculairder): C's landkaart, B's brein rond de kern in de
+# Noordzee, en A's stroom die langs de vijf glazen cijfers dunner wordt. Haar kopij staat hier als data; Python
+# maakt elk getal en elke zin, het script tekent alleen (les van VA-31). De vorm van het land en de
+# gemeentepunten komen uit referentie/kaart_nl_<jaar>.json (kaart_nl.py); de panden uit de werklijst.
+KAART_TEKST = {
+    "trap.label": "Van BAG naar werklijst",
+    "trap.vbo": "verblijfsobjecten",
+    "trap.panden": "panden",
+    "trap.a_e": "in A–E",
+    "trap.geschikt": "score ≥ {drempel}",
+    "trap.werklijst": "op je werklijst",
+    "legenda.cat": "in A–E",
+    "legenda.ring": "score ≥ {drempel}",
+    "legenda.wl": "op je werklijst",
+    "aria": "Selectie op de BAG van {datum}: {vbo} verblijfsobjecten, {panden} panden, {a_e} in categorie A "
+            "tot en met E, {geschikt} met score {drempel} of hoger, {werklijst} op je werklijst: {n_groot} uit de "
+            "{aantal} grootste gemeenten en {n_rest} elders. {grootste}.",
+    "kern.tip": "Je werklijst · {werklijst} panden: {n_groot} uit de {aantal} grootste gemeenten, {n_rest} elders",
+    "kern.woord": "werklijst",
+    "gemeente.tip": "{naam} · {n} {panden} op je werklijst",
+    "cat.tip": "Categorie {k} · {naam} · {n} panden",   # Lumi, concept B
+    "stroom.noot": "De stroom is niet op schaal, de cijfers wel.",   # Lumi, concept A
+}
+TRAP = ("vbo", "panden", "a_e", "geschikt", "werklijst")  # de vijf glazen cijfers, in deze volgorde
+KAART_KERN = (53.02, 3.74)  # breedte, lengte: de kern in de Noordzee, waar Lumi hem zette
+KAART_LABELS = 4            # zoveel gemeenten krijgen naam en aantal op de kaart (Lumi: de vier grootste)
+KAART_STAP = 100            # coördinaten in honderdsten van een graad: ongeveer 1 km
+
+
+def nl_datum_voluit(iso: str | None) -> str:
+    """'JJJJ-MM-DD' -> 'D maand JJJJ', maand voluit (harde spaties); onleesbaar -> 'ophaaldatum onbekend'."""
+    dag = lees_datum(iso)
+    if dag is None:
+        return "ophaaldatum onbekend"
+    return f"{dag.day}{NBSP}{MAANDEN_VOL[dag.month - 1]}{NBSP}{dag.year}"
+
+
+def _kort(breedte: float, lengte: float) -> list[int]:
+    """[breedte, lengte] in honderdsten van een graad vanaf 50° N, 3° O (zo staan ze in de payload)."""
+    return [round((breedte - 50) * KAART_STAP), round((lengte - 3) * KAART_STAP)]
+
+
+def lees_kaart(pad: Path | None = None) -> dict | None:
+    """Het nieuwste kaartbestand van kaart_nl.py, of None (dan tekent de kaart geen land en geen gemeenten)."""
+    pad = pad or kaart_nl.nieuwste()
+    if pad is None or not pad.is_file():
+        return None
+    return json.loads(pad.read_text(encoding="utf-8"))
+
+
+def kaart_bron(kaart: dict | None) -> str:
+    """De bron van de landvorm, zoals hij als commentaar in de pagina staat."""
+    b = (kaart or {}).get("bron")
+    if not b:
+        return "geen kaartbestand in referentie/, dus geen landvorm en geen gemeenten"
+    return f"{b['titel']} ({b['dienst']}, lagen {', '.join(b['lagen'])}), {b['licentie']}, opgehaald {b['opgehaald']}"
+
+
+def landkaart(lijst: list[dict], t: dict, bron: list[dict] | None, grote: list[dict],
+              kaart: dict | None) -> dict:
+    """
+    PAYLOAD.kaart: het land, de grootste gemeenten, één stip per werklijstpand (afgerond op
+    ongeveer 1 km) en alle teksten. 'pt' is plat, vier getallen per pand: breedte, lengte, kleur
+    (0-4 = categorie A-E, +5 = ring voor score ≥ drempel) en gemeente (index in 'gm', -1 = elders).
+    """
+    drempel = t.get("drempel")
+    codes = {g["gemeentecode"]: i for i, g in enumerate(grote)}
+    punten = (kaart or {}).get("gemeenten") or {}
+    tellen = [0] * len(grote)
+    pt = []
+    for p in lijst:
+        i = codes.get(p.get("gemeentecode"), -1)
+        if i >= 0:
+            tellen[i] += 1
+        plek = pand_plek(p)
+        if plek is None:
+            continue  # geen bruikbare x,y: geen stip, wel geteld
+        breedte, lengte = (float(v) for v in plek["ll"].split(","))
+        kleur = "ABCDE".index(p["pandcategorie"]) + (5 if drempel is not None and p["leadscore"] >= drempel else 0)
+        pt += _kort(breedte, lengte) + [kleur, i]
+    gm = []
+    for g, n in zip(grote, tellen):
+        naam = gemeente_naam(g["gemeente"])
+        plek = punten.get(g["gemeentecode"])
+        gm.append({"ll": _kort(*plek) if plek else None, "n": n, "naam": naam, "v": nl_getal(n), "lab": 0,
+                   "tip": KAART_TEKST["gemeente.tip"].format(naam=naam, n=nl_getal(n),
+                                                             panden="pand" if n == 1 else "panden")})
+    grootste = sorted((g for g in gm if g["n"]), key=lambda g: -g["n"])[:KAART_LABELS]
+    for g in grootste:
+        g["lab"] = 1
+    trap = {k: nl_getal(t.get(k)) for k in TRAP}
+    woorden = {**trap, "drempel": nl_getal(drempel), "n_groot": nl_getal(t.get("werklijst_25")),
+               "n_rest": nl_getal(t.get("werklijst_overig")), "aantal": nl_getal(len(grote)),
+               "datum": nl_datum_voluit(bron[0].get("ophaaldatum")) if bron else nl_datum_voluit(None),
+               "grootste": ", ".join(f"{g['naam']} {g['v']}" for g in grootste)}
+    tekst = {k: v.format(**woorden) for k, v in KAART_TEKST.items()
+             if k not in ("gemeente.tip", "cat.tip")}  # die twee vullen gm en cats per stuk
+    per_cat = t.get("categorieen") or {}
+    cats = [{"k": c, "n": per_cat.get(c) or 0,
+             "tip": KAART_TEKST["cat.tip"].format(k=c, naam=CATEGORIE_NAAM[c], n=nl_getal(per_cat.get(c)))}
+            for c in "ABCDE"]
+    # De stroom (A): de ruwe aantallen voor hoe dun hij wordt, en per cijfer de lengte van zijn balk
+    # op een logaritmische schaal (9.998.456 is 100 %, 1 zou 0 % zijn). Getoond worden alleen de teksten.
+    ruw = [t.get(c) or 0 for c in TRAP]
+    top = math.log10(max(ruw[0], 10))
+    breed = [round(100 * math.log10(max(n, 1)) / top) for n in ruw]
+    land = [[c for la, lo in ring for c in _kort(la, lo)] for ring in (kaart or {}).get("land") or []]
+    return {"land": land, "gm": gm, "pt": pt, "trap": trap, "tekst": tekst, "bron": kaart_bron(kaart),
+            "cats": cats, "ruw": ruw, "breed": breed,
+            "kern": {"ll": _kort(*KAART_KERN), "getal": trap["werklijst"], "woord": tekst["kern.woord"],
+                     "tip": tekst["kern.tip"]}}
+
+
+def band_html(k: dict | None) -> tuple[str, str, str]:
+    """
+    (klasse, trap, kaart): wat de band in het kantoordeel zet, na de kop. Zonder PAYLOAD.kaart (een
+    gebied als Delft) drie keer niets, en blijft de kop van het kantoor zoals hij was.
+    Eén canvas ligt onder de hele band; .kaart-vlak houdt alleen de plek voor de kaart vrij.
+    """
+    if not k:
+        return "", "", ""
+    t = k["tekst"]
+    items = []
+    for s, w in zip(TRAP, k["breed"]):
+        klasse = ' class="trap-wl"' if s == "werklijst" else ""
+        items.append(f'<li{klasse} style="--w:{w}%"><b>{escape(k["trap"][s])}</b><span>{escape(t["trap." + s])}</span></li>')
+    legenda = "".join(f'<span><i class="lg-{s}"></i>{escape(t["legenda." + s])}</span>' for s in ("cat", "ring", "wl"))
+    trap = (f'\n      <div class="trap-blok"><ol class="trap" aria-label="{escape(t["trap.label"])}">{"".join(items)}</ol>'
+            f'<p class="stroom-noot">{escape(t["stroom.noot"])}</p></div>')
+    kaart = (f'\n      <!-- Landkaart (VA-85). Landvorm en gemeentepunten: {escape(k["bron"])}. '
+             'De stippen: de panden van de werklijst, afgerond op ongeveer 1 km. -->\n'
+             f'      <canvas class="band-doek" id="landkaart" role="img" aria-label="{escape(t["aria"])}"></canvas>'
+             '<div class="kaart-tip" id="kaartTip" hidden></div>\n'
+             f'      <figure class="kaart"><div class="kaart-vlak"></div><figcaption class="legenda">{legenda}</figcaption></figure>')
+    return " band", trap, kaart
+
+
 TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboard" subtitle="__LABEL__ · 20-pand proefresultaat met score-opbouw" -->
 <!doctype html>
 <html lang="nl" data-theme="light"><!-- VA-66: altijd licht openen (Ayman); Thema wisselt -->
@@ -1157,6 +1544,18 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     --nav-tekst:#c6d3e4; --nav-label:#9fb3cc;
     --nav-hover:rgba(255,255,255,.08); --nav-actief:rgba(255,255,255,.14); --nav-lijn:rgba(255,255,255,.10);
   }
+  /* Landkaart (VA-85, Lumi #h-tokens): alleen mengsels van tokens die er al zijn, geen nieuwe kleur.
+     Ze volgen --brand en --s1, dus de band wordt donker met het thema. */
+  :root{
+    --brand-2:color-mix(in srgb,var(--brand) 78%,var(--s1));
+    --held:linear-gradient(155deg,var(--brand) 0%,var(--brand) 35%,var(--brand-2) 100%);
+    --gloed:color-mix(in srgb,var(--s1) 40%,transparent);
+    --schaduw-hoog:0 1px 2px rgba(11,11,11,.05),0 28px 56px -28px color-mix(in srgb,var(--brand) 60%,transparent);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])){--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9)}
+  }
+  :root[data-theme="dark"]{--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9)}
 
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
@@ -1271,11 +1670,12 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   .note{margin-top:14px;font-size:11.5px;color:var(--muted);line-height:1.5}
 
   .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
-  .card{background:var(--surface);border:1px solid var(--ring);border-radius:14px;padding:16px 17px;
-    box-shadow:var(--shadow);display:flex;flex-direction:column;gap:11px}
-  .card .rowtop{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
-  .card .addr{font-size:14.5px;font-weight:700;letter-spacing:-.01em}
-  .card .lid{font-size:11px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+  .card{container:kaart / inline-size;background:var(--surface);border:1px solid var(--ring);border-radius:14px;
+    padding:16px 17px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:11px;min-width:0}
+  .card-top{display:grid;grid-template-columns:100px minmax(0,1fr) auto;gap:12px;align-items:start}
+  .card-kern{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .card .addr{font-size:14.5px;font-weight:700;letter-spacing:-.01em;overflow-wrap:anywhere}
+  .card .lid{font-size:11.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
   .score{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;
     width:56px;height:56px;border-radius:14px;background:var(--brand);color:#fff}
   .score b{font-size:22px;font-weight:800;line-height:1}
@@ -1456,6 +1856,67 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   .pk-noot{flex-basis:100%;color:var(--ink-2)}
   /* ===================== einde KANTOOR3D-blok ===================== */
 
+  /* =====================================================================
+     LANDKAART (VA-85): Lumi's concepten A, B en C samen in één navy band boven het kantoor.
+     Eén canvas onder de hele band tekent het raster, de stroom langs de cijfers (A), het brein rond
+     de kern (B) en de kaart (C); de kop, de glazen cijfers en de legenda zijn gewone HTML erboven.
+     Let op VA-64 crit. 13: met deze band staat de werkbalk van het kantoor op 1280 × 800 niet meer
+     bij het laden in beeld. Het kantoor zelf blijft even groot en altijd zichtbaar.
+     ===================================================================== */
+  .band{position:relative;isolation:isolate;overflow:hidden;margin:-26px -28px 0;padding:24px 28px 64px;
+    background:var(--held);color:#fff;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,46%);
+    grid-template-rows:auto 1fr;grid-template-areas:"kop kaart" "trap kaart";gap:18px 28px}
+  .band::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.6;
+    background:radial-gradient(42% 70% at 74% 40%,var(--gloed),transparent 70%),
+      radial-gradient(32% 55% at 8% 100%,color-mix(in srgb,var(--s3) 16%,transparent),transparent 70%)}
+  .band>*{position:relative;z-index:1;min-width:0}
+  .band>canvas.band-doek{position:absolute;inset:0;z-index:0;width:100%;height:100%;display:block;color:var(--brand-2)}
+  .band .kop{grid-area:kop;margin:0;gap:6px}
+  .band .kruimel{color:var(--nav-label)}
+  .band .kruimel b{color:#fff}
+  .band h1{color:#fff;font-size:32px}
+  .band .kop-zin{color:var(--nav-tekst)}
+  .band .pill{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.14);color:var(--nav-tekst)}
+  .band + .pk{position:relative;z-index:2;margin-top:-40px;box-shadow:var(--schaduw-hoog)}
+  /* De vijf glazen cijfers (A): onder elkaar, links een kanaal waar de stroom langs loopt. */
+  .trap-blok{grid-area:trap;align-self:end}
+  .trap{list-style:none;margin:0;padding:0 0 0 26px;display:flex;flex-direction:column;gap:7px;max-width:440px}
+  .trap li{position:relative;overflow:hidden;display:flex;align-items:baseline;gap:12px;padding:9px 14px 11px;
+    border-radius:12px;font-size:12.5px;color:var(--nav-tekst);background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.13);box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  .trap li::after{content:"";position:absolute;left:0;bottom:0;height:2px;width:var(--w);border-radius:0 2px 2px 0;
+    background:linear-gradient(90deg,var(--s1),var(--s3));opacity:.85}
+  .trap b{min-width:7.2ch;color:#fff;font-size:21px;font-weight:750;letter-spacing:-.01em;font-variant-numeric:tabular-nums;text-align:right}
+  .trap li.trap-wl{background:color-mix(in srgb,var(--s3) 20%,transparent);border-color:color-mix(in srgb,var(--s3) 58%,transparent)}
+  .stroom-noot{margin:8px 0 0 26px;font-size:11.5px;color:var(--nav-label)}
+  /* De kaart (C): het vlak houdt alleen plek vrij; het canvas eronder tekent erin. */
+  .kaart{grid-area:kaart;margin:0;display:flex;flex-direction:column;justify-content:flex-end;gap:6px}
+  .kaart-vlak{height:clamp(380px,58vh,560px);pointer-events:none}
+  .kaart-tip{position:absolute;z-index:3;pointer-events:none;transform:translate(-50%,calc(-100% - 8px));
+    background:var(--brand);color:#fff;font-size:12px;font-weight:600;padding:5px 8px;border-radius:8px;
+    border:1px solid rgba(255,255,255,.18);white-space:nowrap}
+  .kaart-tip[hidden]{display:none}
+  .legenda{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px 14px;font-size:11.5px;color:var(--nav-tekst)}
+  .legenda span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .legenda i{flex:none;display:inline-block;width:9px;height:9px;border-radius:50%}
+  .lg-cat{background:conic-gradient(var(--s1) 0 20%,var(--s2) 0 40%,var(--s3) 0 60%,var(--s4) 0 80%,var(--s5) 0)}
+  .lg-ring{border:1.5px solid #fff}
+  .lg-wl{background:var(--s1);box-shadow:0 0 6px 2px var(--gloed)}
+  @media (max-width:1100px) and (min-width:801px){ .band{grid-template-columns:minmax(0,1fr) minmax(0,50%)} .trap b{font-size:18px} }
+  @media (max-width:800px){
+    .band{margin:-18px -14px 0;padding:20px 14px 56px;grid-template-columns:minmax(0,1fr);
+      grid-template-rows:auto auto auto;grid-template-areas:"kop" "kaart" "trap";gap:14px}
+    .band h1{font-size:24px}
+    .kaart-vlak{height:400px}
+    .legenda{justify-content:center}
+    .trap{padding-left:22px;max-width:none}
+    .trap li{padding:7px 12px 9px}
+    .trap b{font-size:18px}
+    .stroom-noot{margin-left:22px}
+  }
+  /* ===================== einde LANDKAART ===================== */
+
   @media(max-width:900px){
     .kpis{grid-template-columns:repeat(2,1fr)}
     .cols{grid-template-columns:1fr}
@@ -1546,23 +2007,163 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     @keyframes pandIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   }
   /* ===================== einde PAND OPENEN ===================== */
-  /* ===================== WERKLIJST: gemeentefilter (VA-39) ===================== */
-  .filter{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 2px 14px}
-  .filter label{font-size:12.5px;font-weight:650;color:var(--ink-2)}
-  .filter select{font:inherit;font-size:13.5px;color:var(--ink);background:var(--surface);border:1px solid var(--ring);
-    border-radius:10px;min-height:40px;padding:6px 10px;max-width:100%;box-shadow:var(--shadow);cursor:pointer}
-  .filter select:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
-  .filter-uitkomst{margin:0;font-size:12.5px;color:var(--ink-2)}
-  .filter-uitkomst:empty{display:none}
-  .filter-leeg{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:0 0 14px;padding:14px 16px;
+  /* =====================================================================
+     WERKLIJSTFILTERS (VA-68, VA-69, VA-70; Lumi: design/filters.html). Breed of smal hangt af van de breedte
+     van de werklijst zelf (container), niet van het scherm.
+     ===================================================================== */
+  :root{--knop:#12233b;--knop-rand:transparent}
+  @media (prefers-color-scheme: dark){ :root:where(:not([data-theme="light"])){--knop-rand:rgba(255,255,255,.18)} }
+  :root[data-theme="dark"]{--knop-rand:rgba(255,255,255,.18)}
+  .vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  .wl{container:wl / inline-size}
+  .wl-balk{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 14px;margin:0 2px 12px}
+  .wl-knop{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 12px 0 14px;font:inherit;font-size:13.5px;
+    font-weight:650;color:var(--ink);background:var(--surface);border:1px solid var(--muted);border-radius:10px;cursor:pointer;box-shadow:var(--shadow)}
+  .wl-knop[aria-expanded="true"]{border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
+  .wl-ico{width:16px;height:12px;flex:none;
+    background:linear-gradient(currentColor 0 0) 0 0/100% 2px no-repeat,
+               linear-gradient(currentColor 0 0) 50% 50%/66% 2px no-repeat,
+               linear-gradient(currentColor 0 0) 50% 100%/34% 2px no-repeat}
+  .wl-aantal{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;
+    background:var(--ink);color:var(--surface);font-size:11.5px;font-weight:800;font-variant-numeric:tabular-nums}
+  .wl-aantal[hidden]{display:none}
+  .wl-pijl{width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:translateY(-2px) rotate(45deg);margin-left:2px}
+  .wl-knop[aria-expanded="true"] .wl-pijl{transform:translateY(2px) rotate(-135deg)}
+  .wl-telling{margin:0 0 10px;font-size:13px;font-weight:650;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .wl-sorteer{margin-left:auto;display:flex;gap:10px;align-items:flex-end}
+  .wl-veld{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .wl-veld label,.wl legend{font-size:12px;font-weight:700;color:var(--ink-2)}
+  .wl select{font:inherit;font-size:13.5px;color:var(--ink);background:var(--surface-2);border:1px solid var(--muted);
+    border-radius:10px;min-height:40px;padding:6px 10px;max-width:100%;cursor:pointer}
+  .wl-paneel{background:var(--surface);border:1px solid var(--ring);border-radius:14px;box-shadow:var(--shadow);
+    padding:16px 18px;margin:0 0 12px}
+  .wl-paneel[hidden]{display:none}
+  .wl-keuzes{display:flex;flex-wrap:wrap;gap:16px 28px}
+  .wl-heel{flex-basis:100%}
+  .wl fieldset{border:0;margin:0;padding:0;min-width:0}
+  .wl legend{padding:0;margin:0 0 6px}
+  .wl-opties{display:flex;flex-wrap:wrap;gap:6px}
+  .wl-optie{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:6px 12px 6px 10px;border:1px solid var(--ring);
+    border-radius:10px;background:var(--surface-2);font-size:13px;color:var(--ink);cursor:pointer;user-select:none}
+  .wl-optie input{margin:0;width:16px;height:16px;flex:none;accent-color:var(--s1);cursor:pointer}
+  .wl-kleur{width:10px;height:10px;border-radius:3px;flex:none}
+  .wl-letter{font-weight:800}
+  .wl-n{margin-left:2px;font-size:12px;font-weight:650;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .wl-optie.nul{border-style:dashed;border-color:var(--baseline)}
+  .wl-optie.nul .wl-naam,.wl-optie.nul .wl-letter{color:var(--ink-2)}
+  @supports selector(:has(a)){
+    .wl-optie:has(input:checked){border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1);
+      background:color-mix(in srgb,var(--s1) 9%,var(--surface-2))}
+    .wl-optie:has(input:checked) .wl-naam{font-weight:650}
+    .wl-optie:has(input:focus-visible){outline:2px solid var(--s1);outline-offset:2px}
+    .wl-optie input:focus-visible{outline:none}
+  }
+  /* getalvelden (VA-69): type="text" met 16 px, anders zoomt iOS in */
+  .wl-bereiken{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px 20px;align-items:start;
+    margin-top:16px;padding-top:14px;border-top:1px solid var(--grid)}
+  .wl-hint{margin:-2px 0 6px;font-size:11.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .wl-invoer{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+  .wl-invoer label{display:block;font-size:11.5px;color:var(--ink-2);margin-bottom:3px}
+  .wl-invoer input{width:100%;min-width:0;font:inherit;font-size:16px;min-height:40px;padding:6px 10px;color:var(--ink);
+    background:var(--surface-2);border:1px solid var(--muted);border-radius:9px;font-variant-numeric:tabular-nums}
+  .wl-invoer input[aria-invalid="true"]{border:2px solid var(--crit);padding:5px 9px}
+  .wl-fout{margin:6px 0 0;font-size:12px;line-height:1.35;font-weight:600;color:var(--crit)}
+  .wl-fout[hidden]{display:none}
+  .wl-paneelvoet{display:none}
+  .wl-toon{flex:1;min-height:44px;font:inherit;font-size:14px;font-weight:700;color:#fff;background:var(--knop);
+    border:1px solid var(--knop-rand);border-radius:10px;cursor:pointer}
+  .wl-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 2px 10px}
+  .wl-chips[hidden]{display:none}
+  .wl-chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:4px 8px 4px 12px;border-radius:999px;
+    border:1px solid var(--muted);background:var(--surface);color:var(--ink);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+  .wl-chip .x{font-size:16px;line-height:1;color:var(--ink-2)}
+  @media (hover:hover){ .wl-chip:hover{background:var(--grid)} .wl-wis:hover{color:var(--ink-2)} }
+  .wl-wis{font:inherit;font-size:12.5px;font-weight:650;color:var(--ink);background:none;border:0;padding:6px 6px;min-height:32px;
+    text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+  .wl-bron{margin:0 2px 12px;font-size:11.5px;color:var(--ink-2)}
+  .wl-leeg{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:0 0 14px;padding:16px 18px;
     background:var(--surface);border:1px solid var(--ring);border-radius:14px;box-shadow:var(--shadow)}
-  .filter-leeg[hidden]{display:none}
-  .filter-leeg p{margin:0;font-size:13.5px;color:var(--ink-2)}
-  .filter-terug{font:inherit;font-size:13px;font-weight:600;color:var(--ink);background:var(--surface-2);
-    border:1px solid var(--ring);border-radius:9px;padding:7px 12px;cursor:pointer}
-  .filter-terug:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .wl-leeg[hidden]{display:none}
+  .wl-leeg p{margin:0;font-size:13.5px;color:var(--ink-2);flex:1 1 260px}
+  .wl-leeg .wl-wis{text-decoration:none;background:var(--surface-2);border:1px solid var(--muted);border-radius:9px;padding:7px 12px;min-height:40px}
+  .wl :is(button,select,input,a):focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .wl .grid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+  .wl .grid[hidden]{display:none}
+  @container wl (min-width:720px){ .wl .grid{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  @container wl (max-width:599.98px){
+    .wl-sorteer{margin-left:0;flex-basis:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+    .wl-sorteer select{width:100%}
+    .wl-telling{flex:1}
+    .wl-paneel{padding:14px 14px 0}
+    .wl-keuzes > *{flex-basis:100%}
+    .wl-gem select{width:100%}
+    .wl-optie{min-height:44px}
+    .wl-bereiken{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px 14px}
+    .wl-paneelvoet{display:flex;position:sticky;bottom:0;margin:14px -14px 0;padding:12px 14px;background:var(--surface);
+      border-top:1px solid var(--grid);border-radius:0 0 14px 14px}
+  }
   .schildwacht{height:1px}
-  @media (max-width:560px){ .filter select{width:100%} }
+  /* ---- KAART MET LUCHTFOTO (VA-71): een vast vlak, dus niets verschuift als de foto komt of faalt ---- */
+  .card-foto{position:relative;width:100px;height:100px;border-radius:10px;overflow:hidden;background:var(--grid)}
+  .card-foto.laadt{background:repeating-linear-gradient(135deg,var(--grid) 0 7px,color-mix(in srgb,var(--grid) 55%,var(--surface)) 7px 14px)}
+  .card-foto img{display:block;width:100%;height:100%;object-fit:cover;opacity:0}
+  .card-foto.geladen img{opacity:1}
+  @media (prefers-reduced-motion: no-preference){ .card-foto.geladen img{transition:opacity .15s ease} }
+  .card-foto .merk{display:none;position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+    border:2px solid #fff;box-shadow:0 0 0 1.5px var(--crit);pointer-events:none}
+  .card-foto.geladen .merk{display:block}
+  .card-foto .melding{display:none;position:absolute;inset:0;align-items:center;justify-content:center;padding:6px;text-align:center;
+    font-size:11px;line-height:1.25;font-weight:600;color:var(--ink-2)}
+  .card-foto.mislukt,.card-foto.geen{background:var(--grid);box-shadow:inset 0 0 0 1px var(--baseline)}
+  .card-foto.mislukt .melding,.card-foto.geen .melding{display:flex}
+  @container kaart (max-width:380px){
+    .card-top{grid-template-columns:84px minmax(0,1fr) auto;gap:10px}
+    .card-foto{width:84px;height:84px}
+  }
+  /* ===================== BEWAREN EN VERBERGEN (VA-90) =====================
+     Op elke kaart en in 'Open pand': Bewaar en Verberg. De stand staat in de knop met meer dan kleur:
+     een ster (☆/★) en het woord, een stippelrand bij Verborgen, en aria-pressed. */
+  .bw-rij{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+  .bw-knop{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:5px 12px 5px 10px;border-radius:9px;
+    border:1px solid var(--ring);background:var(--surface-2);color:var(--ink);font:inherit;font-size:12.5px;
+    font-weight:650;text-align:left;cursor:pointer}
+  .bw-knop .bw-ico{flex:none;width:1.1em;text-align:center;font-size:14px;line-height:1}
+  .bw-knop .bw-tk{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+  .bw-knop .bw-terug{font-size:11px;font-weight:500;color:var(--ink-2)}
+  .bw-knop .bw-terug:empty{display:none}
+  .bw-knop.bw-bewaar[aria-pressed="true"]{background:color-mix(in srgb,var(--s1) 12%,var(--surface-2));
+    border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
+  .bw-knop.bw-bewaar[aria-pressed="true"] .bw-ico{color:var(--s1)}
+  .bw-knop.bw-weg[aria-pressed="true"]{background:var(--grid);border:1px dashed var(--ink-2)}
+  .bw-knop[aria-disabled="true"]{cursor:not-allowed;opacity:.65}
+  @media (hover:hover){ .bw-knop:not([aria-disabled="true"]):hover{background:var(--grid)} }
+  .bw-knop:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .bw-label{display:inline-flex;align-self:flex-start;width:max-content;max-width:100%;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;
+    color:var(--ink);background:color-mix(in srgb,var(--s1) 12%,var(--surface-2));border:1px solid var(--s1)}
+  .bw-label.weg{background:var(--grid);border:1px dashed var(--ink-2)}
+  .bw-label[hidden]{display:none}
+  .card.bw-is-weg{border-style:dashed;background:color-mix(in srgb,var(--grid) 35%,var(--surface))}
+  .card.bw-is-weg .card-foto{opacity:.6}
+  .bw-balk{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:0 0 12px;font-size:12.5px;color:var(--ink-2)}
+  .bw-apparaat{margin:0;flex:1 1 280px}
+  .bw-aantal{font-weight:650;color:var(--ink)}
+  .bw-aantal[hidden],.bw-toon[hidden]{display:none}
+  .bw-toon,.bw-ongedaan{font:inherit;font-size:12.5px;font-weight:650;min-height:34px;padding:4px 12px;border-radius:9px;
+    border:1px solid var(--ring);background:var(--surface-2);color:var(--ink);cursor:pointer}
+  .bw-toon.aan{border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
+  .bw-toon:focus-visible,.bw-ongedaan:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .bw-status{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;color:var(--ink)}
+  /* Leeg blijft de statusregel in de toegankelijkheidsboom (Lumi §3): geen display:none, alleen geen hoogte.
+     De -6px heft de rijafstand van de balk op, zodat een lege regel geen ruimte inneemt. */
+  .bw-balk .bw-status:empty{margin-top:-6px}
+  .pand-bw{margin:0 0 14px;padding:0 0 12px;border-bottom:1px solid var(--grid)}
+  .pand-bw .bw-apparaat{margin:8px 0 0;font-size:12px;color:var(--ink-2)}
+  .pand-bw .bw-status{font-size:12.5px}
+  .pand-bw .bw-status:not(:empty){margin-top:6px}
+  .wl-leeg .bw-leeg-toon{font:inherit;font-size:13px;font-weight:650;background:var(--surface-2);border:1px solid var(--ring);
+    border-radius:9px;padding:7px 12px;min-height:40px;color:var(--ink);cursor:pointer}
+  .wl-leeg .bw-leeg-toon:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  /* ===================== einde BEWAREN EN VERBERGEN ===================== */
   /* ===================== einde WERKLIJST ===================== */
 </style>
 </head>
@@ -1592,6 +2193,7 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   <main class="inhoud" id="inhoud" tabindex="-1">
 
     <section class="deel" id="kantoor" aria-labelledby="t-kantoor" tabindex="-1">
+      <div class="kantoor-kop__BAND__">
       <header class="kop">
         <div class="kop-rij">
           <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Kantoor</b></p>
@@ -1600,9 +2202,9 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
             <div class="pill"__PEILTIP__>__PEILDATUM__</div>
           </div>
         </div>
-        <h1 id="t-kantoor">__KOP_KANTOOR_TITEL__</h1>
-        <p class="kop-zin">__KOP_KANTOOR_ZIN__</p>
-      </header>
+        <h1 id="t-kantoor" class="vh">__KOP_KANTOOR_TITEL__</h1>
+      </header>__TRAP____KAART__
+      </div>
       <div class="pk" id="pk">
         <div class="pk-scene pk-start">
           <canvas aria-hidden="true"></canvas>
@@ -1659,9 +2261,19 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
         <h2 class="titel" id="t-__LIJST__">__KOP_LIJST_TITEL__</h2>
         <p class="kop-zin">__KOP_LIJST_ZIN__</p>
       </header>
-      __FILTER__
-      <div class="grid" id="leads"></div>
-      <div class="schildwacht" aria-hidden="true"></div>
+      <div class="wl">
+        __FILTER__
+        <!-- BEWAREN EN VERBERGEN (VA-90) -->
+        <div class="bw-balk" id="bwBalk">
+          <p class="bw-apparaat" id="bwApparaat"></p>
+          <span class="bw-aantal" id="bwAantal" hidden></span>
+          <button class="bw-toon" id="bwToon" type="button" hidden></button>
+          <div class="bw-status" id="bwStatus" role="status"></div>
+        </div>
+        <!-- einde BEWAREN EN VERBERGEN -->
+        <div class="grid" id="leads"></div>
+        <div class="schildwacht" aria-hidden="true"></div>
+      </div>
 
       <p class="foothint">
         Klik op <b>Score-opbouw</b> in een pand om te zien waar elk punt vandaan komt ·
@@ -1682,6 +2294,202 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
 </dialog>
 <script>
 const PAYLOAD = __PAYLOAD__;
+/* ============================ LANDKAART (VA-85) ============================
+   Eén 2D-canvas onder de hele band, geen bibliotheek, niets van buiten. Lumi's drie richtingen samen:
+   A de stroom die langs de vijf cijfers dunner wordt, B het brein (categorie A–E rond de kern),
+   C de kaart met de werklijstpanden die via hun gemeente naar de kern vuren. Alles wat er staat komt
+   kant-en-klaar uit PAYLOAD.kaart (Python); het script tekent alleen. Beweging verminderen: één stil
+   beeld met alles erop. Buiten beeld of in een verborgen tabblad: pauze. */
+(() => {
+  const K = PAYLOAD.kaart, cv = document.getElementById("landkaart");
+  if (!K || !cv) return;
+  const D = document, R = D.documentElement, M = Math, TAU = M.PI * 2, band = cv.parentNode;
+  const vlak = band.querySelector(".kaart-vlak"), cijfers = [...band.querySelectorAll(".trap li")];
+  const ctx = cv.getContext("2d"), tip = D.getElementById("kaartTip"), bg = D.createElement("canvas"), bx = bg.getContext("2d");
+  const rm = matchMedia("(prefers-reduced-motion: reduce)");
+  const X0 = 3.3, Y0 = 53.62, CL = .613, EW = 2.45, EH = 2.92;   // kader van de kaart in graden; CL = cos 52°
+  let W = 0, H = 0, dpr = 1, zicht = true, raf = 0, last = 0, klok = 0, acc1 = 0, acc2 = 0, rt = 0;
+  let kl = {}, gloed = {}, vk = null, kern = null, rr = 40, G = [], S = [], C = [], poort = [], ring = [], P = [], A = [], V = [], T = [];
+  const F = (w, s) => w + " " + s + "px system-ui,-apple-system,Segoe UI,sans-serif";
+  const rgba = (h, a) => { const n = parseInt(h.slice(1), 16); return "rgba(" + (n >> 16) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")"; };
+  const rond = (x, k, px, py, r, a) => { x.globalAlpha = a; x.fillStyle = k; x.beginPath(); x.arc(px, py, r, 0, TAU); x.fill(); };
+  const cirkel = (x, k, px, py, r, a, w) => { x.globalAlpha = a; x.strokeStyle = k; x.lineWidth = w; x.beginPath(); x.arc(px, py, r, 0, TAU); x.stroke(); };
+  const lijn = (x, k, a, w, p, q) => { x.globalAlpha = a; x.strokeStyle = k; x.lineWidth = w; x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); x.stroke(); };
+  const tekst = (x, s, px, py, f, k, al) => { x.globalAlpha = 1; x.font = f; x.fillStyle = k; x.textAlign = al; x.fillText(s, px, py); };
+  const kies = w => { let s = 0; for (const x of w) s += x; let r = M.random() * s; for (let i = 0; i < w.length; i++) if ((r -= w[i]) <= 0) return i; return w.length - 1; };
+  function spriet(c) {   // zachte gloed per kleur, één keer gemaakt
+    if (gloed[c]) return gloed[c];
+    const s = D.createElement("canvas"); s.width = s.height = 64;
+    const x = s.getContext("2d"), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, rgba(c, 1)); g.addColorStop(.25, rgba(c, .45)); g.addColorStop(1, rgba(c, 0));
+    x.fillStyle = g; x.fillRect(0, 0, 64, 64); return gloed[c] = s;
+  }
+  const blob = (x, c, px, py, r, a) => { if (a <= 0) return; x.globalAlpha = M.min(1, a); x.drawImage(spriet(c), px - r, py - r, 2 * r, 2 * r); };
+  // Een boog van p naar q (kwadratisch, als kubisch bewaard), en het punt op t; h = 0 is een rechte lijn.
+  const boog = (p, q, h, v) => { const m = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2 - M.abs(q[0] - p[0]) * h];
+    return {p, q, a: [p[0] + (m[0] - p[0]) * 2 / 3, p[1] + (m[1] - p[1]) * 2 / 3], b: [q[0] + (m[0] - q[0]) * 2 / 3, q[1] + (m[1] - q[1]) * 2 / 3],
+      d: M.max(.2, M.hypot(q[0] - p[0], q[1] - p[1]) / (v || 70))}; };
+  const op = (s, t) => { const u = 1 - t, f = i => u * u * u * s.p[i] + 3 * u * u * t * s.a[i] + 3 * u * t * t * s.b[i] + t * t * t * s.q[i]; return [f(0), f(1)]; };
+  const trek = (x, s) => { x.moveTo(s.p[0], s.p[1]); x.bezierCurveTo(s.a[0], s.a[1], s.b[0], s.b[1], s.q[0], s.q[1]); };
+  const plek = el => { const r = el.getBoundingClientRect(), b = band.getBoundingClientRect(); return {x: r.left - b.left, y: r.top - b.top, w: r.width, h: r.height}; };
+
+  function kleuren() {   // uit de tokens, dus mee met het thema; de kern is --brand-2 (CSS: color van het canvas)
+    const cs = getComputedStyle(R), v = n => cs.getPropertyValue(n).trim();
+    kl = {s: ["--s1", "--s2", "--s3", "--s4", "--s5"].map(v), t2: v("--nav-tekst"), t3: v("--nav-label"), kern: getComputedStyle(cv).color};
+    gloed = {};
+  }
+  function bouw() {
+    const x = bx;
+    // Het raster van de commandokamer.
+    x.strokeStyle = "#ffffff"; x.lineWidth = 1; x.globalAlpha = .04; x.beginPath();
+    for (let i = 28; i < W; i += 28) { x.moveTo(i + .5, 0); x.lineTo(i + .5, H); }
+    for (let j = 28; j < H; j += 28) { x.moveTo(0, j + .5); x.lineTo(W, j + .5); }
+    x.stroke(); x.globalAlpha = .16; x.beginPath();
+    for (let i = 112; i < W; i += 112) for (let j = 112; j < H; j += 112) { x.moveTo(i - 3, j + .5); x.lineTo(i + 4, j + .5); x.moveTo(i + .5, j - 3); x.lineTo(i + .5, j + 4); }
+    x.stroke();
+    // De kaart (C), in het vrijgehouden vlak.
+    vk = plek(vlak);
+    // Het brein steekt links buiten de kaart uit (ring plus letters, ca. 0,03 × schaal + 22 px); smal is daar geen ruimte, dan schuift de kaart in.
+    const ruim = vk.x > 60, sc = ruim ? M.min(vk.w / EW, vk.h / EH) : M.min((vk.w - 22) / (EW + .03), vk.h / EH);
+    const extra = ruim ? 0 : .03 * sc + 22, ox = vk.x + extra + (vk.w - extra - EW * sc) / 2, oy = vk.y + (vk.h - EH * sc) / 2;
+    const pr = ll => [ox + ((ll[1] / 100 + 3) - X0) * CL * sc, oy + (Y0 - (ll[0] / 100 + 50)) * sc];
+    const k = pr(K.kern.ll);
+    rr = M.max(30, sc * .3);
+    kern = {x: k[0], y: k[1], r: M.max(13, sc * .095), f: 0, tip: K.kern.tip};
+    x.beginPath();
+    for (const r of K.land) for (let i = 0; i < r.length; i += 2) { const p = pr([r[i], r[i + 1]]); i ? x.lineTo(p[0], p[1]) : x.moveTo(p[0], p[1]); }
+    x.closePath();
+    const vul = x.createLinearGradient(0, oy, 0, oy + EH * sc); vul.addColorStop(0, "rgba(255,255,255,.11)"); vul.addColorStop(1, "rgba(255,255,255,.04)");
+    x.globalAlpha = 1; x.fillStyle = vul; x.fill("evenodd");
+    x.shadowColor = kl.s[0]; x.shadowBlur = 14; x.strokeStyle = rgba(kl.t2, .7); x.lineWidth = 1.2; x.stroke(); x.shadowBlur = 0;
+    // Gemeenten en hun lijnen naar de kern.
+    G = K.gm.map(g => { if (!g.ll) return null; const p = pr(g.ll);
+      return {x: p[0], y: p[1], n: g.n, r: g.n ? 1.8 + M.sqrt(g.n) * .5 : 2, f: 0, tip: g.tip, naam: g.naam, v: g.v, lab: g.lab, weg: g.n ? boog(p, k, .28) : null}; });
+    const meeste = M.max(1, ...G.map(g => g ? g.n : 0));
+    for (const g of G) if (g && g.weg) { x.globalAlpha = .07 + .3 * M.sqrt(g.n / meeste); x.strokeStyle = kl.s[0]; x.lineWidth = 1; x.beginPath(); trek(x, g.weg); x.stroke(); }
+    // Het brein (B): categorie A–E in een ring om de kern.
+    const cmax = M.max(1, ...K.cats.map(c => c.n));
+    C = K.cats.map((c, i) => { const h = -M.PI / 2 - i * TAU / 5;
+      return {x: k[0] + M.cos(h) * rr, y: k[1] + M.sin(h) * rr, h, r: 3.5 + M.sqrt(c.n / cmax) * 5, c: kl.s[i], k: c.k, n: c.n, f: 0, tip: c.tip}; });
+    cirkel(x, "#ffffff", k[0], k[1], rr, .12, 1);
+    for (const c of C) { lijn(x, c.c, .35, 1.2, [c.x, c.y], k);
+      blob(x, c.c, c.x, c.y, c.r * 3, .35); rond(x, c.c, c.x, c.y, c.r, 1);
+      tekst(x, c.k, c.x + M.cos(c.h) * (c.r + 9), c.y + M.sin(c.h) * (c.r + 9) + 4, F(800, 11), kl.t2, "center"); }
+    // De 500 werklijstpanden: gloed, stip en een ring voor score ≥ drempel.
+    S = []; x.globalCompositeOperation = "lighter";
+    for (let i = 0; i < K.pt.length; i += 4) {
+      const p = pr([K.pt[i], K.pt[i + 1]]), c = K.pt[i + 2], s = {x: p[0], y: p[1], c: kl.s[c % 5], g: K.pt[i + 3]};
+      S.push(s); blob(x, s.c, s.x, s.y, 6, .4); rond(x, s.c, s.x, s.y, 1.5, 1);
+      if (c >= 5) cirkel(x, s.c, s.x, s.y, 3.2, .45, .8);
+    }
+    x.globalCompositeOperation = "source-over";
+    for (const g of G) if (g) { x.setLineDash(g.n ? [] : [2, 2]); cirkel(x, "#ffffff", g.x, g.y, g.r + 1.5, g.n ? .6 : .35, 1); x.setLineDash([]); }
+    // Naam en aantal bij de grootste: de westelijke helft links van het punt, de rest rechts; per kant de zuidelijkste lager.
+    const lab = G.filter(g => g && g.lab).sort((a, b) => a.x - b.x), helft = lab.length / 2;
+    lab.forEach((g, i) => { const links = i < helft, kant = lab.filter((h, j) => (j < helft) === links);
+      const omlaag = kant.length > 1 && g.y === M.max(...kant.map(h => h.y)), px = g.x + (links ? -1 : 1) * (g.r + 6), py = g.y + (omlaag ? 13 : 4);
+      x.font = F(500, 11.5); const wv = x.measureText(" " + g.v).width; x.font = F(700, 11.5); const wn = x.measureText(g.naam).width;
+      const start = M.max(2, M.min(W - 2 - wn - wv, links ? px - wn - wv : px));
+      tekst(x, g.naam, start, py, F(700, 11.5), "#ffffff", "left"); tekst(x, " " + g.v, start + wn, py, F(500, 11.5), kl.t2, "left"); });
+    // De stroom (A): een kanaal links van de cijfers, dat na elk cijfer smaller wordt, en dan naar het brein.
+    poort = cijfers.map((li, i) => { const r = plek(li); return {x: r.x - 13, y: r.y + r.h / 2, tx: r.x, w: 1 + 4 * K.breed[i] / 100, f: 0}; });
+    if (poort.length) {
+      const begin = [poort[0].x, poort[0].y - 34];
+      ring = [boog(begin, [poort[0].x, poort[0].y], 0, 90)];
+      for (let i = 1; i < poort.length; i++) ring.push(boog([poort[i - 1].x, poort[i - 1].y], [poort[i].x, poort[i].y], 0, 90));
+      lijn(x, "#ffffff", .1, poort[0].w, begin, [poort[0].x, poort[0].y]);
+      poort.forEach((q, i) => { if (i) lijn(x, "#ffffff", .12, q.w, [poort[i - 1].x, poort[i - 1].y], [q.x, q.y]);
+        lijn(x, kl.s[0], .4, 1, [q.x, q.y], [q.tx, q.y]); rond(x, kl.s[0], q.x, q.y, 2.6, .9); });
+      const e = poort[poort.length - 1];
+      for (const c of C) { const s = boog([e.x, e.y], [c.x, c.y], -.22, 140); x.globalAlpha = .2; x.strokeStyle = c.c; x.lineWidth = 1.2; x.beginPath(); trek(x, s); x.stroke(); c.weg = s; }
+    }
+    x.globalAlpha = 1;
+  }
+  // Een werklijstpand licht op en vuurt via zijn gemeente (of van elders rechtstreeks) naar de kern (C).
+  function puls() {
+    const s = S[M.random() * S.length | 0]; if (!s) return;
+    T.push({x: s.x, y: s.y, c: s.c, t: 0});
+    const g = s.g >= 0 ? G[s.g] : null, p = [s.x, s.y];
+    const weg = g && g.weg ? [Object.assign(boog(p, [g.x, g.y], 0), {d: .5, eind: g}), Object.assign({}, g.weg, {eind: kern})]
+      : [Object.assign(boog(p, [kern.x, kern.y], .28), {eind: kern})];
+    P.push({weg, i: 0, t: 0, c: s.c, r: 1.6});
+  }
+  // Een deeltje in de stroom (A): grijs tot 'in A–E', dan de kleur van zijn categorie; na het laatste cijfer naar het brein.
+  function deeltje() { if (ring.length) A.push({i: 0, t: 0, c: kl.t3, cat: -1}); }
+  function stap(dt) {
+    klok += dt; acc1 += dt * 12; acc2 += dt * 26;
+    while (acc1 >= 1) { acc1--; if (P.length < 110) puls(); }
+    while (acc2 >= 1) { acc2--; if (A.length < 140) deeltje(); }
+    for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; p.t += dt / p.weg[p.i].d;
+      if (p.t >= 1) { p.weg[p.i].eind.f = 1; p.i++; p.t = 0; if (p.i >= p.weg.length) P.splice(i, 1); } }
+    for (let i = A.length - 1; i >= 0; i--) { const a = A[i], w = a.weg ? a.weg[0] : ring[a.i]; a.t += dt / w.d;
+      if (a.t < 1) continue;
+      if (a.weg) { a.weg[0].eind.f = 1; a.weg.shift(); a.t = 0; if (!a.weg.length) A.splice(i, 1); continue; }
+      const q = poort[a.i]; q.f = M.max(q.f, .6); a.t = 0;
+      // Wie bij dit cijfer afvalt, zakt grijs weg; de rest gaat door. Niet op schaal: (volgende / dit) ^ 0,3.
+      const blijft = a.i + 1 >= poort.length ? 1 : M.pow((K.ruw[a.i + 1] || 0) / M.max(1, K.ruw[a.i]), .3);
+      if (M.random() > blijft) { V.push({x: q.x, y: q.y, vx: -14 - M.random() * 18, vy: 6 + M.random() * 16, c: a.c, t: 0}); A.splice(i, 1); continue; }
+      if (a.i === 2) { a.cat = kies(C.map(c => c.n)); a.c = C[a.cat].c; }
+      if (a.i + 1 < poort.length) { a.i++; continue; }
+      const c = C[a.cat < 0 ? 0 : a.cat];
+      a.weg = [Object.assign({}, c.weg, {eind: c}), Object.assign(boog([c.x, c.y], [kern.x, kern.y], 0), {eind: kern})];
+    }
+    for (let i = V.length - 1; i >= 0; i--) { const v = V[i]; v.t += dt; v.x += v.vx * dt; v.y += v.vy * dt; if (v.t >= 1) V.splice(i, 1); }
+    for (let i = T.length - 1; i >= 0; i--) if ((T[i].t += dt) >= 1) T.splice(i, 1);
+    for (const n of G.concat(C, poort, kern)) if (n && n.f) n.f = M.max(0, n.f - dt * 1.6);
+  }
+  const kop = (p, s, t, c, r) => { const h = op(s, t), b = op(s, M.max(0, t - .16));
+    lijn(ctx, c, .45, r * 1.3, b, h); blob(ctx, c, h[0], h[1], r * 4, .6); rond(ctx, c, h[0], h[1], r, 1); };
+  function teken() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+    ctx.clearRect(0, 0, cv.width, cv.height); ctx.drawImage(bg, 0, 0); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+    if (!rm.matches) {   // de scanlijn: langzaam van boven naar beneden over de kaart
+      const y = vk.y + (klok / 7 % 1) * vk.h, g = ctx.createLinearGradient(0, y - 46, 0, y);
+      g.addColorStop(0, rgba(kl.s[0], 0)); g.addColorStop(1, rgba(kl.s[0], .16));
+      ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.fillRect(vk.x, y - 46, vk.w, 46); lijn(ctx, kl.t2, .35, 1, [vk.x, y], [vk.x + vk.w, y]);
+    }
+    ctx.setLineDash([3, 5]); ctx.lineDashOffset = -klok * 9; cirkel(ctx, kl.s[0], kern.x, kern.y, rr * .62, .55, 1.2); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    ctx.fillStyle = "#ffffff";
+    for (let i = 0; i < 72; i++) { const h = i * 2.39996 + klok * .05 * (i % 2 ? 1 : -1), r = rr * (1.3 + (i * 37 % 30) / 100);
+      ctx.globalAlpha = .28; ctx.fillRect(kern.x + M.cos(h) * r - .7, kern.y + M.sin(h) * r - .7, 1.4, 1.4); }
+    blob(ctx, kl.s[0], kern.x, kern.y, kern.r * 2.8 + (rm.matches ? 0 : 3 + 3 * M.sin(klok * 1.6)), .5 + kern.f * .3);
+    for (const g of G) if (g && g.f) blob(ctx, kl.s[0], g.x, g.y, g.r * 4, g.f * .6);
+    for (const c of C) if (c.f) blob(ctx, c.c, c.x, c.y, c.r * 3.5, c.f * .7);
+    for (const q of poort) if (q.f) blob(ctx, kl.s[0], q.x, q.y, 9, q.f * .8);
+    for (const w of T) { const a = M.sin(M.PI * w.t); blob(ctx, w.c, w.x, w.y, 9, a * .7); cirkel(ctx, w.c, w.x, w.y, 2 + w.t * 8, a * .7, 1); }
+    for (const p of P) kop(p, p.weg[p.i], p.t, p.c, p.r);
+    for (const a of A) kop(a, a.weg ? a.weg[0] : ring[a.i], a.t, a.c, 1.5);
+    for (const v of V) rond(ctx, v.c, v.x, v.y, 1.3, (1 - v.t) * .6);
+    ctx.globalCompositeOperation = "source-over";
+    rond(ctx, kl.kern, kern.x, kern.y, kern.r, 1); cirkel(ctx, "#ffffff", kern.x, kern.y, kern.r, .6, 1);
+    tekst(ctx, K.kern.getal, kern.x, kern.y + kern.r * .15, F(800, M.round(kern.r * .72)), "#ffffff", "center");
+    tekst(ctx, K.kern.woord, kern.x, kern.y + kern.r * .6, F(500, M.max(8, M.round(kern.r * .32))), kl.t2, "center");
+  }
+  const loopt = () => !rm.matches && zicht && !D.hidden;
+  function beeld(ts) { raf = 0; if (!loopt()) return; const dt = last ? M.min(.05, (ts - last) / 1000) : 1 / 60; last = ts; stap(dt); teken(); raf = requestAnimationFrame(beeld); }
+  function speel() { if (loopt() && !raf) { last = 0; raf = requestAnimationFrame(beeld); } }
+  function opnieuw() {
+    const r = band.getBoundingClientRect(); W = M.max(1, M.round(r.width)); H = M.max(1, M.round(r.height)); dpr = M.min(devicePixelRatio || 1, 2);
+    cv.width = bg.width = M.round(W * dpr); cv.height = bg.height = M.round(H * dpr);
+    kleuren(); P = []; A = []; V = []; T = []; acc1 = acc2 = 0; klok = 0;
+    bx.setTransform(dpr, 0, 0, dpr, 0, 0); bx.clearRect(0, 0, W, H); bouw();
+    if (rm.matches) { for (let i = 0; i < 240; i++) stap(1 / 30); for (const n of G.concat(C, poort, kern)) if (n) n.f = 0; }   // stil beeld, met alles erop
+    teken(); speel();
+  }
+  band.addEventListener("pointermove", e => { const b = band.getBoundingClientRect(), px = e.clientX - b.left, py = e.clientY - b.top;
+    let best = null, bd = 10; for (const n of G.concat(C, kern)) { if (!n) continue; const d = M.hypot(n.x - px, n.y - py) - n.r; if (d < bd) { bd = d; best = n; } }
+    if (!best) { tip.hidden = true; return; } tip.textContent = best.tip; tip.hidden = false;
+    tip.style.left = M.max(tip.offsetWidth / 2 + 4, M.min(W - tip.offsetWidth / 2 - 4, best.x)) + "px"; tip.style.top = M.max(28, best.y - best.r) + "px"; });
+  band.addEventListener("pointerleave", () => { tip.hidden = true; });
+  new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(opnieuw, 60); }).observe(band);
+  new IntersectionObserver(e => { zicht = e[e.length - 1].isIntersecting; speel(); }).observe(band);
+  D.addEventListener("visibilitychange", speel);
+  rm.addEventListener("change", opnieuw);
+  new MutationObserver(opnieuw).observe(R, {attributes: true, attributeFilter: ["data-theme"]});
+  opnieuw();
+})();
+/* ===================== einde LANDKAART ===================== */
 const {kpi:KPI, cats:CATS, facts:FACTS, leads:LEADS, budget:BUDGET} = PAYLOAD;
 const FN = {woon:"var(--s1)", winkel:"var(--s2)", kantoor:"var(--s3)", overig:"var(--s4)", bedrijf:"var(--s5)"};
 const FNL = {woon:"Wonen", winkel:"Winkel", kantoor:"Kantoor", overig:"Overig", bedrijf:"Bedrijf"};
@@ -1743,6 +2551,19 @@ function opbouwHTML(d){
 }
 
 const lb=document.getElementById("leads");
+/* De kleine luchtfoto (VA-71): PLEK.mini van PDOK, alleen voor een kaart die getekend wordt, met
+   loading="lazy". Het vlak heeft een vaste maat; laden, mislukken en geen locatie zijn een klasse. */
+const FOTO = PAYLOAD.kaartfoto;
+function kaartFoto(vlak, d){
+  const m = vlak.querySelector(".melding"), plek = d.detail && d.detail.loc;
+  if (!plek || !PLEK.mini) { vlak.classList.add("geen"); m.textContent = FOTO.geen; return; }
+  vlak.classList.add("laadt");
+  const img = new Image(100, 100);
+  img.alt = FOTO.alt.replace("{adres}", () => d.a); img.loading = "lazy"; img.decoding = "async";
+  img.addEventListener("load", () => vlak.classList.replace("laadt", "geladen"), {once: true});
+  img.addEventListener("error", () => { img.remove(); vlak.classList.replace("laadt", "mislukt"); m.textContent = FOTO.mislukt; }, {once: true});
+  vlak.prepend(img); img.src = PLEK.mini.replace("{b}", plek.b);
+}
 function kaart(d){
   const order=["woon","winkel","kantoor","bedrijf","overig"];
   const segs=order.filter(k=>d.f[k]).map(k=>
@@ -1753,14 +2574,14 @@ function kaart(d){
   const sigtags=d.sig.map(s=>`<span class="sigtag ${s.k}" data-tip="${s.d}">${s.t}</span>`).join("");
   const card=el("div","card");
   card.innerHTML=`
-    <div class="rowtop">
-      <div><div class="addr">${d.a}</div>
-        <div class="lid"></div></div>
+    <div class="card-top">
+      <div class="card-foto"><span class="merk" aria-hidden="true"></span><span class="melding"></span></div>
+      <div class="card-kern"><div class="addr">${d.a}</div><div class="lid"></div><span class="bw-label" hidden></span>
+        <div class="chips">${chips}</div>
+        ${sigtags?`<div class="sigtags">${sigtags}</div>`:""}</div>
       <div class="score"><b>${d.s100}</b><small>/100</small></div>
     </div>
     <div class="meter"><i style="width:0" data-w="${d.s100}"></i></div>
-    <div class="chips">${chips}</div>
-    ${sigtags?`<div class="sigtags">${sigtags}</div>`:""}
     <div class="meta">
       <div><div class="mv">${d.bj}</div><div class="ml">BOUWJAAR</div></div>
       <div><div class="mv">${nl(d.m2)}</div><div class="ml">M²</div></div>
@@ -1775,8 +2596,10 @@ function kaart(d){
       <span class="status">te controleren</span>
     </div>`;
   card.querySelector(".lid").textContent = d.r;   // de regel onder het adres komt uit Python
+  kaartFoto(card.querySelector(".card-foto"), d);
   const m=card.querySelector(".meter i");
   requestAnimationFrame(()=>{m.style.width=m.dataset.w+"%";});
+  card.insertBefore(BW.rij(d), card.querySelector(".foot")); BW.ververs(d);   // VA-90
   maakOpenbaar(card, d);
   return card;
 }
@@ -1799,14 +2622,15 @@ const VELDEN = PAYLOAD.velden || [], WAARDEN = PAYLOAD.waarden || [], PLEK = PAY
 const locatie = p => { if (!p) return null; const zet = s => s.replace("{b}", p.b).replace("{ll}", p.ll);
   return {foto: zet(PLEK.foto), maps: zet(PLEK.maps), streetview: zet(PLEK.streetview)}; };
 const pandDlg = document.getElementById("pand");
-let pandOpener = null;
+let pandOpener = null, pandId = null;
 const maak = (tag, cls, tekst) => { const e = document.createElement(tag); if (cls) e.className = cls; if (tekst != null) e.textContent = tekst; return e; };
 function openPand(d, opener) {
-  const det = d.detail; pandOpener = opener;
+  const det = d.detail; pandOpener = opener; pandId = d.id;
   document.getElementById("pandTitel").textContent = det.titel;
   document.getElementById("pandSub").textContent = `${d.p} ${d.wp} · BAG ${d.id}`;
   document.getElementById("pandScore").innerHTML = `<b>${d.s100}</b><small>/100</small>`;
   const romp = document.getElementById("pandRomp"); romp.textContent = "";
+  romp.appendChild(BW.rij(d, true));   // VA-90: Bewaar en Verberg, ook hier
   const loc = locatie(det.loc);
   if (loc) {
     const fig = maak("figure", "pand-foto"), kader = maak("div", "kader"), melding = maak("div", "melding", PAND_TEKST.laden);
@@ -1840,7 +2664,12 @@ function openPand(d, opener) {
 }
 document.getElementById("pandSluit").addEventListener("click", () => pandDlg.close());
 pandDlg.addEventListener("click", e => { if (e.target === pandDlg) pandDlg.close(); });
-pandDlg.addEventListener("close", () => { if (pandOpener && pandOpener.isConnected) pandOpener.focus(); });
+// Terug naar de kaart die het opende (VA-61). Is die kaart weg (Verberg in dit venster, VA-90), dan naar zijn
+// "Ongedaan maken" boven de werklijst, en is dat er niet, naar de werklijst zelf: nooit naar <body> (Lumi §8).
+pandDlg.addEventListener("close", () => {
+  if (pandOpener && pandOpener.isConnected) { pandOpener.focus(); return; }
+  if (pandId != null) (BW.ongedaanVoor(pandId) || BW.lijstDeel()).focus();
+});
 function maakOpenbaar(card, d) {
   if (!d.detail) return;
   card.classList.add("open-baar");
@@ -1853,46 +2682,377 @@ function maakOpenbaar(card, d) {
 }
 /* ============================ einde PAND OPENEN ============================ */
 
-/* ============================ WERKLIJST (VA-39) ============================
+/* ============================ BEWAREN EN VERBERGEN (VA-90) ============================
+   Ayman: elk pand een knop Bewaar en een knop Verberg. Alleen in deze browser (localStorage), op dit
+   apparaat; er gaat niets de pagina uit en geen cijfer verandert: Verberg haalt alleen een kaart uit de
+   werklijst. Een pand is bewaard, verborgen of geen van beide; dezelfde knop nog eens zet het terug.
+   Per pand bewaart de browser ook wat VA-91 nodig heeft om het later te tonen, ook als het niet meer
+   in de data staat. Weigert de browser opslag (privévenster), dan zeggen de knoppen dat; de rest werkt.
+   Alle tekst komt uit PAYLOAD.bewaar.tekst (Python). */
+const BW = (() => {
+  const T = PAYLOAD.bewaar.tekst, DP = PAYLOAD.bewaar.dp, SLEUTEL = "levrai-vastgoed-panden", VORM = 1;
+  const PER_ID = new Map(LEADS.map(d => [d.id, d]));
+  let stand = {}, werkt = false, tonen = false, dlg = null;
+  const luisteraars = [], rijen = new Map();   // per pand-ID de knoppenrij van zijn kaart
+  function lees() {
+    try { const r = JSON.parse(localStorage.getItem(SLEUTEL) || "null");
+      stand = r && r.v === VORM && r.panden && typeof r.panden === "object" ? r.panden : {}; } catch (e) { stand = {}; }
+  }
+  function schrijf() {
+    try { localStorage.setItem(SLEUTEL, JSON.stringify({v: VORM, panden: stand})); return true; } catch (e) { return false; }
+  }
+  try { const k = SLEUTEL + "-proef"; localStorage.setItem(k, "1"); localStorage.removeItem(k); werkt = true; } catch (e) { werkt = false; }
+  if (werkt) lees();
+  const van = id => (stand[id] && stand[id].stand) || "";
+  const zichtbaar = id => tonen || van(id) !== "verborgen";
+  const aantalWeg = () => LEADS.filter(d => van(d.id) === "verborgen").length;
+  // Wat VA-91 nodig heeft om een pand te tonen dat niet meer in de werklijst staat; 'sinds' is het moment van opslaan.
+  const gegevens = (d, s) => ({stand: s, hoofdadres: d.detail ? d.detail.titel : d.a, woonplaats: d.wp, score100: d.s100,
+    pandcategorie: d.pc || d.cat[0] || null, bag_viewer_url: BAG + d.id, datapeildatum: d.dp || DP, sinds: new Date().toISOString()});
+  function zet(d, s) {   // s: "bewaard" of "verborgen"; dezelfde stand nog eens is terug naar geen van beide
+    const oud = stand[d.id] || null, nu = van(d.id) === s ? "" : s;
+    if (nu) stand[d.id] = gegevens(d, nu); else delete stand[d.id];
+    if (!schrijf()) { if (oud) stand[d.id] = oud; else delete stand[d.id]; werkt = false; overal(false); return null; }
+    overal(nu === "verborgen" || (oud && oud.stand === "verborgen")); return {oud, nu};   // alleen verbergen raakt de lijst
+  }
+  function herstel(d, oud) {   // Ongedaan maken: precies de stand van daarvoor, ook als die 'bewaard' was
+    if (oud) stand[d.id] = oud; else delete stand[d.id];
+    if (!schrijf()) { werkt = false; } overal(true);
+  }
+  const adres = d => d.detail ? d.detail.titel : d.a;
+  function knop(d, soort) {
+    const b = maak("button", "bw-knop bw-" + (soort === "bewaard" ? "bewaar" : "weg")); b.type = "button";
+    const ico = maak("span", "bw-ico"); ico.setAttribute("aria-hidden", "true");
+    const tk = maak("span", "bw-tk"); tk.append(maak("span", "bw-nm"), maak("span", "bw-terug"));
+    b.append(ico, tk);   // de naam staat in aria-label, per stand (werkRij)
+    b.addEventListener("click", e => { e.stopPropagation(); druk(d, soort, b); });
+    return b;
+  }
+  function rij(d, inPand) {
+    const r = maak("div", inPand ? "bw-rij-pand" : "bw-rij"), k = maak("div", "bw-rij");
+    k.append(knop(d, "bewaard"), knop(d, "verborgen"));
+    if (!inPand) { rijen.set(d.id, k); werkRij(d); return k; }
+    r.className = "pand-bw"; r.append(k, maak("p", "bw-apparaat", werkt ? T["apparaat.kort"] : T.geen_opslag));
+    const s = maak("div", "bw-status"); s.id = "pandBwStatus"; s.setAttribute("role", "status"); r.append(s);
+    dlg = {d, r: k, s}; werkRij(d); return r;
+  }
+  function werkRij(d) {
+    const s = van(d.id);
+    for (const k of [rijen.get(d.id), dlg && dlg.d.id === d.id ? dlg.r : null]) { if (!k) continue;
+      k.querySelectorAll(".bw-knop").forEach(b => { const soort = b.classList.contains("bw-bewaar") ? "bewaard" : "verborgen", aan = s === soort;
+        b.setAttribute("aria-pressed", String(aan));
+        b.setAttribute("aria-label", T["naam." + (aan ? soort : soort === "bewaard" ? "bewaar" : "verberg")].replace("{adres}", () => adres(d)));
+        if (werkt) b.removeAttribute("aria-disabled"); else b.setAttribute("aria-disabled", "true");
+        b.querySelector(".bw-ico").textContent = soort === "bewaard" ? (aan ? "★" : "☆") : (aan ? "◌" : "⊘");
+        b.querySelector(".bw-nm").textContent = aan ? T["label." + soort] : T[soort === "bewaard" ? "bewaar" : "verberg"];
+        b.querySelector(".bw-terug").textContent = aan ? T["terug." + soort] : ""; });
+    }
+    const card = rijen.get(d.id) && rijen.get(d.id).closest(".card");
+    if (card) { card.classList.toggle("bw-is-weg", s === "verborgen");
+      const l = card.querySelector(".bw-label"); l.hidden = !s; l.className = "bw-label" + (s === "verborgen" ? " weg" : "");
+      l.textContent = "";
+      if (s) { const i = maak("span", null, s === "bewaard" ? "★" : "◌"); i.setAttribute("aria-hidden", "true"); l.append(i, T["label." + s]); } }
+  }
+  // De statusregel boven de werklijst (en in 'Open pand'): role=status, dus voorgelezen zonder te onderbreken.
+  const balk = document.getElementById("bwBalk");
+  const el = id => document.getElementById(id);
+  // Ongedaan maken draagt de zin als beschrijving (aria-describedby) en het pand waar hij bij hoort.
+  function status(doel, tekst, terug, id) {
+    const zin = maak("span", null, tekst); zin.id = doel.id + "-zin";
+    doel.textContent = ""; doel.append(zin);
+    if (!terug) return null;
+    const b = maak("button", "bw-ongedaan", T.ongedaan); b.type = "button"; b.setAttribute("aria-describedby", zin.id);
+    b.dataset.pand = id; b.addEventListener("click", terug); doel.append(b); return b;
+  }
+  function druk(d, soort, b) {
+    const inPand = !!b.closest("#pand"), hier = inPand ? dlg.s : el("bwStatus");
+    if (!werkt) { status(hier, T.geen_opslag); return; }
+    const uit = zet(d, soort);
+    if (!uit) { status(hier, T.geen_opslag); return; }
+    const zin = uit.nu === "verborgen" ? T["status.verborgen"] : uit.nu === "bewaard" ? T["status.bewaard"]
+      : soort === "verborgen" ? T["status.terug"] : T["status.niet_bewaard"];
+    const tekst = zin.replace("{adres}", () => adres(d));
+    const terug = () => { herstel(d, uit.oud);
+      const t = (uit.oud ? (uit.oud.stand === "verborgen" ? T["status.verborgen"] : T["status.bewaard"]) : T["status.terug"]).replace("{adres}", () => adres(d));
+      [el("bwStatus"), dlg && dlg.d.id === d.id ? dlg.s : null].forEach(s => s && status(s, t));
+      // Focus naar de knop die je nu ziet: in 'Open pand' zolang het open is, anders op de kaart (een gesloten
+      // venster houdt zijn knoppen in de pagina, maar die kunnen geen focus krijgen), anders de werklijst.
+      const ziet = x => x && x.isConnected && (!x.closest("dialog") || x.closest("dialog").open);
+      const k = [inPand ? dlg.r : null, rijen.get(d.id)].find(ziet);
+      const f = k && k.querySelector(soort === "bewaard" ? ".bw-bewaar" : ".bw-weg"); (f || lijstDeel()).focus(); };
+    const ongedaan = status(el("bwStatus"), tekst, terug, d.id);
+    if (inPand) status(dlg.s, tekst, terug, d.id);
+    // Een kaart die verdwijnt, neemt de focus niet mee: die gaat naar Ongedaan maken.
+    else if (!b.isConnected && ongedaan) ongedaan.focus();
+  }
+  function werkBalk() {
+    if (!balk) return;
+    const n = aantalWeg(), aantal = el("bwAantal"), toon = el("bwToon");
+    if (n === 0) tonen = false;   // niets verborgen: geen telling en geen knop
+    el("bwApparaat").textContent = werkt ? T.apparaat : T.geen_opslag;
+    aantal.hidden = toon.hidden = n === 0;
+    aantal.textContent = n === 1 ? T["aantal.een"] : T.aantal.replace("{n}", nl(n));
+    // Geen aria-pressed: het label zegt al wat de knop doet (Lumi §4); de rand via de klasse.
+    toon.textContent = T[(tonen ? "toon.uit" : "toon") + (n === 1 ? ".een" : "")]; toon.classList.toggle("aan", tonen);
+  }
+  // Een lege werklijst omdat alles verborgen is (Lumi §7). m: de panden die de filters halen, verborgen meegeteld;
+  // 0 als de lijst niet leeg is door Verberg. Dan staat de zin van de filters (of niets) er weer.
+  function leeg(vak, m, filters) {
+    const p = vak.querySelector("p"), wis = vak.querySelector(".wl-wis");
+    if (vak.dataset.zin == null) vak.dataset.zin = p.textContent;
+    let b = vak.querySelector(".bw-leeg-toon");
+    if (wis) wis.hidden = !!m && !filters;
+    if (!m) { p.textContent = vak.dataset.zin; if (b) b.remove(); return; }
+    p.textContent = !filters ? T["leeg.alles_verborgen"].replace("{totaal}", nl(m))
+      : m === 1 ? T["leeg.verborgen.een"] : T["leeg.verborgen"].replace("{m}", nl(m));
+    if (!b) { b = maak("button", "bw-leeg-toon"); b.type = "button"; vak.insertBefore(b, wis);
+      b.addEventListener("click", () => { tonen = true; overal(true); el("bwToon").focus(); }); }   // daarna: "Verberg ze weer"
+    b.textContent = T[m === 1 ? "toon.een" : "toon"];
+  }
+  const ongedaanVoor = id => { const b = el("bwStatus") && el("bwStatus").querySelector(".bw-ongedaan");
+    return b && b.dataset.pand === String(id) ? b : null; };
+  const lijstDeel = () => (balk && balk.closest("section")) || el("inhoud");
+  // lijst: alleen als een pand verborgen wordt of terugkomt, rekent de werklijst opnieuw; Bewaar verandert geen kaart van plek.
+  function overal(lijst) { rijen.forEach((k, id) => { const d = PER_ID.get(id); if (d) werkRij(d); }); if (dlg) werkRij(dlg.d); werkBalk(); if (lijst) luisteraars.forEach(f => f()); }
+  if (balk) el("bwToon").addEventListener("click", () => { tonen = !tonen; overal(true); });
+  addEventListener("storage", e => { if (e.key === SLEUTEL) { lees(); overal(true); } });   // een ander tabblad van dit dashboard
+  werkBalk();
+  return {rij, ververs: werkRij, zichtbaar, aantalWeg, op: f => luisteraars.push(f), van, leeg, ongedaanVoor, lijstDeel};
+})();
+/* ============================ einde BEWAREN EN VERBERGEN ============================ */
+
+/* ============================ WERKLIJST (VA-39, VA-68 t/m VA-70) ============================
    Tot 500 kaarten: de eerste STAP meteen, de volgende pas als je in de buurt scrolt, zodat de
-   pagina op een telefoon snel staat. Het gemeentefilter kiest alleen uit de panden op de lijst;
-   de keuzes, tellingen en zinnen komen uit gemeente_filter() in Python. De gekozen gemeente
-   staat in het adres (?gemeente=), zodat herladen dezelfde keuze houdt. */
+   pagina op een telefoon snel staat. Elke kaart wordt één keer gebouwd en daarna teruggehangen,
+   zodat zijn luchtfoto maar één keer wordt opgevraagd (VA-71 crit. 3).
+   De filters (gemeente, categorie, signaal, gebied, en de getalvelden van VA-69) rekenen in de browser
+   op de panden van de lijst: tussen filters EN, binnen een filter OF; het aantal bij een keuze telt de
+   panden die alle andere filters halen. Sorteren (VA-70) hangt dezelfde kaarten in een andere volgorde. Elke zin komt uit Python (filter_html(), PAYLOAD.filter.tekst); het script
+   vult alleen getallen in. De stand staat in het adres, zodat herladen en delen dezelfde lijst geven. */
 (() => {
-  const STAP = 40, wacht = document.querySelector(".schildwacht");
+  const STAP = 40, wacht = document.querySelector(".schildwacht"), gebouwd = new Map();
   let rij = LEADS, getoond = 0;
   const io = "IntersectionObserver" in window ? new IntersectionObserver(e => {
     if (e.some(x => x.isIntersecting)) { meer(); kijk(); }
   }, {rootMargin: "0px 0px 1200px 0px"}) : null;
-  function meer() {
-    const tot = io ? Math.min(rij.length, getoond + STAP) : rij.length, deel = document.createDocumentFragment();
-    for (; getoond < tot; getoond++) deel.appendChild(kaart(rij[getoond]));
+  function meer(minstens) {
+    const tot = io ? Math.min(rij.length, Math.max(getoond + STAP, minstens || 0)) : rij.length, deel = document.createDocumentFragment();
+    for (; getoond < tot; getoond++) {
+      const d = rij[getoond];
+      if (!gebouwd.has(d.id)) gebouwd.set(d.id, kaart(d));
+      deel.appendChild(gebouwd.get(d.id));
+    }
     lb.appendChild(deel);
   }
   // Opnieuw waarnemen geeft direct een nieuwe melding: staat de wacht nog in de buurt, dan volgt de volgende STAP.
   function kijk() { if (!io) return; io.unobserve(wacht); if (getoond < rij.length) io.observe(wacht); }
-  function teken(lijst) { rij = lijst; getoond = 0; lb.textContent = ""; meer(); kijk(); }
-
-  const kies = document.getElementById("gemeente");
-  if (!kies) { teken(LEADS); return; }
-  const uitkomst = document.getElementById("gemeente-uitkomst"), leeg = document.getElementById("gemeente-leeg");
-  function toon(naam, adres) {
-    const optie = naam ? [...kies.options].find(o => o.value === naam) : null;
-    kies.value = optie ? naam : "";
-    uitkomst.textContent = optie ? optie.dataset.uitkomst : "";
-    leeg.hidden = !naam || !!optie;
-    if (naam && !optie) leeg.querySelector("p").textContent = leeg.dataset.tekst.replace("{gemeente}", naam);
-    teken(naam ? LEADS.filter(d => d.g === naam) : LEADS);
-    if (adres) {
-      const q = new URLSearchParams(location.search);
-      if (naam) q.set("gemeente", naam); else q.delete("gemeente");
-      const s = q.toString();
-      history.replaceState(null, "", location.pathname + (s ? "?" + s : "") + location.hash);
-    }
+  // houd: na Bewaar of Verberg (VA-90) blijven zoveel kaarten staan als er al waren, dus de pagina springt niet.
+  function teken(lijst, houd) {
+    if (!houd) { rij = lijst; getoond = 0; lb.textContent = ""; meer(); kijk(); return; }
+    // Ter plekke: kaarten die blijven, blijven hangen (een kaart die opnieuw wordt opgehangen, vraagt zijn
+    // luchtfoto opnieuw op); alleen wat weg moet gaat eruit en wat erbij komt, komt op zijn plaats.
+    // Tot en met de laatste kaart die er nu staat: een pand dat wegvalt, haalt er onderaan geen nieuwe kaart (en foto) bij;
+    // de schildwacht doet dat pas als je verder scrolt, zoals altijd.
+    rij = lijst;
+    const staat = new Set(lb.children);
+    let tot = 0; rij.forEach((d, i) => { if (staat.has(gebouwd.get(d.id))) tot = i + 1; });
+    if (!io) tot = rij.length; else if (!tot) tot = Math.min(rij.length, STAP);
+    const wil = rij.slice(0, tot).map(d => { if (!gebouwd.has(d.id)) gebouwd.set(d.id, kaart(d)); return gebouwd.get(d.id); });
+    const blijft = new Set(wil);
+    [...lb.children].forEach(c => { if (!blijft.has(c)) c.remove(); });
+    let plek = lb.firstElementChild;
+    for (const n of wil) { if (n === plek) plek = plek.nextElementSibling; else lb.insertBefore(n, plek); }
+    getoond = tot; kijk();
   }
-  kies.addEventListener("change", () => toon(kies.value, true));
-  leeg.querySelector("button").addEventListener("click", () => { toon("", true); kies.focus(); });
-  toon(new URLSearchParams(location.search).get("gemeente") || "", false);
+
+  const wl = document.querySelector(".wl"), kies = document.getElementById("gemeente");
+  if (!kies || !PAYLOAD.filter) {   // zonder filterpaneel (een stad): alleen de verborgen panden eruit
+    let vak = null;   // het lege vak, pas gemaakt als alles verborgen is (VA-90, Lumi §7)
+    const alles = houd => { const r = LEADS.filter(d => BW.zichtbaar(d.id));
+      if (!r.length && LEADS.length && !vak) { vak = maak("div", "wl-leeg"); vak.append(maak("p")); lb.before(vak); }
+      if (vak) { BW.leeg(vak, r.length ? 0 : LEADS.length, false); vak.hidden = r.length > 0; }
+      lb.hidden = !r.length; teken(r, houd); };
+    BW.op(() => alles(true)); alles(false); return;
+  }
+  const F = PAYLOAD.filter;
+  const T = PAYLOAD.filter.tekst, $ = s => wl.querySelector(s);
+  const knop = $(".wl-knop"), paneel = $(".wl-paneel"), telling = $(".wl-telling"), chipsEl = $(".wl-chips");
+  const leeg = $(".wl-leeg"), toon = $(".wl-toon"), opties = [...wl.querySelectorAll(".wl-optie")];
+  const SIG = {leeg: "leeg", verbouwing: "bouw"};   // adreswaarde -> sig.k op de kaart
+  const HEEFT = {cat: (d, w) => d.cat.includes(w), sig: (d, w) => d.sig.some(s => s.k === SIG[w]),
+                 geb: (d, w) => d.gg === (w === "groot" ? 1 : 0)};
+  const LIJST = [["cat", "categorie"], ["sig", "signaal"], ["geb", "gebied"]];   // groep, adresparameter
+  const KEUZES = Object.fromEntries(LIJST.map(([g]) => [g, opties.filter(o => o.dataset.groep === g).map(o => o.dataset.waarde)]));
+  const GEMEENTEN = [...kies.options].map(o => o.value).filter(Boolean);
+  // Getalvelden (VA-69) en sorteren (VA-70): de velden, zinnen en richtingen komen uit bereik_filter() in Python.
+  const BEREIK = F.bereik || [], SORT = F.sorteer || {}, STD = Object.keys(SORT)[0];
+  const sortEl = document.getElementById("wl-sorteer"), dirEl = document.getElementById("wl-volgorde");
+  const EIGEN = ["gemeente", ...LIJST.map(([, p]) => p), ...BEREIK.flatMap(b => b.url), "sorteer", "richting"];
+  const leegRuw = () => Object.fromEntries(BEREIK.map(b => [b.k, {van: "", tm: ""}]));
+  const st = {gemeente: "", cat: new Set(), sig: new Set(), geb: new Set(), ruw: leegRuw(),
+              sort: STD, dir: STD ? SORT[STD].std : "af"};
+  let B = {};   // per getalveld wat telt: {aan, van, tm}, of {aan: false, fout, veld} bij een ongeldige invoer
+  const vul = (zin, n) => zin.replace("{n}", nl(n));
+  const grens = (b, v) => b.jaar ? String(v) : nl(v);   // een jaartal nooit door nl(): 1939, niet 1.939
+
+  // "1.200" en "1 200" worden 1200; een komma of een letter is ongeldig (Lumi, bouwnotitie 4).
+  function getal(s) { s = String(s).trim(); if (!s) return null; const t = s.replace(/[.\s]/g, ""); return /^\d{1,6}$/.test(t) ? Number(t) : NaN; }
+  // Een ongeldig getal of van > tot en met zet alleen dat veld uit, met een melding; de rest werkt door (crit. 5).
+  function bereik(b, r) {
+    const v = getal(r.van), t = b.url.length > 1 ? getal(r.tm) : null;
+    const fv = Number.isNaN(v) || (b.max != null && v !== null && v > b.max), ft = Number.isNaN(t);
+    if (fv || ft) return {aan: false, fout: b.fout, veld: fv && ft ? "beide" : fv ? "van" : "tm"};
+    if (v === null && t === null) return {aan: false};
+    if (v !== null && t !== null && v > t) return {aan: false, fout: T.omgekeerd, veld: "beide"};
+    return {aan: true, van: v, tm: t};
+  }
+
+  function past(d, behalve, alle) {   // alle: ook de verborgen panden (alleen voor het lege vak, VA-90)
+    if (!alle && !BW.zichtbaar(d.id)) return false;   // VA-90: een verborgen pand telt nergens mee, tot je ze toont
+    if (behalve !== "gemeente" && st.gemeente && d.g !== st.gemeente) return false;
+    for (const [g] of LIJST) if (g !== behalve && st[g].size && ![...st[g]].some(w => HEEFT[g](d, w))) return false;
+    // Grenzen tellen mee; een pand zonder waarde valt weg zolang er een grens staat (VA-69 crit. 4).
+    for (const b of BEREIK) { const x = B[b.k], v = d[b.veld]; if (!x.aan) continue;
+      if (v == null || (x.van !== null && v < x.van) || (x.tm !== null && v > x.tm)) return false; }
+    return true;
+  }
+  // Gelijk blijft in de volgorde van de werklijst (score, dan VA-32); zonder waarde altijd achteraan (VA-70 crit. 3).
+  const PLAATS = new Map(LEADS.map((d, i) => [d, i]));
+  function sorteer(lijst) {
+    if (!STD) return lijst;
+    const k = SORT[st.sort].veld, op = st.dir === "op", na = (a, b) => PLAATS.get(a) - PLAATS.get(b);
+    return lijst.slice().sort((a, b) => { const x = a[k], y = b[k];
+      if (x == null || y == null) return x == null && y == null ? na(a, b) : x == null ? 1 : -1;
+      return x === y ? na(a, b) : op ? x - y : y - x; });
+  }
+  // Beide gebieden aan is hetzelfde als geen van beide (crit. 3): dat is geen actief filter.
+  const telt = g => st[g].size > 0 && !(g === "geb" && st.geb.size === KEUZES.geb.length);
+
+  function chips() {
+    const c = [];
+    if (st.gemeente) c.push([T.chipGemeente.replace("{gemeente}", () => st.gemeente), () => { st.gemeente = ""; }]);
+    for (const g of ["geb", "cat", "sig"]) if (telt(g))
+      opties.forEach(o => { const w = o.dataset.waarde; if (o.dataset.groep === g && st[g].has(w)) c.push([o.dataset.chip, () => st[g].delete(w)]); });
+    for (const b of BEREIK) { const x = B[b.k]; if (!x.aan) continue;   // geen chip voor de sortering: dat is geen filter
+      const zin = x.van !== null && x.tm !== null ? b.chips.vanTm : x.van !== null ? b.chips.van : b.chips.tm;
+      c.push([zin.replace("{van}", () => grens(b, x.van)).replace("{tm}", () => grens(b, x.tm)), () => { st.ruw[b.k] = {van: "", tm: ""}; }]); }
+    return c;
+  }
+  function knopje(cls, tekst, klik) { const b = maak("button", cls, tekst); b.type = "button"; b.addEventListener("click", klik); return b; }
+  let volgordeVan = STD;   // voor welk veld de opties van Volgorde nu staan (de HTML begint bij score)
+  function zetSortering() {
+    if (!sortEl || !dirEl) return;
+    if (volgordeVan !== st.sort) {   // een ander veld: de richtingen van dat veld, de standaard eerst
+      dirEl.textContent = ""; SORT[st.sort].opties.forEach(([r, n]) => dirEl.add(new Option(n, r))); volgordeVan = st.sort; }
+    sortEl.value = st.sort; dirEl.value = st.dir;
+  }
+
+  function werk(schrijf, houd) {
+    B = Object.fromEntries(BEREIK.map(b => [b.k, bereik(b, st.ruw[b.k])]));
+    const treffers = LEADS.filter(d => past(d, null)), n = treffers.length;
+    const zonder = g => LEADS.filter(d => past(d, g));
+    const basis = {gemeente: zonder("gemeente"), cat: zonder("cat"), sig: zonder("sig"), geb: zonder("geb")};
+    opties.forEach(o => {
+      const g = o.dataset.groep, w = o.dataset.waarde, c = basis[g].filter(d => HEEFT[g](d, w)).length;
+      o.querySelector("input").checked = st[g].has(w);
+      o.querySelector(".wl-getal").textContent = nl(c);
+      o.classList.toggle("nul", c === 0);
+    });
+    const perGemeente = {};
+    basis.gemeente.forEach(d => { perGemeente[d.g] = (perGemeente[d.g] || 0) + 1; });
+    for (const o of kies.options) o.textContent = o.value
+      ? T.gemOptie.replace("{gemeente}", () => o.value).replace("{aantal}", nl(perGemeente[o.value] || 0))
+      : vul(T.gemAlle, basis.gemeente.length);
+    kies.value = st.gemeente;
+    BEREIK.forEach(b => {
+      const x = B[b.k], fout = $(`#wl-${b.k}-fout`);
+      for (const k of ["van", "tm"]) { const inp = $(`#wl-${b.k}-${k}`); if (!inp) continue;
+        if (inp.value !== st.ruw[b.k][k]) inp.value = st.ruw[b.k][k];
+        if (x.fout && (x.veld === "beide" || x.veld === k)) inp.setAttribute("aria-invalid", "true"); else inp.removeAttribute("aria-invalid"); }
+      fout.textContent = x.fout || ""; fout.hidden = !x.fout;
+    });
+    zetSortering();
+
+    const lijst = chips(), a = lijst.length, bol = $(".wl-aantal");
+    bol.hidden = !a; bol.textContent = nl(a); $(".wl-actief").textContent = a ? vul(T.actief, a) : "";
+    telling.textContent = a || n !== LEADS.length ? vul(T.telling, n) : T.alle;   // n = de kaarten op het scherm
+    toon.textContent = n === 0 ? T.toonNul : n === 1 ? T.toonEen : vul(T.toon, n);
+    chipsEl.textContent = ""; chipsEl.hidden = !a;
+    lijst.forEach(([tekst, weg], i) => {
+      const b = knopje("wl-chip", tekst, () => {
+        weg(); werk(true);
+        const rest = chipsEl.querySelectorAll(".wl-chip");
+        (rest[i] || rest[i - 1] || knop).focus();
+      });
+      b.setAttribute("aria-label", T.chipNaam.replace("{chip}", () => tekst));
+      const x = maak("span", "x", "×"); x.setAttribute("aria-hidden", "true"); b.append(x);
+      chipsEl.append(b);
+    });
+    if (a) chipsEl.append(knopje("wl-wis", T.wis, wisAlles));
+    BW.leeg(leeg, n ? 0 : LEADS.filter(d => past(d, null, true)).length, a > 0);   // VA-90: leeg door Verberg?
+    leeg.hidden = n > 0; lb.hidden = n === 0;
+    teken(sorteer(treffers), houd);   // dezelfde kaarten uit 'gebouwd', in de nieuwe volgorde: geen tweede PDOK-verzoek
+    if (schrijf) schrijfAdres();
+  }
+  // De sortering blijft staan: die knop wist alleen de filters (Lumi, kopij 'wis').
+  function wisAlles() { st.gemeente = ""; LIJST.forEach(([g]) => st[g].clear()); st.ruw = leegRuw(); werk(true); knop.focus(); }
+
+  // Het adres (crit. 9): een onbekende of ongeldige waarde valt weg, de rest geldt.
+  function leesAdres() {
+    const q = new URLSearchParams(location.search), gem = (q.get("gemeente") || "").trim().toLowerCase();
+    st.gemeente = GEMEENTEN.find(g => g.toLowerCase() === gem) || "";
+    for (const [g, p] of LIJST) (q.get(p) || "").split(",").forEach(x => {
+      const w = KEUZES[g].find(k => k.toLowerCase() === x.trim().toLowerCase()); if (w) st[g].add(w); });
+    // Een ongeldig getal laat het veld leeg; van > tot en met krijgt de waarden en de melding, net als bij typen.
+    for (const b of BEREIK) b.url.forEach((p, j) => { const v = (q.get(p) || "").trim();
+      if (/^\d{1,6}$/.test(v) && !(b.max != null && Number(v) > b.max)) st.ruw[b.k][j ? "tm" : "van"] = v; });
+    const s = (q.get("sorteer") || "").trim().toLowerCase(), r = (q.get("richting") || "").trim().toLowerCase();
+    if (Object.keys(SORT).includes(s)) st.sort = s;
+    if (STD) st.dir = r === "op" || r === "af" ? r : SORT[st.sort].std;
+  }
+  // In de volgorde van Lumi's tabel, alleen wat meetelt; de standaardsortering staat er niet in.
+  function schrijfAdres() {
+    const q = new URLSearchParams(location.search), uit = [];
+    EIGEN.forEach(p => q.delete(p));
+    const zet = (p, v) => uit.push(p + "=" + encodeURIComponent(v).replace(/%2C/gi, ","));
+    if (st.gemeente) zet("gemeente", st.gemeente);
+    for (const [g, p] of LIJST) { const w = KEUZES[g].filter(k => st[g].has(k)); if (w.length) zet(p, w.join(",")); }
+    for (const b of BEREIK) { const x = B[b.k]; if (!x.aan) continue;
+      if (x.van !== null) zet(b.url[0], x.van); if (x.tm !== null) zet(b.url[1], x.tm); }
+    if (STD && st.sort !== STD) zet("sorteer", st.sort);
+    if (STD && st.dir !== SORT[st.sort].std) zet("richting", st.dir);
+    const rest = q.toString(), s = uit.concat(rest ? [rest] : []).join("&");
+    history.replaceState(null, "", location.pathname + (s ? "?" + s : "") + location.hash);
+  }
+
+  // Het paneel: open vanaf 801 px (de grens van het menu, VA-63), anders dicht achter "Filters".
+  const zetOpen = open => { knop.setAttribute("aria-expanded", String(open)); paneel.hidden = !open; };
+  const dicht = () => { zetOpen(false); knop.focus(); };
+  knop.addEventListener("click", () => zetOpen(paneel.hidden));
+  toon.addEventListener("click", dicht);
+  paneel.addEventListener("keydown", e => { if (e.key === "Escape" && wl.clientWidth < 600) dicht(); });
+  // Vakjes en selects gelden meteen; een getalveld 400 ms na de laatste toets, en meteen bij change.
+  const typen = new Map();
+  paneel.addEventListener("input", e => {
+    const t = e.target; if (!t.dataset.k) return;
+    st.ruw[t.dataset.k][t.dataset.x] = t.value; clearTimeout(typen.get(t)); typen.set(t, setTimeout(() => werk(true), 400));
+  });
+  paneel.addEventListener("change", e => {
+    const t = e.target, o = t.closest(".wl-optie");
+    if (t === kies) st.gemeente = t.value;
+    else if (o) { const set = st[o.dataset.groep]; if (t.checked) set.add(o.dataset.waarde); else set.delete(o.dataset.waarde); }
+    else if (t.dataset.k) { clearTimeout(typen.get(t)); st.ruw[t.dataset.k][t.dataset.x] = t.value; }
+    else return;
+    werk(true);
+  });
+  // Een ander veld springt naar zijn eigen standaardrichting (Lumi, VA-70).
+  if (sortEl) sortEl.addEventListener("change", () => { st.sort = sortEl.value; st.dir = SORT[st.sort].std; werk(true); });
+  if (dirEl) dirEl.addEventListener("change", () => { st.dir = dirEl.value; werk(true); });
+  leeg.querySelector(".wl-wis").addEventListener("click", wisAlles);
+  zetOpen(matchMedia("(min-width: 801px)").matches);
+  leesAdres();
+  werk(false);
+  BW.op(() => werk(false, true));   // VA-90: na Bewaar of Verberg; het adres verandert niet
 })();
 /* ============================ einde WERKLIJST ============================ */
 
@@ -3251,6 +4411,8 @@ function kantoorStart(root, data, opties = {}) {
 
 def render(payload: dict) -> str:
     """Vul het sjabloon. De payload als laatste, zodat zijn inhoud niet wordt vervangen."""
+    payload = {**payload, "kaartfoto": payload.get("kaartfoto") or kaartfoto_tekst(),  # elke kaart (VA-71)
+               "bewaar": payload.get("bewaar") or bewaar_blok([])}  # elke kaart en elk pand (VA-90)
     tip = payload["peildatum_tip"]
     # Zonder 'pagina' (een payload van vóór VA-39, of een test) de teksten van een gebied als Delft.
     pg = payload.get("pagina") or pagina(
@@ -3258,6 +4420,7 @@ def render(payload: dict) -> str:
         "De 20 hoogst scorende panden — de controlevraag uit de briefing", BRON_PIL)
     lijst = pg["lijst"]
     naam = next(n for g in menu_voor(lijst) for d, n in g["items"] if d == lijst)
+    band = band_html(payload.get("kaart"))
     html = (TEMPLATE
             .replace("__TITEL__", escape(pg["titel"]))
             .replace("__LABEL__", payload["gebied"])
@@ -3268,8 +4431,9 @@ def render(payload: dict) -> str:
             .replace("__FEITEN_CAP__", escape(pg["feiten.cap"]))
             .replace("__LIJST_NAAM__", escape(naam))
             .replace("__LIJST__", lijst)
-            .replace("__FILTER__", filter_html(payload.get("filter")))
+            .replace("__FILTER__", filter_html(payload.get("filter"), KAARTFOTO_TEKST["bron"]))
             .replace("__MENU__", menu_html(lijst))
+            .replace("__BAND__", band[0]).replace("__TRAP__", band[1]).replace("__KAART__", band[2])
             .replace("__WERKBALK__", werkbalk_html((payload.get("kantoor") or {}).get("tekst"))))
     # De koppen van het lijstdeel ('proefresultaat.*' of 'werklijst.*') gaan naar __KOP_LIJST_*__.
     for sleutel, tekst in (payload.get("koppen") or koppen(payload["gebied"], None, None)).items():

@@ -193,7 +193,9 @@ class Koppen(unittest.TestCase):
     def test_geen_sjabloonplek_blijft_over(self):
         html = gebouwd()
         self.assertEqual(re.findall(r"__[A-Z][A-Z0-9_]*__", html), [])
-        self.assertIn('<h1 id="t-kantoor">Zo loopt de pandenselectie</h1>', html)
+        self.assertIn('<h1 id="t-kantoor" class="vh">Kantoor</h1>', html)
+        self.assertNotIn("Zo loopt de pandenselectie", html)
+        self.assertNotIn("Elke medewerker is een stap", html)
         self.assertIn('id="secmeta">20 panden · Delft · gesorteerd op score-index</span>', html)
 
     def test_het_script_maakt_de_meta_niet_meer(self):
@@ -323,8 +325,7 @@ class MenuLandelijk(unittest.TestCase):
         self.assertEqual(k["werklijst.titel"], "Werklijst november 2026")
         self.assertEqual(k["werklijst.zin"], "De 500 hoogst scorende panden van Nederland, klaar voor je "
                                              "visuele controle. Open een pand voor alle gegevens.")
-        self.assertEqual(k["werklijst.meta"], "500 panden · 450 uit de 25 grootste gemeenten · 50 elders · "
-                                              "gesorteerd op score-index")
+        self.assertEqual(k["werklijst.meta"], "500 panden · 450 uit de 25 grootste gemeenten · 50 elders")
         self.assertFalse([s for s in k if s.startswith("proefresultaat.")])
         for t in bd.KOP_TEKST_LANDELIJK.values():
             self.assertNotRegex(t.lower(), r"snapshot")
