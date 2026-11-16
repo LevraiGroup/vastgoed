@@ -818,16 +818,25 @@ def bewaar_blok(top: list[dict]) -> dict:
 # Zolang de run met de hand gaat, zegt de pagina dat; het woord 'automatisch' verschijnt alleen bij
 # wijze: automatisch (dat zet pas het verhaal dat de run echt inplant, VA-77). Kopij: Ada, wacht op Lumi.
 OUTPUT = BASE / "output"
+# Sinds Aymans "maak het wel weer fancy, high tech, cool": een glazen paneel in de band, met een zacht
+# kloppende stip en een dunne lijn door de maand. Die lijn staat op de dag dat de pagina gebouwd is (Python,
+# date.today()), niet op een klok in de browser; bij de volgende build schuift hij op.
 PLANNING_TEKST = {
-    "werklijst": "Werklijst {maand}",
-    "werklijst.geen": "Werklijst: nog geen werklijstbestand",
-    "volgende.handmatig": "Volgende run: handmatig, begin {maand}",
-    "volgende.handmatig.dag": "Volgende run: handmatig, rond {dag} {maand}",
-    "volgende.handmatig.geen": "Volgende run: handmatig",
-    "volgende.automatisch": "Volgende run: {dag} {maand}",
-    "volgende.automatisch.geen": "Volgende run: automatisch, op dag {dag} van de maand",
+    "paneel": "Planning van de datarun",
+    "laatste": "Laatste run",
+    "volgende": "Volgende run",
+    "laatste.geen": "nog geen werklijst",
+    "volgende.begin": "begin {maand}",
+    "volgende.rond": "rond {dag} {maand}",
+    "volgende.op": "{dag} {maand}",
+    "volgende.dag": "op dag {dag} van de maand",
+    "volgende.geen": "nog niet bekend",
+    "wijze.handmatig": "handmatig",
+    "wijze.automatisch": "automatisch",
     "controle.uit": "Dagelijkse controle nog niet actief",
     "controle.aan": "Dagelijkse controle: elke nacht om {tijd}",
+    "lijn": "{pct} % van {maand} voorbij bij het bouwen van deze pagina",
+    "zin": "Volgende run: {volgende}, {wijze}. {controle}.",
 }
 PLANNING_WIJZEN = ("handmatig", "automatisch")
 PLANNING_DAG = range(1, 29)   # dag 1 tot en met 28: die bestaat in elke maand
@@ -885,39 +894,61 @@ def lees_planning(cfg: dict) -> tuple[dict, list[str]]:
     return {"wijze": wijze, "dag": dag, "controle": controle, "tijd": tijd.strip() if controle else None}, let
 
 
-def planning_teksten(cfg: dict, gebied_slug: str, map_: Path | None = None) -> tuple[dict, list[str]]:
+def maand_voortgang(jjjj_mm: str, dag: date) -> int:
+    """Hoeveel procent van de maand 'JJJJ-MM' voorbij is op 'dag' (0 tot en met 100)."""
+    j, m = (int(x) for x in jjjj_mm.split("-"))
+    vj, vm = (int(x) for x in volgende_maand(jjjj_mm).split("-"))
+    begin, eind = date(j, m, 1), date(vj, vm, 1)
+    return max(0, min(100, round(100 * (dag - begin).days / (eind - begin).days)))
+
+
+def planning_teksten(cfg: dict, gebied_slug: str, map_: Path | None = None,
+                     vandaag: date | None = None) -> tuple[dict, list[str]]:
     """
-    De drie regels naast Bron en Peildatum, en de zin van de kantoormanager (VA-86 crit. 2, 3, 5, 6):
-    {'werklijst', 'volgende', 'controle', 'zin'}, plus de waarschuwingen voor de build.
+    Wat het runpaneel toont en de zin van de kantoormanager (VA-86 crit. 2, 3, 5, 6): {'laatste', 'volgende',
+    'wijze', 'controle', 'voortgang', 'lijn', 'zin'}, plus de waarschuwingen voor de build. 'automatisch' staat er
+    alleen bij wijze: automatisch.
     """
     plan, let = lees_planning(cfg)
     maand = werklijst_maand(gebied_slug, map_)
     T = PLANNING_TEKST
-    werklijst = T["werklijst"].format(maand=maand_voluit(maand)) if maand else T["werklijst.geen"]
+    na = maand_voluit(volgende_maand(maand)) if maand else None
     if plan["wijze"] == "automatisch":
-        volgende = (T["volgende.automatisch"].format(dag=plan["dag"], maand=maand_voluit(volgende_maand(maand)))
-                    if maand else T["volgende.automatisch.geen"].format(dag=plan["dag"]))
-    elif not maand:
-        volgende = T["volgende.handmatig.geen"]
+        volgende = T["volgende.op"].format(dag=plan["dag"], maand=na) if na else T["volgende.dag"].format(dag=plan["dag"])
+    elif not na:
+        volgende = T["volgende.geen"]
     elif plan["dag"] is not None:
-        volgende = T["volgende.handmatig.dag"].format(dag=plan["dag"], maand=maand_voluit(volgende_maand(maand)))
+        volgende = T["volgende.rond"].format(dag=plan["dag"], maand=na)
     else:
-        volgende = T["volgende.handmatig"].format(maand=maand_voluit(volgende_maand(maand)))
+        volgende = T["volgende.begin"].format(maand=na)
+    wijze = T["wijze." + plan["wijze"]]
     controle = T["controle.aan"].format(tijd=plan["tijd"]) if plan["controle"] else T["controle.uit"]
-    return {"werklijst": werklijst, "volgende": volgende, "controle": controle,
-            "zin": f"{volgende}. {controle}."}, let
+    voortgang = maand_voortgang(maand, vandaag or date.today()) if maand else None
+    return {"laatste": maand_voluit(maand) if maand else T["laatste.geen"], "volgende": volgende, "wijze": wijze,
+            "automatisch": plan["wijze"] == "automatisch", "controle": controle, "voortgang": voortgang,
+            "lijn": T["lijn"].format(pct=voortgang, maand=maand_voluit(maand)) if maand else "",
+            "zin": T["zin"].format(volgende=volgende, wijze=wijze, controle=controle)}, let
 
 
-def planning_pillen(pl: dict | None) -> str:
-    """De drie regels als pillen in de rij van Bron en Peildatum; zonder planning niets."""
+def planning_paneel(pl: dict | None) -> str:
+    """Het glazen runpaneel bovenaan de band (onder Bron en Peildatum); zonder planning niets."""
     if not pl:
         return ""
-    return "".join(f'<div class="pill">{escape(pl[k])}</div>' for k in ("werklijst", "volgende", "controle"))
+    T = PLANNING_TEKST
+    stip = "run-stip automatisch" if pl["automatisch"] else "run-stip"
+    lijn = (f'<div class="run-lijn" role="img" aria-label="{escape(pl["lijn"])}"><i style="width:{pl["voortgang"]}%">'
+            '</i></div>') if pl["voortgang"] is not None else ""
+    return (f'\n        <div class="run-paneel" role="group" aria-label="{escape(T["paneel"])}">'
+            f'<div class="run-rij"><span class="run-item"><span class="{stip}" aria-hidden="true"></span>'
+            f'<span class="run-lab">{escape(T["laatste"])}</span> <b>{escape(pl["laatste"])}</b></span>'
+            f'<span class="run-item"><span class="run-lab">{escape(T["volgende"])}</span> <b>{escape(pl["volgende"])}</b> '
+            f'<span class="run-wijze">{escape(pl["wijze"])}</span></span></div>'
+            f'{lijn}<p class="run-noot">{escape(pl["controle"])}</p></div>')
 
 
-def met_planning(payload: dict, cfg: dict) -> dict:
+def met_planning(payload: dict, cfg: dict, vandaag: date | None = None) -> dict:
     """De planning in de payload, en de zin erachter bij wat de kantoormanager zegt (crit. 6)."""
-    pl, let = planning_teksten(cfg, slug(payload["gebied"]))
+    pl, let = planning_teksten(cfg, slug(payload["gebied"]), vandaag=vandaag)
     tekst = (payload.get("kantoor") or {}).get("tekst") or {}
     if tekst.get("chef"):
         tekst["chef"] = {**tekst["chef"], "zin": f"{tekst['chef']['zin']} {pl['zin']}"}
@@ -2098,6 +2129,32 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     .stroom-noot{margin-left:22px}
   }
   /* ===================== einde LANDKAART ===================== */
+  /* ===================== RUNPANEEL (VA-86): wanneer de laatste en de volgende run zijn, in glas ===================== */
+  .run-paneel{display:flex;flex-direction:column;gap:8px;width:fit-content;max-width:100%;margin-top:4px;padding:10px 14px 11px;
+    border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.13);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 24px -8px var(--gloed);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);font-size:13px;color:var(--nav-tekst)}
+  .run-rij{display:flex;flex-direction:column;gap:5px}
+  .run-item{position:relative;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;padding-left:19px}
+  .run-lab{min-width:9.5em;font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--nav-tekst)}
+  .run-item b{color:#fff;font-weight:700}
+  .run-wijze{padding:1px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.22);font-size:11.5px;color:var(--nav-tekst)}
+  .run-stip{position:absolute;left:1px;top:.45em;width:9px;height:9px;border-radius:50%;background:var(--s4);
+    box-shadow:0 0 0 0 color-mix(in srgb,var(--s4) 55%,transparent)}
+  .run-stip.automatisch{background:var(--s3);box-shadow:0 0 0 0 color-mix(in srgb,var(--s3) 55%,transparent)}
+  @media (prefers-reduced-motion: no-preference){
+    .run-stip{animation:run-klop 2.6s ease-out infinite}
+    .run-stip.automatisch{animation-name:run-klop-aan}
+  }
+  @keyframes run-klop{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--s4) 55%,transparent)}
+    70%,100%{box-shadow:0 0 0 7px color-mix(in srgb,var(--s4) 0%,transparent)}}
+  @keyframes run-klop-aan{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--s3) 55%,transparent)}
+    70%,100%{box-shadow:0 0 0 7px color-mix(in srgb,var(--s3) 0%,transparent)}}
+  .run-lijn{position:relative;margin-left:19px;height:3px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden}
+  .run-lijn i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;
+    background:linear-gradient(90deg,var(--s1),var(--s3));box-shadow:0 0 10px var(--gloed)}
+  .run-noot{margin:0 0 0 19px;font-size:12px;color:var(--nav-tekst)}
+  /* ===================== einde RUNPANEEL ===================== */
 
   @media(max-width:900px){
     .kpis{grid-template-columns:repeat(2,1fr)}
@@ -2401,9 +2458,9 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
           <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Kantoor</b></p>
           <div class="spills">
             <div class="pill">__BRONPIL__</div>
-            <div class="pill"__PEILTIP__>__PEILDATUM__</div>__PLANNING__
+            <div class="pill"__PEILTIP__>__PEILDATUM__</div>
           </div>
-        </div>
+        </div>__PLANNING__
         <h1 id="t-kantoor" class="vh">__KOP_KANTOOR_TITEL__</h1>
       </header>__TRAP____KAART__
       </div>
@@ -4638,7 +4695,7 @@ def render(payload: dict) -> str:
             .replace("__LIJST__", lijst)
             .replace("__FILTER__", filter_html(payload.get("filter"), KAARTFOTO_TEKST["bron"]))
             .replace("__MENU__", menu_html(lijst))
-            .replace("__PLANNING__", planning_pillen(payload.get("planning")))
+            .replace("__PLANNING__", planning_paneel(payload.get("planning")))
             .replace("__SLOT__", slot_html(payload.get("slot")))
             .replace("__BAND__", band[0]).replace("__TRAP__", band[1]).replace("__KAART__", band[2])
             .replace("__WERKBALK__", werkbalk_html((payload.get("kantoor") or {}).get("tekst"))))
