@@ -74,8 +74,10 @@ class Werklijst(unittest.TestCase):
 
     def test_verborgen_telt_nergens_mee(self):
         w = werklijst()
-        past = w[w.index("function past(d, behalve) {"):]
-        self.assertTrue(past.split("\n")[1].strip().startswith("if (!BW.zichtbaar(d.id)) return false;"))
+        past = w[w.index("function past(d, behalve, alle) {"):]
+        self.assertTrue(past.split("\n")[1].strip().startswith("if (!alle && !BW.zichtbaar(d.id)) return false;"))
+        # Alleen het lege vak telt de verborgen panden mee ('alle'); de telling en de kaarten nooit.
+        self.assertEqual(w.count("past(d, null, true)"), 1)
         self.assertIn("LEADS.filter(d => past(d, null))", w)       # de telling is wat past()
         self.assertIn("teken(sorteer(treffers), houd);", w)        # en dat zijn de kaarten
         self.assertIn("telling.textContent = a || n !== LEADS.length ? vul(T.telling, n) : T.alle;", w)
@@ -96,7 +98,10 @@ class Werklijst(unittest.TestCase):
         self.assertIn("[...lb.children].forEach(c => { if (!blijft.has(c)) c.remove(); });", werklijst())
 
     def test_stad_zonder_filterpaneel(self):
-        self.assertIn("const alles = houd => teken(LEADS.filter(d => BW.zichtbaar(d.id)), houd);", werklijst())
+        w = werklijst()
+        self.assertIn("const alles = houd => { const r = LEADS.filter(d => BW.zichtbaar(d.id));", w)
+        self.assertIn("lb.hidden = !r.length; teken(r, houd); };", w)
+        self.assertIn("BW.leeg(vak, r.length ? 0 : LEADS.length, false)", w)   # een stad heeft geen filters
 
 
 class Opslag(unittest.TestCase):
@@ -181,7 +186,132 @@ class Gebouwd(unittest.TestCase):
         self.assertIn('id="bwBalk"', html)
 
 
+class LegeWerklijst(unittest.TestCase):
+    """Lumi §7: een lege werklijst zegt of de filters of Verberg de oorzaak zijn, met de goede knop."""
+
+    def test_drie_gevallen(self):
+        js, w = blok(), werklijst()
+        # m: de panden die de filters halen, verborgen meegeteld; 0 als de lijst niet door Verberg leeg is.
+        self.assertIn("BW.leeg(leeg, n ? 0 : LEADS.filter(d => past(d, null, true)).length, a > 0);", w)
+        lg = js[js.index("function leeg(vak, m, filters) {"):js.index("const ongedaanVoor")]
+        # 1. de filters zelf vinden niets: de zin van de filters blijft (LIJST_TEKST['leeg']) en Wis alle filters
+        self.assertIn("if (!m) { p.textContent = vak.dataset.zin; if (b) b.remove(); return; }", lg)
+        # 2. filters actief, alles verborgen: enkelvoud bij 1; 3. geen filter: alle panden verborgen, geen Wis
+        self.assertIn('p.textContent = !filters ? T["leeg.alles_verborgen"].replace("{totaal}", nl(m))', lg)
+        self.assertIn(': m === 1 ? T["leeg.verborgen.een"] : T["leeg.verborgen"].replace("{m}", nl(m));', lg)
+        self.assertIn("if (wis) wis.hidden = !!m && !filters;", lg)
+        # De knop in het vak doet wat de balkknop doet, met dezelfde sleutels; daarna de focus op de balkknop.
+        self.assertIn('b.textContent = T[m === 1 ? "toon.een" : "toon"];', lg)
+        self.assertIn('tonen = true; overal(true); el("bwToon").focus();', lg)
+
+    def test_teksten(self):
+        t = bd.BEWAAR_TEKST
+        self.assertEqual(t["leeg.verborgen"], "Je hebt alle {m} panden verborgen die bij deze filters passen.")
+        self.assertEqual(t["leeg.verborgen.een"], "Het enige pand dat bij deze filters past, heb je verborgen.")
+        self.assertEqual(t["leeg.alles_verborgen"],
+                         "Je hebt alle {totaal} panden van de werklijst van deze maand verborgen.")
+        # De zin van de filters zelf is niet veranderd (geval 1).
+        self.assertTrue(bd.LIJST_TEKST["leeg"].startswith("Geen enkel pand op de werklijst van deze maand past"))
+
+
+class Toegankelijk(unittest.TestCase):
+    """Lumi §1 t/m §4: namen in aria-label, tekens verborgen voor de schermlezer, een lege status in de boom."""
+
+    def test_namen_per_stand(self):
+        js = blok()
+        self.assertNotIn(" · ", js)   # geen middenpunt meer in de naam
+        self.assertIn('b.setAttribute("aria-label", T["naam." + (aan ? soort : soort === "bewaard" ? "bewaar" : "verberg")]'
+                      '.replace("{adres}", () => adres(d)));', js)
+        self.assertIn('b.setAttribute("aria-pressed", String(aan));', js)   # de knoppen per pand houden aria-pressed
+        for k in ("bewaar", "bewaard", "verberg", "verborgen"):   # de naam begint met de zichtbare tekst (WCAG 2.5.3)
+            zichtbaar = bd.BEWAAR_TEKST[k if k in ("bewaar", "verberg") else "label." + k]
+            self.assertTrue(bd.BEWAAR_TEKST["naam." + k].startswith(zichtbaar), k)
+
+    def test_tekens_niet_voorgelezen(self):
+        js = blok()
+        self.assertIn('const i = maak("span", null, s === "bewaard" ? "★" : "◌"); i.setAttribute("aria-hidden", "true");'
+                      ' l.append(i, T["label." + s]);', js)
+        self.assertNotIn('"★ "', js)
+        self.assertIn('const ico = maak("span", "bw-ico"); ico.setAttribute("aria-hidden", "true");', js)
+
+    def test_toon_knop_zonder_aria_pressed(self):
+        js = blok()
+        self.assertIn('<button class="bw-toon" id="bwToon" type="button" hidden></button>', bd.TEMPLATE)
+        balk = js[js.index("function werkBalk() {"):js.index("function leeg(")]
+        self.assertNotIn("aria-pressed", re.sub(r"//[^\n]*", "", balk))   # alleen de code, niet het commentaar
+        self.assertIn('T[(tonen ? "toon.uit" : "toon") + (n === 1 ? ".een" : "")]', balk)
+        self.assertIn('toon.classList.toggle("aan", tonen);', balk)
+        self.assertIn(".bw-toon.aan{", bd.TEMPLATE)
+        self.assertNotIn(".bw-toon[aria-pressed", bd.TEMPLATE)
+
+    def test_ongedaan_maken_beschreven_door_zijn_zin(self):
+        js = blok()
+        self.assertIn('const zin = maak("span", null, tekst); zin.id = doel.id + "-zin";', js)
+        self.assertIn('b.setAttribute("aria-describedby", zin.id);', js)
+        self.assertIn('s.id = "pandBwStatus";', js)   # de statusregel in 'Open pand' heeft ook een id
+
+    def test_lege_status_blijft_in_de_boom(self):
+        self.assertNotIn(".bw-status:empty{display:none}", bd.TEMPLATE)
+        self.assertNotRegex(bd.TEMPLATE, r"\.bw-status[^{]*\{[^}]*display:\s*none")
+
+
+class FocusNaSluiten(unittest.TestCase):
+    """Criterium 13, VA-61 en Lumi §8: sluit 'Open pand' en is de kaart weg, dan nooit de focus op <body>."""
+
+    def sluit(self):
+        t = bd.TEMPLATE
+        i = t.index('pandDlg.addEventListener("close", () => {')
+        return t[i:t.index("});", i)]
+
+    def test_volgorde(self):
+        s = self.sluit()
+        kaart = s.index("if (pandOpener && pandOpener.isConnected) { pandOpener.focus(); return; }")
+        ongedaan = s.index("if (pandId != null) (BW.ongedaanVoor(pandId) || BW.lijstDeel()).focus();")
+        self.assertLess(kaart, ongedaan)   # eerst de kaart (VA-61), dan Ongedaan maken, dan de werklijst
+        self.assertIn("pandOpener = opener; pandId = d.id;", bd.TEMPLATE)
+
+    def test_ongedaan_maken_alleen_van_dit_pand(self):
+        js = blok()
+        self.assertIn('const b = el("bwStatus") && el("bwStatus").querySelector(".bw-ongedaan");', js)
+        self.assertIn("return b && b.dataset.pand === String(id) ? b : null; };", js)
+        self.assertIn("b.dataset.pand = id;", js)
+        self.assertIn('const ongedaan = status(el("bwStatus"), tekst, terug, d.id);', js)
+        self.assertIn("if (inPand) status(dlg.s, tekst, terug, d.id);", js)
+
+    def test_ongedaan_maken_na_sluiten(self):
+        # Na het sluiten staan de knoppen van 'Open pand' nog in de pagina (isConnected), maar ze kunnen geen
+        # focus krijgen. Ongedaan maken boven de werklijst kiest dan de kaart, en anders de werklijst.
+        js = blok()
+        self.assertIn('const ziet = x => x && x.isConnected && (!x.closest("dialog") || x.closest("dialog").open);', js)
+        self.assertIn("const k = [inPand ? dlg.r : null, rijen.get(d.id)].find(ziet);", js)
+        self.assertIn('(f || lijstDeel()).focus(); };', js)
+
+    def test_terugval_is_de_werklijst(self):
+        js = blok()
+        self.assertIn('const lijstDeel = () => (balk && balk.closest("section")) || el("inhoud");', js)
+        # De sectie van de werklijst en de inhoud kunnen focus krijgen.
+        self.assertIn('<section class="deel" id="__LIJST__" aria-labelledby="t-__LIJST__" tabindex="-1">', bd.TEMPLATE)
+        self.assertIn('<main class="inhoud" id="inhoud" tabindex="-1">', bd.TEMPLATE)
+        self.assertIn("return {rij, ververs: werkRij, zichtbaar, aantalWeg, op: f => luisteraars.push(f), van, leeg, "
+                      "ongedaanVoor, lijstDeel};", js)
+
+
 class Kopij(unittest.TestCase):
+    def test_alles_uit_lumis_tabel(self):
+        # Elke zin staat letterlijk in Lumi's kopijtabel (design/copy-va90.md).
+        tabel = (HIER.parent / "design" / "copy-va90.md").read_text(encoding="utf-8")
+        for k, t in bd.BEWAAR_TEKST.items():
+            self.assertIn(t, tabel, k)
+        t = bd.BEWAAR_TEKST
+        self.assertEqual(t["terug.bewaard"], "Druk om niet meer te bewaren")
+        self.assertEqual(t["terug.verborgen"], "Druk om weer te tonen")
+        self.assertEqual(t["naam.bewaard"], "Bewaard, druk om niet meer te bewaren: {adres}")
+        self.assertEqual(t["naam.verborgen"], "Verborgen, druk om weer te tonen: {adres}")
+        self.assertEqual(t["toon.een"], "Toon het verborgen pand")
+        self.assertEqual(t["toon.uit.een"], "Verberg het weer")
+        self.assertEqual(t["apparaat.kort"], "Alleen op dit apparaat, in deze browser. Een ander apparaat ziet het niet.")
+        self.assertNotIn("Collega's zien het niet", t["apparaat"])
+
     def test_nederlands_zonder_snapshot_of_engels(self):
         for t in bd.BEWAAR_TEKST.values():
             self.assertNotRegex(t.lower(), r"snapshot|\bsave\b|\bhide\b|\bundo\b|\bshow\b|\blive\b|\bonline\b")

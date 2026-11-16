@@ -756,17 +756,25 @@ def maak_leads(top: list[dict], landelijk: bool) -> tuple[list[dict], list[list]
 # Ayman: "every pand needs to have a bewaar or verberg button". Bewaard en verborgen staan alleen in
 # de browser (localStorage), op dit apparaat, tot Q35 zegt waar het anders moet (VA-92). Er gaat
 # niets de pagina uit, en niets in de pijplijn leest het: verbergen is geen leveren (VA-6), het
-# verandert geen cijfer. Kopij: Ada's voorstel in gewoon Nederlands, wacht op Lumi.
+# verandert geen cijfer. Kopij: Lumi, design/copy-va90.md. Het script vult alleen {adres},
+# {n}, {m} en {totaal} in; het maakt zelf geen zinnen.
 BEWAAR_TEKST = {
     "bewaar": "Bewaar",
     "bewaard": "Bewaard",
     "verberg": "Verberg",
     "verborgen": "Verborgen",
-    "terug.bewaard": "Nog eens: niet meer bewaren",
-    "terug.verborgen": "Nog eens: weer tonen",
+    "terug.bewaard": "Druk om niet meer te bewaren",
+    "terug.verborgen": "Druk om weer te tonen",
     "label.bewaard": "Bewaard",
     "label.verborgen": "Verborgen",
-    "apparaat": "Bewaren en verbergen geldt alleen op dit apparaat, in deze browser. Collega's zien het niet.",
+    # De toegankelijke naam van de knoppen (aria-label), per stand; aria-pressed blijft.
+    "naam.bewaar": "Bewaar {adres}",
+    "naam.bewaard": "Bewaard, druk om niet meer te bewaren: {adres}",
+    "naam.verberg": "Verberg {adres}",
+    "naam.verborgen": "Verborgen, druk om weer te tonen: {adres}",
+    "apparaat": "Wat je bewaart of verbergt, staat alleen op dit apparaat, in deze browser. Op een ander apparaat "
+                "zie je het niet, ook niet met dezelfde inlog. Wis je de browsergegevens, dan ben je het kwijt.",
+    "apparaat.kort": "Alleen op dit apparaat, in deze browser. Een ander apparaat ziet het niet.",
     "status.bewaard": "{adres} is bewaard.",
     "status.niet_bewaard": "{adres} is niet meer bewaard.",
     "status.verborgen": "{adres} is verborgen.",
@@ -775,9 +783,16 @@ BEWAAR_TEKST = {
     "aantal": "{n} panden verborgen",
     "aantal.een": "1 pand verborgen",
     "toon": "Toon verborgen panden",
+    "toon.een": "Toon het verborgen pand",
     "toon.uit": "Verberg ze weer",
-    "geen_opslag": "Bewaren en verbergen werkt niet in deze browser: hij slaat niets op (bijvoorbeeld in een "
-                   "privévenster). De rest van het dashboard werkt gewoon.",
+    "toon.uit.een": "Verberg het weer",
+    "geen_opslag": "Deze browser laat het dashboard niets opslaan, dus Bewaar en Verberg werken hier niet. Dat "
+                   "gebeurt bijvoorbeeld in een privévenster, of als opslag voor websites uit staat. Open het "
+                   "dashboard in een gewoon venster om panden te bewaren. De rest van het dashboard werkt gewoon.",
+    # Een lege werklijst omdat alles verborgen is (Lumi §7). m: de panden die de filters halen, verborgen meegeteld.
+    "leeg.verborgen": "Je hebt alle {m} panden verborgen die bij deze filters passen.",
+    "leeg.verborgen.een": "Het enige pand dat bij deze filters past, heb je verborgen.",
+    "leeg.alles_verborgen": "Je hebt alle {totaal} panden van de werklijst van deze maand verborgen.",
 }
 
 
@@ -2135,13 +2150,19 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   .bw-aantal[hidden],.bw-toon[hidden]{display:none}
   .bw-toon,.bw-ongedaan{font:inherit;font-size:12.5px;font-weight:650;min-height:34px;padding:4px 12px;border-radius:9px;
     border:1px solid var(--ring);background:var(--surface-2);color:var(--ink);cursor:pointer}
-  .bw-toon[aria-pressed="true"]{border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
+  .bw-toon.aan{border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
   .bw-toon:focus-visible,.bw-ongedaan:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
   .bw-status{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;color:var(--ink)}
-  .bw-status:empty{display:none}
+  /* Leeg blijft de statusregel in de toegankelijkheidsboom (Lumi §3): geen display:none, alleen geen hoogte.
+     De -6px heft de rijafstand van de balk op, zodat een lege regel geen ruimte inneemt. */
+  .bw-balk .bw-status:empty{margin-top:-6px}
   .pand-bw{margin:0 0 14px;padding:0 0 12px;border-bottom:1px solid var(--grid)}
   .pand-bw .bw-apparaat{margin:8px 0 0;font-size:12px;color:var(--ink-2)}
-  .pand-bw .bw-status{margin-top:6px;font-size:12.5px}
+  .pand-bw .bw-status{font-size:12.5px}
+  .pand-bw .bw-status:not(:empty){margin-top:6px}
+  .wl-leeg .bw-leeg-toon{font:inherit;font-size:13px;font-weight:650;background:var(--surface-2);border:1px solid var(--ring);
+    border-radius:9px;padding:7px 12px;min-height:40px;color:var(--ink);cursor:pointer}
+  .wl-leeg .bw-leeg-toon:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
   /* ===================== einde BEWAREN EN VERBERGEN ===================== */
   /* ===================== einde WERKLIJST ===================== */
 </style>
@@ -2246,7 +2267,7 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
         <div class="bw-balk" id="bwBalk">
           <p class="bw-apparaat" id="bwApparaat"></p>
           <span class="bw-aantal" id="bwAantal" hidden></span>
-          <button class="bw-toon" id="bwToon" type="button" aria-pressed="false" hidden></button>
+          <button class="bw-toon" id="bwToon" type="button" hidden></button>
           <div class="bw-status" id="bwStatus" role="status"></div>
         </div>
         <!-- einde BEWAREN EN VERBERGEN -->
@@ -2601,10 +2622,10 @@ const VELDEN = PAYLOAD.velden || [], WAARDEN = PAYLOAD.waarden || [], PLEK = PAY
 const locatie = p => { if (!p) return null; const zet = s => s.replace("{b}", p.b).replace("{ll}", p.ll);
   return {foto: zet(PLEK.foto), maps: zet(PLEK.maps), streetview: zet(PLEK.streetview)}; };
 const pandDlg = document.getElementById("pand");
-let pandOpener = null;
+let pandOpener = null, pandId = null;
 const maak = (tag, cls, tekst) => { const e = document.createElement(tag); if (cls) e.className = cls; if (tekst != null) e.textContent = tekst; return e; };
 function openPand(d, opener) {
-  const det = d.detail; pandOpener = opener;
+  const det = d.detail; pandOpener = opener; pandId = d.id;
   document.getElementById("pandTitel").textContent = det.titel;
   document.getElementById("pandSub").textContent = `${d.p} ${d.wp} · BAG ${d.id}`;
   document.getElementById("pandScore").innerHTML = `<b>${d.s100}</b><small>/100</small>`;
@@ -2643,7 +2664,12 @@ function openPand(d, opener) {
 }
 document.getElementById("pandSluit").addEventListener("click", () => pandDlg.close());
 pandDlg.addEventListener("click", e => { if (e.target === pandDlg) pandDlg.close(); });
-pandDlg.addEventListener("close", () => { if (pandOpener && pandOpener.isConnected) pandOpener.focus(); });
+// Terug naar de kaart die het opende (VA-61). Is die kaart weg (Verberg in dit venster, VA-90), dan naar zijn
+// "Ongedaan maken" boven de werklijst, en is dat er niet, naar de werklijst zelf: nooit naar <body> (Lumi §8).
+pandDlg.addEventListener("close", () => {
+  if (pandOpener && pandOpener.isConnected) { pandOpener.focus(); return; }
+  if (pandId != null) (BW.ongedaanVoor(pandId) || BW.lijstDeel()).focus();
+});
 function maakOpenbaar(card, d) {
   if (!d.detail) return;
   card.classList.add("open-baar");
@@ -2698,7 +2724,7 @@ const BW = (() => {
     const b = maak("button", "bw-knop bw-" + (soort === "bewaard" ? "bewaar" : "weg")); b.type = "button";
     const ico = maak("span", "bw-ico"); ico.setAttribute("aria-hidden", "true");
     const tk = maak("span", "bw-tk"); tk.append(maak("span", "bw-nm"), maak("span", "bw-terug"));
-    b.append(ico, tk, maak("span", "vh", " · " + adres(d)));
+    b.append(ico, tk);   // de naam staat in aria-label, per stand (werkRij)
     b.addEventListener("click", e => { e.stopPropagation(); druk(d, soort, b); });
     return b;
   }
@@ -2706,8 +2732,8 @@ const BW = (() => {
     const r = maak("div", inPand ? "bw-rij-pand" : "bw-rij"), k = maak("div", "bw-rij");
     k.append(knop(d, "bewaard"), knop(d, "verborgen"));
     if (!inPand) { rijen.set(d.id, k); werkRij(d); return k; }
-    r.className = "pand-bw"; r.append(k, maak("p", "bw-apparaat", werkt ? T.apparaat : T.geen_opslag));
-    const s = maak("div", "bw-status"); s.setAttribute("role", "status"); r.append(s);
+    r.className = "pand-bw"; r.append(k, maak("p", "bw-apparaat", werkt ? T["apparaat.kort"] : T.geen_opslag));
+    const s = maak("div", "bw-status"); s.id = "pandBwStatus"; s.setAttribute("role", "status"); r.append(s);
     dlg = {d, r: k, s}; werkRij(d); return r;
   }
   function werkRij(d) {
@@ -2715,6 +2741,7 @@ const BW = (() => {
     for (const k of [rijen.get(d.id), dlg && dlg.d.id === d.id ? dlg.r : null]) { if (!k) continue;
       k.querySelectorAll(".bw-knop").forEach(b => { const soort = b.classList.contains("bw-bewaar") ? "bewaard" : "verborgen", aan = s === soort;
         b.setAttribute("aria-pressed", String(aan));
+        b.setAttribute("aria-label", T["naam." + (aan ? soort : soort === "bewaard" ? "bewaar" : "verberg")].replace("{adres}", () => adres(d)));
         if (werkt) b.removeAttribute("aria-disabled"); else b.setAttribute("aria-disabled", "true");
         b.querySelector(".bw-ico").textContent = soort === "bewaard" ? (aan ? "★" : "☆") : (aan ? "◌" : "⊘");
         b.querySelector(".bw-nm").textContent = aan ? T["label." + soort] : T[soort === "bewaard" ? "bewaar" : "verberg"];
@@ -2723,15 +2750,19 @@ const BW = (() => {
     const card = rijen.get(d.id) && rijen.get(d.id).closest(".card");
     if (card) { card.classList.toggle("bw-is-weg", s === "verborgen");
       const l = card.querySelector(".bw-label"); l.hidden = !s; l.className = "bw-label" + (s === "verborgen" ? " weg" : "");
-      l.textContent = s ? (s === "bewaard" ? "★ " : "") + T["label." + s] : ""; }
+      l.textContent = "";
+      if (s) { const i = maak("span", null, s === "bewaard" ? "★" : "◌"); i.setAttribute("aria-hidden", "true"); l.append(i, T["label." + s]); } }
   }
   // De statusregel boven de werklijst (en in 'Open pand'): role=status, dus voorgelezen zonder te onderbreken.
   const balk = document.getElementById("bwBalk");
   const el = id => document.getElementById(id);
-  function status(doel, tekst, terug) {
-    doel.textContent = ""; doel.append(maak("span", null, tekst));
+  // Ongedaan maken draagt de zin als beschrijving (aria-describedby) en het pand waar hij bij hoort.
+  function status(doel, tekst, terug, id) {
+    const zin = maak("span", null, tekst); zin.id = doel.id + "-zin";
+    doel.textContent = ""; doel.append(zin);
     if (!terug) return null;
-    const b = maak("button", "bw-ongedaan", T.ongedaan); b.type = "button"; b.addEventListener("click", terug); doel.append(b); return b;
+    const b = maak("button", "bw-ongedaan", T.ongedaan); b.type = "button"; b.setAttribute("aria-describedby", zin.id);
+    b.dataset.pand = id; b.addEventListener("click", terug); doel.append(b); return b;
   }
   function druk(d, soort, b) {
     const inPand = !!b.closest("#pand"), hier = inPand ? dlg.s : el("bwStatus");
@@ -2744,10 +2775,13 @@ const BW = (() => {
     const terug = () => { herstel(d, uit.oud);
       const t = (uit.oud ? (uit.oud.stand === "verborgen" ? T["status.verborgen"] : T["status.bewaard"]) : T["status.terug"]).replace("{adres}", () => adres(d));
       [el("bwStatus"), dlg && dlg.d.id === d.id ? dlg.s : null].forEach(s => s && status(s, t));
-      const k = (inPand ? dlg.r : rijen.get(d.id) || null);
-      const f = k && k.isConnected && k.querySelector(soort === "bewaard" ? ".bw-bewaar" : ".bw-weg"); if (f) f.focus(); };
-    const ongedaan = status(el("bwStatus"), tekst, terug);
-    if (inPand) status(dlg.s, tekst, terug);
+      // Focus naar de knop die je nu ziet: in 'Open pand' zolang het open is, anders op de kaart (een gesloten
+      // venster houdt zijn knoppen in de pagina, maar die kunnen geen focus krijgen), anders de werklijst.
+      const ziet = x => x && x.isConnected && (!x.closest("dialog") || x.closest("dialog").open);
+      const k = [inPand ? dlg.r : null, rijen.get(d.id)].find(ziet);
+      const f = k && k.querySelector(soort === "bewaard" ? ".bw-bewaar" : ".bw-weg"); (f || lijstDeel()).focus(); };
+    const ongedaan = status(el("bwStatus"), tekst, terug, d.id);
+    if (inPand) status(dlg.s, tekst, terug, d.id);
     // Een kaart die verdwijnt, neemt de focus niet mee: die gaat naar Ongedaan maken.
     else if (!b.isConnected && ongedaan) ongedaan.focus();
   }
@@ -2758,14 +2792,32 @@ const BW = (() => {
     el("bwApparaat").textContent = werkt ? T.apparaat : T.geen_opslag;
     aantal.hidden = toon.hidden = n === 0;
     aantal.textContent = n === 1 ? T["aantal.een"] : T.aantal.replace("{n}", nl(n));
-    toon.textContent = tonen ? T["toon.uit"] : T.toon; toon.setAttribute("aria-pressed", String(tonen));
+    // Geen aria-pressed: het label zegt al wat de knop doet (Lumi §4); de rand via de klasse.
+    toon.textContent = T[(tonen ? "toon.uit" : "toon") + (n === 1 ? ".een" : "")]; toon.classList.toggle("aan", tonen);
   }
+  // Een lege werklijst omdat alles verborgen is (Lumi §7). m: de panden die de filters halen, verborgen meegeteld;
+  // 0 als de lijst niet leeg is door Verberg. Dan staat de zin van de filters (of niets) er weer.
+  function leeg(vak, m, filters) {
+    const p = vak.querySelector("p"), wis = vak.querySelector(".wl-wis");
+    if (vak.dataset.zin == null) vak.dataset.zin = p.textContent;
+    let b = vak.querySelector(".bw-leeg-toon");
+    if (wis) wis.hidden = !!m && !filters;
+    if (!m) { p.textContent = vak.dataset.zin; if (b) b.remove(); return; }
+    p.textContent = !filters ? T["leeg.alles_verborgen"].replace("{totaal}", nl(m))
+      : m === 1 ? T["leeg.verborgen.een"] : T["leeg.verborgen"].replace("{m}", nl(m));
+    if (!b) { b = maak("button", "bw-leeg-toon"); b.type = "button"; vak.insertBefore(b, wis);
+      b.addEventListener("click", () => { tonen = true; overal(true); el("bwToon").focus(); }); }   // daarna: "Verberg ze weer"
+    b.textContent = T[m === 1 ? "toon.een" : "toon"];
+  }
+  const ongedaanVoor = id => { const b = el("bwStatus") && el("bwStatus").querySelector(".bw-ongedaan");
+    return b && b.dataset.pand === String(id) ? b : null; };
+  const lijstDeel = () => (balk && balk.closest("section")) || el("inhoud");
   // lijst: alleen als een pand verborgen wordt of terugkomt, rekent de werklijst opnieuw; Bewaar verandert geen kaart van plek.
   function overal(lijst) { rijen.forEach((k, id) => { const d = PER_ID.get(id); if (d) werkRij(d); }); if (dlg) werkRij(dlg.d); werkBalk(); if (lijst) luisteraars.forEach(f => f()); }
   if (balk) el("bwToon").addEventListener("click", () => { tonen = !tonen; overal(true); });
   addEventListener("storage", e => { if (e.key === SLEUTEL) { lees(); overal(true); } });   // een ander tabblad van dit dashboard
   werkBalk();
-  return {rij, ververs: werkRij, zichtbaar, aantalWeg, op: f => luisteraars.push(f), van};
+  return {rij, ververs: werkRij, zichtbaar, aantalWeg, op: f => luisteraars.push(f), van, leeg, ongedaanVoor, lijstDeel};
 })();
 /* ============================ einde BEWAREN EN VERBERGEN ============================ */
 
@@ -2815,7 +2867,11 @@ const BW = (() => {
 
   const wl = document.querySelector(".wl"), kies = document.getElementById("gemeente");
   if (!kies || !PAYLOAD.filter) {   // zonder filterpaneel (een stad): alleen de verborgen panden eruit
-    const alles = houd => teken(LEADS.filter(d => BW.zichtbaar(d.id)), houd);
+    let vak = null;   // het lege vak, pas gemaakt als alles verborgen is (VA-90, Lumi §7)
+    const alles = houd => { const r = LEADS.filter(d => BW.zichtbaar(d.id));
+      if (!r.length && LEADS.length && !vak) { vak = maak("div", "wl-leeg"); vak.append(maak("p")); lb.before(vak); }
+      if (vak) { BW.leeg(vak, r.length ? 0 : LEADS.length, false); vak.hidden = r.length > 0; }
+      lb.hidden = !r.length; teken(r, houd); };
     BW.op(() => alles(true)); alles(false); return;
   }
   const F = PAYLOAD.filter;
@@ -2851,8 +2907,8 @@ const BW = (() => {
     return {aan: true, van: v, tm: t};
   }
 
-  function past(d, behalve) {
-    if (!BW.zichtbaar(d.id)) return false;   // VA-90: een verborgen pand telt nergens mee, tot je ze toont
+  function past(d, behalve, alle) {   // alle: ook de verborgen panden (alleen voor het lege vak, VA-90)
+    if (!alle && !BW.zichtbaar(d.id)) return false;   // VA-90: een verborgen pand telt nergens mee, tot je ze toont
     if (behalve !== "gemeente" && st.gemeente && d.g !== st.gemeente) return false;
     for (const [g] of LIJST) if (g !== behalve && st[g].size && ![...st[g]].some(w => HEEFT[g](d, w))) return false;
     // Grenzen tellen mee; een pand zonder waarde valt weg zolang er een grens staat (VA-69 crit. 4).
@@ -2933,6 +2989,7 @@ const BW = (() => {
       chipsEl.append(b);
     });
     if (a) chipsEl.append(knopje("wl-wis", T.wis, wisAlles));
+    BW.leeg(leeg, n ? 0 : LEADS.filter(d => past(d, null, true)).length, a > 0);   // VA-90: leeg door Verberg?
     leeg.hidden = n > 0; lb.hidden = n === 0;
     teken(sorteer(treffers), houd);   // dezelfde kaarten uit 'gebouwd', in de nieuwe volgorde: geen tweede PDOK-verzoek
     if (schrijf) schrijfAdres();

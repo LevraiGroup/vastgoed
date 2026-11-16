@@ -152,3 +152,6 @@ struck through with the reason, never deleted.
 - **A headless browser never makes `document.hidden` true, even when a second tab is in front; prove
   "pauses when the tab is hidden" by overriding `document.hidden` and firing `visibilitychange`, then
   counting frames, and say in the close-out that it was simulated.** *(2026-11-16, Vera, VA-85)*
+- **A closed `<dialog>` keeps its children in the page: `isConnected` stays true but they cannot take focus, so
+  focus sent there lands on `<body>`.** Check `closest("dialog").open` before focusing inside one. *(2026-11-16, Ada,
+  VA-90)*
