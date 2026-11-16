@@ -148,6 +148,23 @@ bronnen:
     slechte_labels: ["E", "F", "G"]
     max_bevragingen: 2000       # veiligheidsplafond per run in API-modus
 
+# === BETAALDE BRONNEN (VA-54) ======================================================
+# Opgezocht per pand met de knop op het dashboard, nooit in bulk. Alle betaalde bronnen samen
+# kosten hooguit 200 cent per ISO-week (Ayman, 2026-11-13); dat plafond staat in betaald.py en
+# kan met VASTGOED_WEEKLIMIET_CENT alleen lager. Kosten = aantal bevragingen x prijs_cent.
+# prijs_cent: hele centen, minstens 1; een bron zonder geldige prijs wordt nooit aangeroepen.
+# sleutel_variabele: de NAAM van de Railway-variabele met de sleutel. Nooit de sleutel zelf hier.
+betaalde_bronnen:
+  kvk:
+    naam: "KVK"
+    prijs_cent: 2               # per verschillende postcode + huisnummer (TOEKOMSTVERBETERINGEN.md item 1)
+    sleutel_variabele: KVK_API_KEY
+  kadaster_koopsom:
+    naam: "Kadaster Koopsom"
+    prijs_cent: 45              # per adres, alleen het hoofdadres, dus 1 per pand (kadaster.nl,
+                                # "Koopsom API", "Kosten: € 0,45 per adres", gelezen 2026-11-13; VA-59)
+    sleutel_variabele: KADASTER_KOOPSOM_KEY
+
 # Wanneer de volgende run is, voor het dashboard (VA-86). Het Kantoor toont het naast Bron en Peildatum.
 planning:
   maandrun:

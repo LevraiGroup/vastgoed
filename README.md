@@ -106,6 +106,10 @@ Railway-variabelen, die Ayman zet; er staat nooit een waarde in git:
 | `VASTGOED_POGINGEN` | mislukte inlogs per adres voordat het dichtgaat | 5 |
 | `VASTGOED_VENSTER_MIN` | binnen hoeveel minuten die mislukte inlogs tellen | 15 |
 | `VASTGOED_BLOKKADE_MIN` | hoeveel minuten een adres daarna dicht is | 15 |
+| `VASTGOED_GROOTBOEK` | pad naar het weekgrootboek van betaalde opzoekingen (VA-54), op een Railway-volume; nooit binnen de app-map, want die wordt bij elke deploy vervangen | geen: zonder dit pad wordt elke betaalde opzoeking geweigerd |
+| `VASTGOED_WEEKLIMIET_CENT` | lager weekplafond voor alle betaalde bronnen samen, in centen; hoger dan 200 wordt genegeerd | 200 |
+| `KVK_API_KEY` | sleutel van KVK (naam staat in `config.yaml`, `betaalde_bronnen`) | geen: dan is KVK "niet ingesteld" |
+| `KADASTER_KOOPSOM_KEY` | sleutel van Kadaster Koopsom (idem) | geen: dan is Kadaster "niet ingesteld" |
 
 Het adres dat telt, is de kop `X-Real-IP`, die Railway zet; `X-Forwarded-For` wordt genegeerd.
 Waarom: `X-Real-IP` is de enige kop die Railway documenteert voor het adres van de bezoeker

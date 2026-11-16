@@ -15,6 +15,15 @@ ondertekend komen uit omgevingsvariabelen (Railway), nooit uit een bestand in gi
 
 Ontbreekt een van de eerste drie, is de sleutel korter dan 32 tekens of is het wachtwoord
 leeg na het weghalen van spaties, dan lukt geen enkele inlog en blijft het dashboard dicht.
+
+Betaalde opzoekingen (VA-54) gaan alleen via POST /api/opzoeken, met een geldige sessie, en
+altijd door de bewaker in betaald.py (plafond 200 cent per ISO-week, prijzen in config.yaml):
+
+    VASTGOED_GROOTBOEK        pad naar het weekgrootboek (JSON) op blijvende opslag; zonder
+                              dit pad wordt elke betaalde opzoeking geweigerd
+    VASTGOED_WEEKLIMIET_CENT  lager plafond in centen (standaard en maximaal 200)
+    KVK_API_KEY, KADASTER_KOOPSOM_KEY   sleutels; welke variabele bij welke bron hoort, staat
+                              in config.yaml (betaalde_bronnen.*.sleutel_variabele)
 De poort komt uit PORT (Railway zet die); lokaal is het 8000. De pipeline draait hier nooit.
 
     python serve.py            # http://localhost:8000/
@@ -26,7 +35,9 @@ import hashlib
 import hmac
 import html
 import ipaddress
+import json
 import os
+import re
 import secrets
 import sys
 import threading
@@ -36,9 +47,15 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+import betaald
+
 BASIS = Path(__file__).resolve().parent
 DESIGN = BASIS / "design"
 LOGIN_SJABLOON = BASIS / "web" / "login.html"
+CONFIG = BASIS / "config.yaml"
+OUTPUT = BASIS / "output"
+PAD_OPZOEKEN = "/api/opzoeken"
+MAX_OPZOEKING = 1024  # bytes; {"bron": ..., "bag_pand_id": ...} is nooit groter
 STANDAARD_POORT = 8000
 
 VAR_GEBRUIKER = "VASTGOED_GEBRUIKER"
@@ -262,6 +279,11 @@ TITEL_FOUT = "Inloggen mislukt · Levrai Vastgoed"
 FOUTMELDING = "Gebruikersnaam of wachtwoord klopt niet. Probeer het opnieuw."
 # VA-51; goedgekeurd door Lumi (2026-11-14).
 TE_VAAK = "Te veel mislukte pogingen vanaf dit netwerk. Over {minuten} kun je weer inloggen."
+# VA-54; concept van Rex, Lumi mag herschrijven (Ayman's weeklimietregel staat in betaald.py).
+NIET_INGELOGD = "Log eerst in. Er is niets opgevraagd."
+ANDERE_SITE = "Dit verzoek komt niet van het dashboard. Er is niets opgevraagd."
+ALLEEN_POST = "Opzoeken kan alleen met de knop op het dashboard. Er is niets opgevraagd."
+ONGELDIG_VERZOEK = "Het verzoek noemt alleen een bron en een bag_pand_id. Er is niets opgevraagd."
 
 
 def te_vaak_melding(seconden: float) -> str:
@@ -300,10 +322,11 @@ class Handler(SimpleHTTPRequestHandler):
     timeout = SOCKET_TIMEOUT_SECONDEN
 
     def __init__(self, *args, instellingen: Instellingen, sessies: Sessies, pogingen: Pogingen,
-                 **kwargs):
+                 bewaker: betaald.Bewaker, **kwargs):
         self.instellingen = instellingen
         self.sessies = sessies
         self.pogingen = pogingen
+        self.bewaker = bewaker
         super().__init__(*args, **kwargs)
 
     # ---------------------------------------------------------------- hulpjes
@@ -374,6 +397,17 @@ class Handler(SimpleHTTPRequestHandler):
         if not kop_alleen:
             self.wfile.write(body)
 
+    def _stuur_json(self, status: int, data: dict, kop_alleen: bool = False, koppen=()):
+        body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        for naam, waarde in koppen:
+            self.send_header(naam, waarde)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        if not kop_alleen:
+            self.wfile.write(body)
+
     def _cookie(self, waarde: str, max_age: int | None) -> str:
         delen = [f"{COOKIE}={waarde}", "Path=/", "HttpOnly", "Secure", "SameSite=Lax"]
         if max_age is not None:
@@ -422,6 +456,9 @@ class Handler(SimpleHTTPRequestHandler):
         if self._naar_https():
             return
         pad = self._pad()
+        if pad == PAD_OPZOEKEN:  # alleen POST; een link of prefetch kost nooit geld
+            return self._stuur_json(HTTPStatus.METHOD_NOT_ALLOWED, {"fout": ALLEEN_POST, "kosten_cent": 0},
+                                    kop_alleen, koppen=[("Allow", "POST")])
         if pad == "/uitloggen":  # alleen POST logt uit; een link of prefetch doet niets
             return self._doorsturen("/")
         if pad == "/login":
@@ -439,6 +476,8 @@ class Handler(SimpleHTTPRequestHandler):
         if self._naar_https():
             return
         pad = self._pad()
+        if pad == PAD_OPZOEKEN:
+            return self._opzoeken()
         if pad not in ("/login", "/uitloggen"):
             return self._doorsturen("/login")
         if not self._zelfde_herkomst():
@@ -472,26 +511,65 @@ class Handler(SimpleHTTPRequestHandler):
             cookie = self._cookie(self.sessies.nieuw(BROWSERSESSIE_SECONDEN), None)
         self._doorsturen("/", cookie=cookie)
 
+    def _opzoeken(self):
+        """
+        Eén betaalde opzoeking (VA-54). Het verzoek noemt alleen een bron en een bag_pand_id; de
+        adressen zoekt de server zelf op. Alles wat hier geweigerd wordt, heeft niets aangeroepen.
+        """
+        if not self._ingelogd():
+            return self._stuur_json(HTTPStatus.UNAUTHORIZED, {"fout": NIET_INGELOGD, "kosten_cent": 0})
+        if not self._zelfde_herkomst():
+            return self._stuur_json(HTTPStatus.FORBIDDEN, {"fout": ANDERE_SITE, "kosten_cent": 0})
+        try:
+            lengte = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            lengte = -1
+        if not 0 < lengte <= MAX_OPZOEKING:
+            self.close_connection = True
+            return self._stuur_json(HTTPStatus.BAD_REQUEST, {"fout": ONGELDIG_VERZOEK, "kosten_cent": 0})
+        try:
+            verzoek = json.loads(self.rfile.read(lengte).decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            verzoek = None
+        if (not isinstance(verzoek, dict) or set(verzoek) != {"bron", "bag_pand_id"}
+                or not isinstance(verzoek["bron"], str) or not isinstance(verzoek["bag_pand_id"], str)
+                or not re.fullmatch(r"[a-z][a-z0-9_]{0,39}", verzoek["bron"])
+                or not re.fullmatch(r"[0-9]{16}", verzoek["bag_pand_id"])):
+            return self._stuur_json(HTTPStatus.BAD_REQUEST, {"fout": ONGELDIG_VERZOEK, "kosten_cent": 0})
+        status, antwoord = self.bewaker.zoek(verzoek["bron"], verzoek["bag_pand_id"])
+        self._stuur_json(status, antwoord)
+
     def _uitloggen(self):
         self.sessies.beeindig(lees_cookie(self.headers.get("Cookie")))
         self._doorsturen("/login", cookie=self._cookie("", 0))
 
 
+class Server(ThreadingHTTPServer):
+    """Een wachtrij van 64: vijftig tegelijk klikkende gebruikers krijgen geen geweigerde verbinding."""
+
+    request_queue_size = 64
+
+
 def maak_server(poort: int, host: str = "0.0.0.0", map_: Path = DESIGN,
-                omgeving: dict[str, str] | None = None, klok=time.time) -> ThreadingHTTPServer:
-    """Een server die `map_` alleen na inloggen serveert."""
+                omgeving: dict[str, str] | None = None, klok=time.time, config: Path = CONFIG,
+                output: Path = OUTPUT, bronnen: dict[str, betaald.Bron] | None = None,
+                log=None) -> ThreadingHTTPServer:
+    """Een server die `map_` alleen na inloggen serveert, met de bewaker voor betaalde opzoekingen."""
     omgeving = omgeving if omgeving is not None else dict(os.environ)
     instellingen = Instellingen(omgeving)
     sessies = Sessies(instellingen.sleutel, klok=klok)
     pogingen = Pogingen(_getal(omgeving, VAR_POGINGEN, STANDAARD_POGINGEN),
                         _getal(omgeving, VAR_VENSTER, STANDAARD_VENSTER_MIN) * 60,
                         _getal(omgeving, VAR_BLOKKADE, STANDAARD_BLOKKADE_MIN) * 60, klok=klok)
+    bewaker = betaald.Bewaker(omgeving, config, output, BASIS, klok, bronnen=bronnen,
+                              log=log or functools.partial(print, flush=True))
     handler = functools.partial(Handler, directory=str(map_), instellingen=instellingen,
-                                sessies=sessies, pogingen=pogingen)
-    server = ThreadingHTTPServer((host, poort), handler)
+                                sessies=sessies, pogingen=pogingen, bewaker=bewaker)
+    server = Server((host, poort), handler)
     server.instellingen = instellingen
     server.sessies = sessies
     server.pogingen = pogingen
+    server.bewaker = bewaker
     return server
 
 
@@ -513,6 +591,12 @@ def main() -> int:
     print(f"Dashboard op poort {poort}, map {DESIGN}; 'Ingelogd blijven' geldt "
           f"{ins.blijven_dagen} dagen; na {pg.limiet} mislukte inlogs binnen "
           f"{int(pg.venster // 60)} min is een adres {int(pg.blokkade // 60)} min dicht.", flush=True)
+    bw = server.bewaker
+    for regel in bw.meldingen:
+        print(f"LET OP: {regel}.", flush=True)
+    print(f"Betaalde opzoekingen: plafond {bw.plafond} cent per ISO-week; grootboek "
+          f"{bw.grootboek.pad or 'niet gezet'}; prijzen voor {', '.join(sorted(bw.prijzen)) or 'geen bron'}; "
+          f"gekoppeld: {', '.join(sorted(bw.bronnen)) or 'geen'}.", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
