@@ -169,6 +169,8 @@ betaalde_bronnen:
 # staat achter een slotblok. Openen is Aymans besluit: zet null, bouw het dashboard opnieuw en push.
 werklijst:
   vrij_zichtbaar: 5             # aantal zichtbare panden; null of weglaten = alles zichtbaar (geen slot)
+  # VA-97: zoveel dagen blijft een pand verborgen (Verberg op het dashboard), daarna staat het weer op de werklijst
+  verberg_dagen: 30
 
 # Wanneer de volgende run is, voor het dashboard (VA-86). Het Kantoor toont het naast Bron en Peildatum.
 planning:

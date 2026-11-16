@@ -1,0 +1,843 @@
+<!-- @dsCard group="Levrai VASTGOED" name="Menu en paginakop (VA-63)" subtitle="Zijbalk, kruimelpad, titel en statuspillen · elke toestand op 1280 en 375 px, licht en donker" -->
+<!doctype html>
+<html lang="nl" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Levrai · Ontwerp menu (VA-63)</title>
+<!--
+  VA-63 · Lumi · ontwerp, geen productiecode.
+  Bovenaan: het menu werkend, rond een vereenvoudigde, beeldloze nabootsing van de huidige pagina.
+  Daaronder: elke toestand op 1280 en 375 px, licht en donker, met de kopijtabel, de gemeten
+  contrasten, de latere menu-items (niet getekend) en de bouwnotities voor Ada (VA-64).
+  Geen externe bron: geen CDN, geen webfont, geen icoonfont, geen gekoppelde afbeelding.
+  Kleuren: alleen die uit design/index.html (Levrai-navy #12233b, de A–E-kleuren, de neutrale tinten,
+  #c6d3e4 en #9fb3cc uit de huidige kop, en wit met transparantie zoals de huidige .toggle).
+-->
+<style>
+  /* ---------- thema's: exact de waarden van design/index.html ---------- */
+  :root, .thema-licht{
+    color-scheme: light;
+    --plane:#f9f9f7; --surface:#fcfcfb; --surface-2:#ffffff;
+    --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --baseline:#c3c2b7; --ring:rgba(11,11,11,.10);
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4;
+    --good:#0ca30c; --crit:#d03b3b;
+    --shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -12px rgba(11,11,11,.12);
+    --brand:#12233b;
+  }
+  /* VA-63 crit. 12 (Ayman, 2026-11-09): de pagina opent altijd licht, ook als de computer donker staat.
+     Donker alleen via de Thema-knop ([data-theme="dark"]); de systeeminstelling van de bezoeker telt bewust niet mee. */
+  :root[data-theme="dark"], .thema-donker{
+    color-scheme: dark;
+    --plane:#0d0d0d; --surface:#1a1a19; --surface-2:#201f1e;
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,.10);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+    --good:#0ca30c; --crit:#e06666;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);
+    --brand:#0a1524;
+  }
+  /* Menu-tinten: bestaande kleuren uit de huidige kop (.top, .mark small, .sub, .toggle). */
+  :root, .thema-licht, .thema-donker{
+    --nav-tekst:#c6d3e4;              /* item in rust      (= .top .sub) */
+    --nav-label:#9fb3cc;              /* groepslabel       (= .mark small) */
+    --nav-hover:rgba(255,255,255,.08);
+    --nav-actief:rgba(255,255,255,.14);
+    --nav-lijn:rgba(255,255,255,.10);
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  @media (prefers-reduced-motion: no-preference){ html{scroll-behavior:smooth} }
+  body{margin:0;background:var(--plane);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.45}
+  a{color:inherit}
+
+  /* =====================================================================
+     MENU — dit blok gaat mee naar build_dashboard.py (VA-64)
+     ===================================================================== */
+  .skip{position:absolute;left:12px;top:-60px;z-index:100;background:var(--brand);color:#fff;
+    padding:10px 14px;border-radius:10px;font-size:14px;font-weight:650;text-decoration:none}
+  .skip:focus{top:12px;outline:2px solid #fff;outline-offset:2px}
+
+  .vg{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:var(--vh,100vh);
+    background:var(--plane);color:var(--ink)}
+
+  /* zijbalk */
+  .side{grid-column:1;grid-row:1 / span 2;position:sticky;top:0;align-self:start;height:var(--vh,100vh);overflow:auto;
+    background:var(--brand);color:#fff;border-right:1px solid var(--nav-lijn);
+    display:flex;flex-direction:column;padding:22px 12px 16px;scrollbar-width:thin}
+  .side-kop{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .merk{padding:2px 10px 18px}
+  .mark{font-weight:800;letter-spacing:.16em;font-size:15px;color:#fff;white-space:nowrap}
+  .mark small{display:block;letter-spacing:.28em;font-weight:600;font-size:10px;color:var(--nav-label);margin-top:3px}
+  .merk-sub{margin:12px 0 0;font-size:12.5px;color:var(--nav-tekst)}
+
+  .nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+  .nav .groep{margin:0;padding:16px 12px 6px;font-size:10px;font-weight:700;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--nav-label)}
+  .nav .groep:first-child{padding-top:4px}
+  .nav a{position:relative;display:flex;align-items:center;min-height:40px;padding:8px 12px 8px 14px;
+    border-radius:10px;color:var(--nav-tekst);font-size:14px;font-weight:500;text-decoration:none}
+  .vg.klaar .nav a{transition:background-color .15s ease,color .15s ease}
+  @media (hover:hover){ .nav a:hover{background:var(--nav-hover);color:#fff} }
+  .nav a.is-hover{background:var(--nav-hover);color:#fff}
+  .nav a:focus-visible,.nav a.is-focus{outline:2px solid #fff;outline-offset:-2px}
+  /* actief: meer dan kleur alleen — streep links, vet, lichter vlak, aria-current */
+  .nav a[aria-current]{background:var(--nav-actief);color:#fff;font-weight:700}
+  .nav a[aria-current]::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;
+    border-radius:0 3px 3px 0;background:#fff}
+
+  .side-voet{margin-top:auto;padding:16px 10px 0;border-top:1px solid var(--nav-lijn);
+    display:flex;flex-wrap:wrap;gap:8px}
+  .toggle{cursor:pointer;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);
+    color:#fff;font:inherit;font-size:12px;padding:7px 12px;border-radius:999px;min-height:32px}
+  @media (hover:hover){ .toggle:hover{background:rgba(255,255,255,.18)} }
+  .toggle:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .uitlog{margin:0}
+
+  .sluit-menu{display:none;align-items:center;gap:6px;cursor:pointer;flex:none;
+    background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#fff;
+    font:inherit;font-size:13px;font-weight:650;min-height:40px;padding:0 12px;border-radius:10px}
+  .sluit-menu span{font-size:18px;line-height:1}
+  .sluit-menu:focus-visible{outline:2px solid #fff;outline-offset:2px}
+
+  /* bovenbalk en lade: alleen smal */
+  .topbalk{display:none}
+  .menuknop{display:inline-flex;align-items:center;gap:10px;cursor:pointer;min-height:44px;padding:0 14px;
+    background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#fff;
+    font:inherit;font-size:14px;font-weight:650;border-radius:10px}
+  .menuknop .streep{width:18px;height:12px;flex:none;
+    background:linear-gradient(#fff 0 0) top/100% 2px no-repeat,
+               linear-gradient(#fff 0 0) center/100% 2px no-repeat,
+               linear-gradient(#fff 0 0) bottom/100% 2px no-repeat}
+  .menuknop:focus-visible,.menuknop.is-focus{outline:2px solid #fff;outline-offset:2px}
+  .scrim{display:none}
+
+  /* hoofdvlak */
+  .inhoud{grid-column:2;min-width:0;padding:26px 28px 64px}
+  .inhoud:focus{outline:none}
+  .deel{scroll-margin-top:16px}
+  .deel:focus{outline:none}
+  .deel + .deel{margin-top:44px}
+  .kop{display:flex;flex-direction:column;gap:6px;margin:0 2px 16px}
+  .kop-rij{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 14px;min-height:28px}
+  .kruimel{margin:0;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+  .kruimel b{color:var(--ink);font-weight:800}
+  .kruimel span{margin:0 .35em}
+  .kop h1,.kop .titel{margin:0;font-weight:750;letter-spacing:-.02em;line-height:1.15}
+  .kop h1{font-size:30px}
+  .kop .titel{font-size:22px}
+  .kop-zin{margin:0;font-size:14.5px;color:var(--ink-2);max-width:78ch}
+  .spills{display:flex;flex-wrap:wrap;gap:6px}
+  .spill{font-size:12px;color:var(--ink-2);background:var(--surface);border:1px solid var(--ring);
+    padding:4px 11px;border-radius:999px;white-space:nowrap}
+  .kop-meta{font-size:12px;color:var(--ink-2)}
+
+  /* ---- smal (≤ 800 px): bovenbalk + lade. In de bouw: @media (max-width:800px). ---- */
+  .vg.smal{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr}
+  .vg.smal .topbalk{grid-column:1;grid-row:1;display:flex;position:sticky;top:0;z-index:20;align-items:center;
+    justify-content:space-between;gap:12px;height:56px;padding:0 10px 0 16px;background:var(--brand);color:#fff;
+    box-shadow:0 1px 0 var(--nav-lijn)}
+  .vg.smal .topbalk .mark{font-size:13px}
+  .vg.smal .topbalk .mark small{font-size:9px;margin-top:2px}
+  .vg.smal .inhoud{grid-column:1;grid-row:2;padding:18px 14px 48px}
+  .vg.smal .deel{scroll-margin-top:72px}
+  .vg.smal .kop h1{font-size:24px}
+  .vg.smal .kop .titel{font-size:19px}
+  .vg.smal .kop-zin{font-size:14px}
+  .vg.smal .side{position:fixed;top:0;bottom:0;left:0;width:min(304px,86%);height:auto;z-index:40;
+    transform:translateX(-100%);visibility:hidden;box-shadow:0 0 40px rgba(0,0,0,.35);
+    padding-top:14px}
+  .vg.smal.open .side{transform:none;visibility:visible}
+  /* Overgangen pas na de eerste frame (.klaar), anders schuift de lade bij elke laadbeurt zichtbaar weg. */
+  .vg.smal.klaar .side{transition:transform .22s ease,visibility 0s linear .22s}
+  .vg.smal.klaar.open .side{transition:transform .22s ease}
+  .vg.smal .sluit-menu{display:inline-flex}
+  .vg.smal .merk{padding-top:8px}
+  .vg.smal .scrim{display:block;position:fixed;inset:0;z-index:30;background:rgba(11,11,11,.55);
+    opacity:0;visibility:hidden}
+  .vg.smal.open .scrim{opacity:1;visibility:visible}
+  .vg.smal.klaar .scrim{transition:opacity .22s ease,visibility 0s linear .22s}
+  .vg.smal.klaar.open .scrim{transition:opacity .22s ease}
+
+  @media (prefers-reduced-motion: reduce){
+    .vg.klaar .nav a,.vg.smal.klaar .side,.vg.smal.klaar.open .side,.vg.smal.klaar .scrim,.vg.smal.klaar.open .scrim{transition:none}
+  }
+  /* ===================== einde MENU-blok ===================== */
+
+  /* =====================================================================
+     WERKBALK VAN HET KANTOOR — gaat mee naar build_dashboard.py, vervangt .pk-lijst
+     ===================================================================== */
+  .pk-balk{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border-top:1px solid var(--grid);background:var(--surface)}
+  .pk-knop{display:inline-flex;align-items:center;gap:9px;cursor:pointer;min-height:42px;padding:6px 14px 6px 6px;
+    border-radius:10px;border:1px solid var(--ring);background:var(--surface-2);color:var(--ink);
+    font:inherit;font-size:13px;font-weight:650;text-align:left;transition:background-color .15s ease}
+  .pk-knop .nr{flex:none;width:28px;height:28px;border-radius:7px;background:var(--brand);color:#fff;
+    font-size:13px;font-weight:800;display:grid;place-items:center;font-variant-numeric:tabular-nums}
+  .pk-knop.chef .nr{background:transparent;border:1.5px dashed var(--baseline)}
+  .pk-knop .tk{display:flex;flex-direction:column;min-width:0}
+  .pk-knop .nm{display:flex;align-items:center;gap:6px}
+  .pk-knop .nm::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--muted)}
+  .pk-knop.werkt .nm::before{background:var(--s1)}
+  .pk-knop.aandacht .nm::before{background:var(--s4)}
+  .pk-knop.slaapt .nm::before{background:var(--baseline)}
+  .pk-knop.chef .nm::before{background:var(--brand);box-shadow:0 0 0 1px var(--baseline)}
+  .pk-knop .bel{display:none;font-size:12px;font-weight:500;color:var(--ink-2);margin-top:1px}
+  .pk-knop.aandacht .bel::before{content:"! ";color:var(--s2);font-weight:800}
+  @media (hover:hover){ .pk-knop:hover{background:var(--grid)} }
+  .pk-knop.is-hover{background:var(--grid)}
+  .pk-knop:focus-visible,.pk-knop.is-focus{outline:2px solid var(--s1);outline-offset:2px}
+  /* open: lichtblauw vlak + dubbele rand (vorm, niet alleen kleur) + aria-expanded */
+  .pk-knop[aria-expanded="true"]{background:color-mix(in srgb,var(--s1) 12%,var(--surface-2));
+    border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
+  .pk-balk .tussen{flex:1}
+  .vg.smal .pk-balk{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;padding:8px}
+  .vg.smal .pk-balk .tussen{display:none}
+  .vg.smal .pk-knop{width:100%;align-items:flex-start;padding:8px 10px 8px 8px}
+  .vg.smal .pk-knop .bel{display:block}
+  @media (prefers-reduced-motion: reduce){ .pk-knop{transition:none} }
+  /* ===================== einde WERKBALK-blok ===================== */
+
+  /* ---------- uit design/index.html, ongewijzigd (alleen wat de nabootsing gebruikt) ---------- */
+  .pk{background:var(--surface);border:1px solid var(--ring);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+  .pk-bel{position:relative;max-width:220px;width:max-content;text-align:center;
+    background:var(--surface-2);color:var(--ink);border:2px solid var(--ink-2);border-radius:3px;
+    padding:3px 7px;font-size:12px;font-weight:650;line-height:1.25;box-shadow:2px 2px 0 var(--ring)}
+  .pk-bel::after{content:"";position:absolute;left:50%;bottom:-8px;margin-left:-4px;
+    border:4px solid transparent;border-top-color:var(--pk-rand,var(--ink-2))}
+  .pk-bel.werkt{--pk-rand:var(--s1);border-color:var(--s1)}
+  .pk-bel.aandacht{--pk-rand:var(--s4);border-color:var(--s4);background:color-mix(in srgb,var(--s4) 16%,var(--surface-2))}
+  .pk-bel.aandacht::before{content:"! ";color:var(--s2);font-weight:800}
+  .pk-bel.slaapt{--pk-rand:var(--baseline);border-color:var(--baseline);border-style:dashed;color:var(--ink-2)}
+  .pk-naam{font-size:11px;font-weight:650;color:var(--ink-2);white-space:nowrap;
+    background:var(--surface);border:1px solid var(--ring);border-radius:999px;padding:1px 8px}
+  .pk-naam b{color:var(--muted);font-weight:650;margin-right:3px}
+  .pk-bord{font-size:9px;font-weight:800;letter-spacing:.16em;color:#fff;background:var(--brand);
+    padding:2px 6px;border-radius:2px;white-space:nowrap}
+  .pk-uitleg{border-top:1px solid var(--grid);padding:14px 16px 16px;background:var(--surface-2)}
+  .pk-uitleg[hidden]{display:none}
+  .pk-uitleg h3{margin:0;font-size:13.5px;font-weight:700}
+  .pk-uitleg h3 em{font-style:normal;color:var(--muted);font-weight:500}
+  .pk-uitleg .pk-status{margin:8px 0 0;font-size:12.5px;font-weight:650;display:flex;gap:7px;align-items:baseline}
+  .pk-uitleg .pk-status::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--muted);transform:translateY(-1px)}
+  .pk-uitleg .pk-status.werkt::before{background:var(--s1)}
+  .pk-uitleg .pk-status.aandacht::before{background:var(--s4)}
+  .pk-uitleg .pk-status.slaapt::before{background:var(--baseline)}
+  .pk-uitleg .pk-status.chef::before{background:var(--brand)}
+  .pk-uitleg p.pk-tekst{margin:6px 0 0;font-size:12px;color:var(--ink-2);max-width:72ch}
+  .pk-sluit{margin-top:10px;cursor:pointer;font:inherit;font-size:11.5px;font-weight:650;color:var(--s1);background:none;border:0;padding:0}
+  .pk-sluit:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  /* VA-63: voettekst van --muted (3,50:1 licht) naar --ink-2 (7,73:1), zodat hij AA haalt */
+  .pk-voet{padding:10px 16px 12px;border-top:1px solid var(--grid);font-size:11.5px;color:var(--ink-2)}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .kpi{background:var(--surface);border:1px solid var(--ring);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+  .kpi .v{font-size:30px;font-weight:750;letter-spacing:-.02em;line-height:1}
+  .kpi .l{font-size:12.5px;color:var(--ink-2);margin-top:8px}
+  .kpi .h{font-size:11px;color:var(--muted);margin-top:3px}
+  .kpi .accent{width:26px;height:3px;border-radius:2px;margin-bottom:12px;background:var(--s1)}
+  .cols{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}
+  .panel{background:var(--surface);border:1px solid var(--ring);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow)}
+  .panel h3{margin:0 0 4px;font-size:14px;font-weight:700}
+  .panel .cap{margin:0 0 16px;font-size:12px;color:var(--muted)}
+  .bar{display:grid;grid-template-columns:150px 1fr;align-items:center;gap:12px;margin:11px 0}
+  .bar .name{font-size:12.5px;color:var(--ink-2)}
+  .bar .name b{color:var(--ink);font-weight:650}
+  .track{position:relative;height:22px;background:var(--grid);border-radius:6px;overflow:hidden}
+  .fill{height:100%;border-radius:6px;display:flex;align-items:center;justify-content:flex-end;
+    padding-right:8px;color:#fff;font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;min-width:34px}
+  .facts{display:grid;gap:12px}
+  .fact{display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px dashed var(--grid);padding-bottom:9px}
+  .fact:last-child{border-bottom:0;padding-bottom:0}
+  .fact .k{font-size:12.5px;color:var(--ink-2)}
+  .fact .val{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .card{background:var(--surface);border:1px solid var(--ring);border-radius:14px;padding:16px 17px;
+    box-shadow:var(--shadow);display:flex;flex-direction:column;gap:11px}
+  .card .rowtop{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .card .addr{font-size:14.5px;font-weight:700;letter-spacing:-.01em}
+  .card .lid{font-size:11px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+  .score{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    width:56px;height:56px;border-radius:14px;background:var(--brand);color:#fff}
+  .score b{font-size:22px;font-weight:800;line-height:1}
+  .score small{font-size:8px;letter-spacing:.08em;color:#9fb3cc;margin-top:2px}
+  .meter{height:6px;border-radius:4px;background:var(--grid);overflow:hidden}
+  .meter i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--s1),var(--s3))}
+  .chips{display:flex;flex-wrap:wrap;gap:5px}
+  .chip{font-size:10.5px;font-weight:700;color:#fff;padding:2px 8px;border-radius:999px}
+  .cA{background:var(--s1)} .cB{background:var(--s2)} .cC{background:var(--s3)}
+  .cD{background:var(--s4);color:#3a2a00} .cE{background:var(--s5);color:#3a1220}
+  .foothint{margin-top:22px;font-size:11.5px;color:var(--muted);text-align:center;line-height:1.6}
+  /* .mid = de bestaande @media(max-width:900px) van design/index.html */
+  .vg.mid .kpis{grid-template-columns:repeat(2,1fr)}
+  .vg.mid .cols{grid-template-columns:1fr}
+  .vg.mid .grid{grid-template-columns:1fr}
+  .vg.mid .bar{grid-template-columns:120px 1fr}
+  .vg.smal .kpi .v{font-size:26px}
+
+  /* ---------- nabootsing van het 3D-kantoor (alleen in dit ontwerp; VA-48 tekent het echte) ---------- */
+  .pk-scene.mock{position:relative;aspect-ratio:1.45/1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
+    gap:10px;padding:14px;background:var(--surface-2)}
+  .vg.smal .pk-scene.mock{aspect-ratio:1/1;gap:8px;padding:10px}
+  /* VA-63 crit. 13: breed past het hele kantoor met de werkbalk op het scherm (1280 × 800 zonder scrollen).
+     270 px = bovenmarge 26 + kop 112 + werkbalk 63 + voettekst 40 + randen en marge; gemeten: werkbalk tot 752, voettekst tot 792 px.
+     In de bouw: .vg:not(.smal) wordt @media (min-width:801px), en de regel geldt voor .pk-scene.pk-3d. */
+  .vg:not(.smal) .pk-scene.mock{max-height:calc(var(--kantoor-vh,var(--vh,100vh)) - 270px);min-height:240px}
+  .kamer{position:relative;border-radius:10px;border:1px solid var(--ring);
+    background:repeating-linear-gradient(0deg,transparent 0 23px,var(--grid) 23px 24px),
+               repeating-linear-gradient(90deg,transparent 0 23px,var(--grid) 23px 24px),var(--plane);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:28px 8px 10px}
+  .kamer .pk-bord{position:absolute;top:10px;left:10px}
+  .kamer .bureau{width:40%;height:14%;min-height:14px;border-radius:5px;background:var(--baseline);box-shadow:0 3px 0 var(--grid)}
+  .vg.smal .kamer .pk-bel{display:none}
+  .vg.smal .kamer .pk-bord{font-size:7px;letter-spacing:.06em;padding:1px 4px;top:7px;left:7px}
+  .ontwerp-noot{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:78%;
+    background:var(--surface);border:1px dashed var(--baseline);border-radius:8px;padding:6px 10px;
+    font-size:12px;color:var(--ink-2);text-align:center}
+  .ontwerp-regel{margin:12px 2px 0;font-size:12px;color:var(--ink-2);border:1px dashed var(--baseline);border-radius:8px;padding:8px 10px}
+
+  /* =====================================================================
+     ONTWERPBORD (alleen dit bestand)
+     ===================================================================== */
+  .bord{border-top:6px solid var(--brand);background:var(--plane);padding:40px 20px 80px}
+  .bord-w{max-width:1240px;margin:0 auto}
+  /* alleen directe kinderen van .bord-w, zodat niets hiervan in de frames lekt */
+  .bord-w > h2{margin:6px 0 8px;font-size:26px;letter-spacing:-.02em}
+  .bord-w > h3{margin:40px 0 6px;font-size:18px}
+  .bord-w > h4{margin:22px 0 6px;font-size:14px}
+  .bord-w > p:not(.kruimel),.bord-w > ul > li{font-size:14px;color:var(--ink-2);max-width:86ch}
+  .bord-w > p b,.bord-w > ul > li b{color:var(--ink)}
+  .bord-w code,.tabel code{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;background:var(--surface);
+    border:1px solid var(--ring);border-radius:5px;padding:0 4px;color:var(--ink);overflow-wrap:anywhere}
+  .frames{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start;margin-top:14px}
+  .frame-fig{margin:0;flex:1 1 100%;min-width:0}
+  .frames.smal-rij .frame-fig{flex:1 1 280px;max-width:375px}
+  .frame-fig figcaption{margin-top:9px;font-size:12.5px;color:var(--ink-2);line-height:1.5}
+  .frame-fig figcaption b{color:var(--ink)}
+  .frame{position:relative;overflow:hidden;border-radius:12px;box-shadow:0 0 0 1px var(--ring),var(--shadow);background:var(--plane)}
+  .frame-in{position:absolute;top:0;left:0;transform-origin:0 0;transform:scale(var(--k,1));overflow:hidden;background:var(--plane)}
+  .frame-in .rol{height:100%;overflow:hidden}
+  .vouw{position:absolute;left:0;right:0;border-top:2px dashed var(--crit);z-index:60;pointer-events:none}
+  .vouw span{position:absolute;right:12px;top:4px;background:var(--crit);color:#fff;font-size:13px;font-weight:700;padding:3px 9px;border-radius:6px}
+  .tabel{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:10px;font-size:13px}
+  .tabel th,.tabel td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--grid);overflow-wrap:anywhere}
+  .tabel th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);background:var(--surface)}
+  .tabel td{color:var(--ink)}
+  .tabel td.z{color:var(--ink-2)}
+  .tabel .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  @media (max-width:640px){
+    .tabel, .tabel tbody, .tabel tr, .tabel td{display:block;width:100%}
+    .tabel thead{display:none}
+    .tabel tr{border-bottom:1px solid var(--grid);padding:6px 0}
+    .tabel td{border:0;padding:3px 4px}
+    .tabel td[data-k]::before{content:attr(data-k) ": ";font-weight:700;color:var(--ink-2)}
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#inhoud">Sla het menu over</a>
+
+<!-- ======================= HET MENU, WERKEND ======================= -->
+<div class="vg" id="live">
+  <header class="topbalk">
+    <div class="mark">LEVRAI GROUP<small>VASTGOED</small></div>
+    <button class="menuknop" type="button" aria-expanded="false" aria-controls="menu"><span class="streep" aria-hidden="true"></span>Menu</button>
+  </header>
+  <div class="scrim" aria-hidden="true"></div>
+
+  <aside class="side" id="menu" aria-label="Menu">
+    <div class="side-kop">
+      <div class="merk">
+        <div class="mark">LEVRAI GROUP<small>VASTGOED</small></div>
+        <p class="merk-sub">Pandenselectie&nbsp;·&nbsp;Delft</p>
+      </div>
+      <button class="sluit-menu" type="button"><span aria-hidden="true">×</span>Sluit menu</button>
+    </div>
+    <nav class="nav" aria-label="Onderdelen van het dashboard">
+      <p class="groep" id="g-overzicht">Overzicht</p>
+      <ul aria-labelledby="g-overzicht">
+        <li><a href="#kantoor" data-doel="kantoor" aria-current="location">Kantoor</a></li>
+        <li><a href="#kerncijfers" data-doel="kerncijfers">Kerncijfers</a></li>
+      </ul>
+      <p class="groep" id="g-panden">Panden</p>
+      <ul aria-labelledby="g-panden">
+        <li><a href="#voorraad" data-doel="voorraad">Voorraad</a></li>
+        <li><a href="#proefresultaat" data-doel="proefresultaat">Proefresultaat</a></li>
+      </ul>
+    </nav>
+    <div class="side-voet">
+      <button class="toggle thema-knop" id="themeBtn" type="button">◐ Thema</button>
+      <form class="uitlog" method="post" action="/uitloggen" onsubmit="return false"><button class="toggle" type="submit">Uitloggen</button></form>
+    </div>
+  </aside>
+
+  <main class="inhoud" id="inhoud" tabindex="-1">
+
+    <section class="deel" id="kantoor" aria-labelledby="t-kantoor" tabindex="-1">
+      <header class="kop">
+        <div class="kop-rij">
+          <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Kantoor</b></p>
+          <div class="spills">
+            <span class="spill">Bron: PDOK BAG WFS v2_0</span>
+            <span class="spill">Peildatum 4 aug 2026</span>
+          </div>
+        </div>
+        <h1 id="t-kantoor">Zo loopt de pandenselectie</h1>
+        <p class="kop-zin">Elke medewerker is een stap van de pandenselectie. Wat ze zeggen, komt uit de cijfers van dit dashboard.</p>
+      </header>
+      <div class="pk" id="pk">
+        <div class="pk-scene mock" aria-hidden="true">
+          <div class="kamer"><span class="pk-bord">BAG-ARCHIEF</span><span class="pk-bel werkt">BAG opgehaald 4 aug 2026</span><span class="bureau"></span><span class="pk-naam"><b>1</b>Ingest</span></div>
+          <div class="kamer"><span class="pk-bord">TAXATIEKAMER</span><span class="pk-bel werkt">1.668 panden op de werklijst</span><span class="bureau"></span><span class="pk-naam"><b>2</b>Selectie</span></div>
+          <div class="kamer"><span class="pk-bord">DATALAB</span><span class="pk-bel slaapt">Geen extra bron actief</span><span class="bureau"></span><span class="pk-naam"><b>3</b>Verrijking</span></div>
+          <div class="kamer"><span class="pk-bord">KAARTENKAMER</span><span class="pk-bel aandacht">20 panden wachten op visuele controle</span><span class="bureau"></span><span class="pk-naam"><b>4</b>Controle</span></div>
+          <p class="ontwerp-noot">Hier staat het 3D-kantoor (VA-48). Dit ontwerp laadt het niet.</p>
+        </div>
+        <div class="pk-balk" role="group" aria-label="Uitleg per medewerker">
+          <button class="pk-knop werkt" type="button" data-wie="ingest" aria-expanded="false" aria-controls="pk-uitleg"><span class="nr">1</span><span class="tk"><span class="nm">Ingest</span><span class="bel">BAG opgehaald 4 aug 2026</span></span></button>
+          <button class="pk-knop werkt" type="button" data-wie="selectie" aria-expanded="false" aria-controls="pk-uitleg"><span class="nr">2</span><span class="tk"><span class="nm">Selectie</span><span class="bel">1.668 panden op de werklijst</span></span></button>
+          <button class="pk-knop slaapt" type="button" data-wie="verrijking" aria-expanded="false" aria-controls="pk-uitleg"><span class="nr">3</span><span class="tk"><span class="nm">Verrijking</span><span class="bel">Geen extra bron actief</span></span></button>
+          <button class="pk-knop aandacht" type="button" data-wie="controle" aria-expanded="false" aria-controls="pk-uitleg"><span class="nr">4</span><span class="tk"><span class="nm">Controle</span><span class="bel">20 panden wachten op visuele controle</span></span></button>
+          <span class="tussen"></span>
+          <button class="pk-knop chef" type="button" data-wie="chef" aria-expanded="false" aria-controls="pk-uitleg"><span class="nr" aria-hidden="true"></span><span class="tk"><span class="nm">Kantoormanager</span><span class="bel">Loopt naar Controle, die je aandacht vraagt.</span></span></button>
+        </div>
+        <div class="pk-uitleg" id="pk-uitleg" hidden aria-live="polite">
+          <h3></h3>
+          <p class="pk-status"></p>
+          <p class="pk-tekst"></p>
+          <button class="pk-sluit" type="button">Sluit uitleg</button>
+        </div>
+        <div class="pk-voet">De kantoormanager loopt naar wie je aandacht vraagt. Klik op iemand in het kantoor of op een naam hierboven voor uitleg.</div>
+      </div>
+    </section>
+
+    <section class="deel" id="kerncijfers" aria-labelledby="t-kerncijfers" tabindex="-1">
+      <header class="kop">
+        <div class="kop-rij"><p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Kerncijfers</b></p></div>
+        <h2 class="titel" id="t-kerncijfers">Delft in vier cijfers</h2>
+        <p class="kop-zin">Van de ingelezen verblijfsobjecten tot de werklijst met score 8 of hoger.</p>
+      </header>
+      <div class="kpis" id="kpis">
+        <div class="kpi"><div class="accent" style="background:var(--s1)"></div><div class="v">61.993</div><div class="l">Verblijfsobjecten ingelezen</div><div class="h">100,0% dekking van Delft</div></div>
+        <div class="kpi"><div class="accent" style="background:var(--s3)"></div><div class="v">24.008</div><div class="l">Unieke BAG-panden</div><div class="h">1.314 uitgesloten</div></div>
+        <div class="kpi"><div class="accent" style="background:var(--s2)"></div><div class="v">2.346</div><div class="l">Binnen categorie A–E</div><div class="h">de mastervoorraad</div></div>
+        <div class="kpi"><div class="accent" style="background:var(--s5)"></div><div class="v">1.668</div><div class="l">Werklijst · score ≥ 8</div><div class="h">ruim meerdere maanden voorraad</div></div>
+      </div>
+    </section>
+
+    <section class="deel" id="voorraad" aria-labelledby="t-voorraad" tabindex="-1">
+      <header class="kop">
+        <div class="kop-rij"><p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Voorraad</b></p></div>
+        <h2 class="titel" id="t-voorraad">Voorraad en proefselectie</h2>
+        <p class="kop-zin">Hoeveel panden in elke categorie A–E vallen, en wat de 20 panden van de proef kenmerkt.</p>
+      </header>
+      <div class="cols">
+        <div class="panel">
+          <h3>Technische voorraad naar categorie</h3>
+          <p class="cap">Delft · panden binnen categorie A–E · een pand kan in meerdere vallen</p>
+          <div class="bar"><div class="name"><b>A</b> Winkel + wonen</div><div class="track"><div class="fill" style="width:26%;background:var(--s1)">348</div></div></div>
+          <div class="bar"><div class="name"><b>B</b> Bedrijf/kantoor + wonen</div><div class="track"><div class="fill" style="width:24%;background:var(--s2)">322</div></div></div>
+          <div class="bar"><div class="name"><b>C</b> Klein wooncomplex</div><div class="track"><div class="fill" style="width:100%;background:var(--s3)">1.322</div></div></div>
+          <div class="bar"><div class="name"><b>D</b> Groot oud pand</div><div class="track"><div class="fill" style="width:43%;background:var(--s4);color:#3a2a00">562</div></div></div>
+          <div class="bar"><div class="name"><b>E</b> Afwijkende combinatie</div><div class="track"><div class="fill" style="width:27%;background:var(--s5);color:#3a1220">360</div></div></div>
+        </div>
+        <div class="panel">
+          <h3>Proefselectie in cijfers</h3>
+          <p class="cap">De 20 hoogst scorende panden — de controlevraag uit de briefing</p>
+          <div class="facts">
+            <div class="fact"><span class="k">Panden in proefselectie</span><span class="val">20</span></div>
+            <div class="fact"><span class="k">Score-index (/100)</span><span class="val">69–92</span></div>
+            <div class="fact"><span class="k">Bouwjaren</span><span class="val">1550–1930</span></div>
+            <div class="fact"><span class="k">Gem. oppervlakte</span><span class="val">540 m²</span></div>
+            <div class="fact"><span class="k">Doelgebied</span><span class="val">Delft</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="deel" id="proefresultaat" aria-labelledby="t-proefresultaat" tabindex="-1">
+      <header class="kop">
+        <div class="kop-rij">
+          <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Proefresultaat</b></p>
+          <span class="kop-meta" id="secmeta">20 panden · Delft · gesorteerd op score-index</span>
+        </div>
+        <h2 class="titel" id="t-proefresultaat">De 20 hoogst scorende panden</h2>
+        <p class="kop-zin">De controlevraag uit de briefing. Open een pand voor de score-opbouw per criterium.</p>
+      </header>
+      <div class="grid" id="leads">
+        <article class="card"><div class="rowtop"><div><div class="addr">Hippolytusbuurt 1</div><div class="lid">2611HK · bouwjaar 1860 · 686 m²</div></div><div class="score"><b>92</b><small>SCORE</small></div></div><div class="meter"><i style="width:92%"></i></div><div class="chips"><span class="chip cA">A</span><span class="chip cC">C</span><span class="chip cE">E</span></div></article>
+        <article class="card"><div class="rowtop"><div><div class="addr">Hippolytusbuurt 3</div><div class="lid">2611HM · bouwjaar 1740 · 745 m²</div></div><div class="score"><b>77</b><small>SCORE</small></div></div><div class="meter"><i style="width:77%"></i></div><div class="chips"><span class="chip cA">A</span><span class="chip cE">E</span></div></article>
+        <article class="card"><div class="rowtop"><div><div class="addr">Brabantse Turfmarkt 55</div><div class="lid">2611CM · bouwjaar 1860 · 502 m²</div></div><div class="score"><b>77</b><small>SCORE</small></div></div><div class="meter"><i style="width:77%"></i></div><div class="chips"><span class="chip cA">A</span><span class="chip cE">E</span></div></article>
+        <article class="card"><div class="rowtop"><div><div class="addr">Buitenwatersloot 121A</div><div class="lid">2613PZ · bouwjaar 1910 · 715 m²</div></div><div class="score"><b>69</b><small>SCORE</small></div></div><div class="meter"><i style="width:69%"></i></div><div class="chips"><span class="chip cA">A</span><span class="chip cC">C</span></div></article>
+      </div>
+      <p class="ontwerp-regel">Vereenvoudigd in dit ontwerp: het dashboard toont hier alle 20 panden, met de score-opbouw en de detailweergave van VA-61 en VA-62.</p>
+      <p class="foothint">Klik op <b>Score-opbouw</b> in een pand om te zien waar elk punt vandaan komt · grijze criteria wachten op een extra databron (energielabel, verkoophistorie, leegstand).</p>
+    </section>
+  </main>
+</div>
+
+<!-- ======================= ONTWERPBORD ======================= -->
+<div class="bord" id="bord">
+<div class="bord-w">
+  <p class="kruimel">Ontwerp VA-63 · Lumi · 9 november 2026</p>
+  <h2>Het menu van het dashboard, in elke toestand</h2>
+  <p>De indeling komt van het E-com Agents-dashboard: een donkere zijbalk met het merk bovenaan, groepen onder kleine labels in hoofdletters en een gemarkeerd actief onderdeel. In het hoofdvlak staan een kruimelpad, een grote titel, één regel uitleg en statuspillen rechtsboven, en onder het kantoor een balk met genummerde knoppen. <b>Kleuren, letters en tekst zijn van Levrai.</b> Bovenaan deze pagina werkt het menu echt. Hieronder staat elke toestand op 1280 en 375 pixels breed, in licht en donker.</p>
+  <p><b>Eén pagina, het kantoor altijd bovenaan.</b> E-com Agents wisselt van pagina, waardoor zijn kantoor verdwijnt. Hier brengt een menu-item je naar zijn deel van dezelfde pagina, en niets in het menu verbergt het kantoor (Ayman, 7 november).</p>
+  <p><b>Alleen wat er nu is.</b> Het menu heeft vier items, één voor elk deel dat de pagina vandaag heeft. Er staat niets grijs en niets met "binnenkort". De inlogpagina (VA-49, VA-52) krijgt geen zijbalk.</p>
+
+  <h3>Licht thema</h3>
+  <div class="frames">
+    <figure class="frame-fig" data-frame="licht-1280-boven">
+      <figcaption><b>1280 × 1100, bovenaan.</b> Menu: <b>Kantoor</b> actief (witte streep, vet, lichter vlak) · <b>Kerncijfers</b> hover · <b>Voorraad</b> toetsenbordfocus (witte ring) · <b>Proefresultaat</b> in rust. Werkbalk: 2 hover · 3 focus · 4 open, met de uitleg eronder. De rode lijn is de onderkant van een scherm van 1280 × 800: het kantoor en de werkbalk staan erboven (criterium 13). De uitleg mag eronder vallen.</figcaption>
+    </figure>
+    <figure class="frame-fig" data-frame="licht-1280-proef">
+      <figcaption><b>1280 × 800, gescrold naar het proefresultaat.</b> De markering volgt het scrollen: <b>Proefresultaat</b> is actief, <b>Kantoor</b> in rust. De zijbalk blijft staan terwijl de pagina scrolt.</figcaption>
+    </figure>
+  </div>
+  <div class="frames smal-rij">
+    <figure class="frame-fig" data-frame="licht-375-dicht">
+      <figcaption><b>375, menu dicht, bovenaan.</b> Bovenbalk met het merk en de menuknop. De werkbalk staat onder elkaar, met wat elke medewerker zegt.</figcaption>
+    </figure>
+    <figure class="frame-fig" data-frame="licht-375-open">
+      <figcaption><b>375, menu open.</b> <b>Kerncijfers</b> actief · <b>Voorraad</b> hover · <b>Proefresultaat</b> focus · <b>Kantoor</b> in rust. Sluit met Escape, met "Sluit menu", door naast de lade te tikken of door een item te kiezen.</figcaption>
+    </figure>
+    <figure class="frame-fig" data-frame="licht-375-terug">
+      <figcaption><b>375, na het kiezen van Proefresultaat.</b> De lade is dicht, de pagina staat bij het proefresultaat en de focus staat weer op de menuknop.</figcaption>
+    </figure>
+  </div>
+
+  <h3>Donker thema</h3>
+  <div class="frames">
+    <figure class="frame-fig" data-frame="donker-1280-boven">
+      <figcaption><b>1280 × 1100, bovenaan.</b> Dezelfde toestanden als in licht. De zijbalk gebruikt de donkere navy van het thema (<code>#0a1524</code>) met een dunne lijn ernaast.</figcaption>
+    </figure>
+    <figure class="frame-fig" data-frame="donker-1280-proef">
+      <figcaption><b>1280 × 800, gescrold naar het proefresultaat.</b> <b>Proefresultaat</b> actief.</figcaption>
+    </figure>
+  </div>
+  <div class="frames smal-rij">
+    <figure class="frame-fig" data-frame="donker-375-dicht"><figcaption><b>375, menu dicht, bovenaan.</b></figcaption></figure>
+    <figure class="frame-fig" data-frame="donker-375-open"><figcaption><b>375, menu open.</b> Kerncijfers actief · Voorraad hover · Proefresultaat focus · Kantoor in rust.</figcaption></figure>
+    <figure class="frame-fig" data-frame="donker-375-terug"><figcaption><b>375, na het kiezen van Proefresultaat.</b> Focus op de menuknop.</figcaption></figure>
+  </div>
+
+  <h3>Kopij</h3>
+  <p>Alle tekst is Nederlands en staat in deze tabel. Tekst tussen accolades komt uit de cijfers en wordt in Python opgebouwd, niet in het script van de pagina (LESSONS, VA-31). Het kruimelpad staat in gewone letters in de HTML; CSS zet het in hoofdletters, zodat een schermlezer woorden leest en geen letters.</p>
+  <table class="tabel">
+    <thead><tr><th style="width:22%">Sleutel</th><th style="width:40%">Tekst</th><th>Waar en waarom</th></tr></thead>
+    <tbody>
+      <tr><td data-k="Sleutel">merk</td><td data-k="Tekst">LEVRAI GROUP / VASTGOED</td><td class="z" data-k="Waar">Zijbalk en bovenbalk. Ongewijzigd uit de huidige kop.</td></tr>
+      <tr><td data-k="Sleutel">merk.sub</td><td data-k="Tekst">Pandenselectie · {gebied}</td><td class="z" data-k="Waar">Zijbalk, onder het merk. Ongewijzigd.</td></tr>
+      <tr><td data-k="Sleutel">menu.label</td><td data-k="Tekst">Menu</td><td class="z" data-k="Waar"><code>aria-label</code> van de zijbalk.</td></tr>
+      <tr><td data-k="Sleutel">nav.label</td><td data-k="Tekst">Onderdelen van het dashboard</td><td class="z" data-k="Waar"><code>aria-label</code> van <code>nav</code>.</td></tr>
+      <tr><td data-k="Sleutel">groep.overzicht</td><td data-k="Tekst">Overzicht</td><td class="z" data-k="Waar">Groepslabel: het kantoor en de kerncijfers.</td></tr>
+      <tr><td data-k="Sleutel">groep.panden</td><td data-k="Tekst">Panden</td><td class="z" data-k="Waar">Groepslabel: de voorraad en het proefresultaat.</td></tr>
+      <tr><td data-k="Sleutel">item.kantoor</td><td data-k="Tekst">Kantoor</td><td class="z" data-k="Waar"><code>#kantoor</code>: het 3D-kantoor (VA-48), altijd bovenaan.</td></tr>
+      <tr><td data-k="Sleutel">item.kerncijfers</td><td data-k="Tekst">Kerncijfers</td><td class="z" data-k="Waar"><code>#kerncijfers</code>: de rij met vier cijfers.</td></tr>
+      <tr><td data-k="Sleutel">item.voorraad</td><td data-k="Tekst">Voorraad</td><td class="z" data-k="Waar"><code>#voorraad</code>: de voorraad per categorie en de proefselectie in cijfers.</td></tr>
+      <tr><td data-k="Sleutel">item.proefresultaat</td><td data-k="Tekst">Proefresultaat</td><td class="z" data-k="Waar"><code>#proefresultaat</code>: de 20 panden.</td></tr>
+      <tr><td data-k="Sleutel">kruimel</td><td data-k="Tekst">Levrai Vastgoed / {item}</td><td class="z" data-k="Waar">Boven elk deel. De schuine streep is <code>aria-hidden</code>.</td></tr>
+      <tr><td data-k="Sleutel">kantoor.titel</td><td data-k="Tekst">Zo loopt de pandenselectie</td><td class="z" data-k="Waar"><code>h1</code> van de pagina.</td></tr>
+      <tr><td data-k="Sleutel">kantoor.zin</td><td data-k="Tekst">Elke medewerker is een stap van de pandenselectie. Wat ze zeggen, komt uit de cijfers van dit dashboard.</td><td class="z" data-k="Waar">De eerste twee zinnen van de huidige voettekst, nu als uitleg onder de titel.</td></tr>
+      <tr><td data-k="Sleutel">kantoor.voet</td><td data-k="Tekst">De kantoormanager loopt naar wie je aandacht vraagt. Klik op iemand in het kantoor of op een naam hierboven voor uitleg.</td><td class="z" data-k="Waar">Vervangt <code>TEKST3D.voet</code>. Kleur nu <code>--ink-2</code>.</td></tr>
+      <tr><td data-k="Sleutel">kerncijfers.titel</td><td data-k="Tekst">{gebied} in vier cijfers</td><td class="z" data-k="Waar">Wordt "Nederland in vier cijfers" zodra het dashboard het hele land toont.</td></tr>
+      <tr><td data-k="Sleutel">kerncijfers.zin</td><td data-k="Tekst">Van de ingelezen verblijfsobjecten tot de werklijst met score {drempel} of hoger.</td><td class="z" data-k="Waar">{drempel} uit <code>config.yaml</code> (nu 8).</td></tr>
+      <tr><td data-k="Sleutel">voorraad.titel</td><td data-k="Tekst">Voorraad en proefselectie</td><td class="z" data-k="Waar">De twee panelen houden hun eigen koppen.</td></tr>
+      <tr><td data-k="Sleutel">voorraad.zin</td><td data-k="Tekst">Hoeveel panden in elke categorie A–E vallen, en wat de {n} panden van de proef kenmerkt.</td><td class="z" data-k="Waar">{n} = aantal panden in de proef (nu 20).</td></tr>
+      <tr><td data-k="Sleutel">proef.titel</td><td data-k="Tekst">De {n} hoogst scorende panden</td><td class="z" data-k="Waar">Vervangt de kop "Proefresultaat — 20 panden" (<code>.sec-h</code>).</td></tr>
+      <tr><td data-k="Sleutel">proef.zin</td><td data-k="Tekst">De controlevraag uit de briefing. Open een pand voor de score-opbouw per criterium.</td><td class="z" data-k="Waar">Openen kan sinds VA-61.</td></tr>
+      <tr><td data-k="Sleutel">proef.meta</td><td data-k="Tekst">{n} panden · {gebied} · gesorteerd op score-index</td><td class="z" data-k="Waar">De huidige <code>#secmeta</code>, nu rechts in de kop.</td></tr>
+      <tr><td data-k="Sleutel">pil.bron / pil.peildatum</td><td data-k="Tekst">Bron: {bron} · Peildatum {datum}</td><td class="z" data-k="Waar">Ongewijzigd. Bewust zonder groen "live"-bolletje: de gegevens zijn van augustus.</td></tr>
+      <tr><td data-k="Sleutel">thema / uitloggen</td><td data-k="Tekst">◐ Thema · Uitloggen</td><td class="z" data-k="Waar">Ongewijzigd, nu onderaan de zijbalk (in de lade op 375).</td></tr>
+      <tr><td data-k="Sleutel">menuknop</td><td data-k="Tekst">Menu</td><td class="z" data-k="Waar">375: opent de lade. <code>aria-expanded</code> zegt of hij open is.</td></tr>
+      <tr><td data-k="Sleutel">sluit-menu</td><td data-k="Tekst">Sluit menu</td><td class="z" data-k="Waar">375: in de lade. Zelfde vorm als "Sluit uitleg".</td></tr>
+      <tr><td data-k="Sleutel">skip</td><td data-k="Tekst">Sla het menu over</td><td class="z" data-k="Waar">Eerste Tab-stop; alleen zichtbaar met focus.</td></tr>
+      <tr><td data-k="Sleutel">balk.label</td><td data-k="Tekst">Uitleg per medewerker</td><td class="z" data-k="Waar"><code>aria-label</code> van de werkbalk.</td></tr>
+      <tr><td data-k="Sleutel">balk.knop</td><td data-k="Tekst">{nr} {naam} (+ op 375 wat de medewerker zegt)</td><td class="z" data-k="Waar">1 Ingest, 2 Selectie, 3 Verrijking, 4 Controle uit <code>NAMEN</code>, de regel uit <code>kantoor_teksten()</code>.</td></tr>
+      <tr><td data-k="Sleutel">balk.chef</td><td data-k="Tekst">Kantoormanager</td><td class="z" data-k="Waar">Zonder nummer: hij is geen stap. Staat vandaag in <code>.pk-lijst</code> en mag niet verdwijnen.</td></tr>
+      <tr><td data-k="Sleutel">uitleg.sluit</td><td data-k="Tekst">Sluit uitleg</td><td class="z" data-k="Waar">Ongewijzigd.</td></tr>
+    </tbody>
+  </table>
+  <p>Er staat geen Engels in, ook niet het woord dat Nova op 6 november uitsloot ("momentopname" is het Nederlandse woord). Het dashboard is alleen Nederlands, dus er zijn geen andere talen om te vullen.</p>
+
+  <h3>Contrast, gemeten (WCAG 2.x)</h3>
+  <table class="tabel">
+    <thead><tr><th style="width:40%">Tekst of rand</th><th>Licht</th><th>Donker</th></tr></thead>
+    <tbody>
+      <tr><td data-k="Tekst">Menu-item in rust, <code>#c6d3e4</code> op navy</td><td class="num" data-k="Licht">10,41 : 1</td><td class="num" data-k="Donker">12,08 : 1</td></tr>
+      <tr><td data-k="Tekst">Groepslabel en "VASTGOED", <code>#9fb3cc</code> op navy</td><td class="num" data-k="Licht">7,37 : 1</td><td class="num" data-k="Donker">8,55 : 1</td></tr>
+      <tr><td data-k="Tekst">Item met hover, wit op <code>#25354b</code> / <code>#1e2836</code></td><td class="num" data-k="Licht">12,43 : 1</td><td class="num" data-k="Donker">14,87 : 1</td></tr>
+      <tr><td data-k="Tekst">Actief item, wit op <code>#334256</code> / <code>#2c3643</code></td><td class="num" data-k="Licht">10,22 : 1</td><td class="num" data-k="Donker">12,24 : 1</td></tr>
+      <tr><td data-k="Tekst">Focusring en actieve streep, wit op navy (rand, minimaal 3 : 1)</td><td class="num" data-k="Licht">15,80 : 1</td><td class="num" data-k="Donker">18,33 : 1</td></tr>
+      <tr><td data-k="Tekst">Menuknop, wit op navy met 10% wit</td><td class="num" data-k="Licht">11,69 : 1</td><td class="num" data-k="Donker">14,07 : 1</td></tr>
+      <tr><td data-k="Tekst">Kruimelpad en uitlegregel, <code>--ink-2</code> op <code>--plane</code></td><td class="num" data-k="Licht">7,53 : 1</td><td class="num" data-k="Donker">10,85 : 1</td></tr>
+      <tr><td data-k="Tekst">Titel, <code>--ink</code> op <code>--plane</code></td><td class="num" data-k="Licht">18,67 : 1</td><td class="num" data-k="Donker">19,44 : 1</td></tr>
+      <tr><td data-k="Tekst">Statuspil, <code>--ink-2</code> op <code>--surface</code></td><td class="num" data-k="Licht">7,73 : 1</td><td class="num" data-k="Donker">9,72 : 1</td></tr>
+      <tr><td data-k="Tekst">Werkbalkknop, <code>--ink</code> op <code>--surface-2</code></td><td class="num" data-k="Licht">19,68 : 1</td><td class="num" data-k="Donker">16,46 : 1</td></tr>
+      <tr><td data-k="Tekst">Werkbalkknop met hover, <code>--ink</code> op <code>--grid</code></td><td class="num" data-k="Licht">14,87 : 1</td><td class="num" data-k="Donker">13,99 : 1</td></tr>
+      <tr><td data-k="Tekst">Werkbalkknop open, <code>--ink</code> op 12% <code>--s1</code></td><td class="num" data-k="Licht">16,93 : 1</td><td class="num" data-k="Donker">14,28 : 1</td></tr>
+      <tr><td data-k="Tekst">Regel in de knop (375), <code>--ink-2</code> op <code>--surface-2</code></td><td class="num" data-k="Licht">7,94 : 1</td><td class="num" data-k="Donker">9,18 : 1</td></tr>
+      <tr><td data-k="Tekst">Nummer, wit op navy</td><td class="num" data-k="Licht">15,80 : 1</td><td class="num" data-k="Donker">18,33 : 1</td></tr>
+      <tr><td data-k="Tekst">Focusring in het hoofdvlak, <code>--s1</code> op <code>--plane</code> (rand)</td><td class="num" data-k="Licht">4,19 : 1</td><td class="num" data-k="Donker">5,34 : 1</td></tr>
+      <tr><td data-k="Tekst">Voettekst kantoor, <code>--ink-2</code> op <code>--surface</code> (was <code>--muted</code>: 3,50 : 1)</td><td class="num" data-k="Licht">7,73 : 1</td><td class="num" data-k="Donker">9,72 : 1</td></tr>
+    </tbody>
+  </table>
+  <p><b>Gevonden buiten dit menu, niet aangepast:</b> <code>--muted</code> op <code>--surface</code> haalt in licht 3,50 : 1 (<code>.kpi .h</code>, <code>.panel .cap</code>, <code>.note</code>, <code>.foothint</code>, <code>.card .lid</code>), en <code>--s1</code> als tekst haalt 4,30 tot 4,42 : 1 (<code>.baglink</code>, "Sluit uitleg"). Beide zitten net onder AA. Dat hoort in een eigen verhaal.</p>
+
+  <h3>Later in het menu, niet getekend</h3>
+  <p>Deze items komen pas in het menu als hun verhaal Done is en de pagina het deel echt heeft. Tot dan staan ze nergens, ook niet grijs.</p>
+  <table class="tabel">
+    <thead><tr><th style="width:22%">Item</th><th style="width:30%">Plek</th><th>Komt met</th></tr></thead>
+    <tbody>
+      <tr><td data-k="Item">Werklijst</td><td data-k="Plek">Groep Panden, na Proefresultaat</td><td class="z" data-k="Komt met">VA-17. Wacht op Ayman, vraag 5: werkt Levrai vanuit de CSV of vanuit het dashboard?</td></tr>
+      <tr><td data-k="Item">Nederland</td><td data-k="Plek">Groep Overzicht, na Kerncijfers</td><td class="z" data-k="Komt met">VA-39 (vraag 12 en 12b). Als het hele dashboard landelijk wordt, worden de {gebied}-titels "Nederland" en is een apart item misschien niet nodig.</td></tr>
+      <tr><td data-k="Item">Koppelingen</td><td data-k="Plek">Nieuwe groep "Bronnen", onder Panden</td><td class="z" data-k="Komt met">VA-56 (KVK) en VA-58 (EP-online), maar alleen als de pagina een deel krijgt dat de koppelingen en het dagbudget toont. De knop per pand van VA-56 is alleen geen menu-item.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Bouwnotities voor Ada (VA-64)</h3>
+  <h4>Wat je overneemt</h4>
+  <ul>
+    <li>De blokken <b>MENU</b> en <b>WERKBALK VAN HET KANTOOR</b> uit de CSS hierboven, en de markup van <code>.skip</code>, <code>.vg</code>, <code>.topbalk</code>, <code>.scrim</code>, <code>aside.side</code> (met <code>.side-kop</code>, <code>.merk</code>, <code>.sluit-menu</code>, <code>nav.nav</code> met <code>.groep</code> en een <code>ul</code> per groep, <code>.side-voet</code>), <code>main.inhoud</code> en per deel een <code>section.deel</code> met <code>header.kop</code>.</li>
+    <li>De huidige <code>header.top</code> verdwijnt. Het merk en "Pandenselectie · {gebied}" gaan naar <code>.merk</code>, de twee pillen naar <code>.spills</code> in de kop van Kantoor, en Thema en Uitloggen naar <code>.side-voet</code>. <code>#themeBtn</code> en het formulier naar <code>/uitloggen</code> blijven zoals ze zijn (de <code>onsubmit</code> hier is alleen voor dit ontwerp).</li>
+    <li>De nieuwe ids <code>#kantoor</code>, <code>#kerncijfers</code>, <code>#voorraad</code> en <code>#proefresultaat</code> komen op de <code>section.deel</code>. De ids die het script nu gebruikt (<code>#pk</code>, <code>#kpis</code>, <code>#cats</code>, <code>#facts</code>, <code>#leads</code>, <code>#secmeta</code>) blijven binnenin staan. <code>.pk</code> wordt een <code>div</code>, zonder eigen <code>aria-label</code>, want de sectie heeft al een titel. <code>.sec-h</code> verdwijnt.</li>
+    <li><code>.smal</code> (tot 800 px) en <code>.mid</code> (tot 900 px) zijn in dit bestand klassen, zodat de frames ze kunnen tonen. In de bouw worden het <code>@media (max-width:800px)</code> en de bestaande <code>@media (max-width:900px)</code>, met dezelfde regels. De lay-out heeft geen script nodig.</li>
+    <li>De <code>dialog.pand</code> van VA-61 blijft buiten <code>.vg</code> staan, zoals nu.</li>
+  </ul>
+  <h4>Het actieve item volgt het scrollen</h4>
+  <ul>
+    <li>Bij elke scroll (één keer per frame, via <code>requestAnimationFrame</code>) is het actieve deel het laatste <code>.deel</code> waarvan de bovenkant boven een lijn op 30% van de schermhoogte staat (op smal: plus 56 px voor de bovenbalk). Staat de pagina helemaal onderaan, dan is het laatste deel actief. Precies één link heeft <code>aria-current="location"</code>.</li>
+    <li>Verandert het actieve deel door scrollen, zet het adres dan bij met <code>history.replaceState(null, "", "#" + id)</code>. Zo kloppen het adres, de markering en een herlaadbeurt, en komen er geen extra stappen in "terug".</li>
+    <li>Bij een klik op een item wordt dat item meteen actief. Negeer scrollupdates tot <code>scrollend</code> (of 900 ms waar dat event ontbreekt), anders flikkert de markering over de delen ertussen.</li>
+    <li>Openen met een adres als <code>#proefresultaat</code>: de cijfers en kaarten worden door het script uit <code>PAYLOAD</code> getekend. Roep daarna één keer <code>scrollIntoView()</code> aan op het deel, want de browser springt al voordat die delen hoogte hebben. Het kantoor schuift niet, want de scène heeft een vaste <code>aspect-ratio</code>.</li>
+  </ul>
+  <h4>De lade op 375</h4>
+  <ul>
+    <li>Openen: <code>.open</code> op <code>.vg</code>, <code>aria-expanded="true"</code> op de menuknop, <code>inert</code> op <code>main</code>, <code>overflow:hidden</code> op <code>body</code>, en focus naar het actieve item. Tab blijft binnen <code>.side</code>.</li>
+    <li>Sluiten met Escape, met "Sluit menu", met een tik op de achtergrond en bij het kiezen van een item. Daarna gaat de focus terug naar de menuknop. Een dichte lade is <code>visibility:hidden</code>, zodat haar links niet in de Tab-volgorde staan. Wordt het scherm breder dan 800 px terwijl de lade open is, dan sluit ze zonder focus te verplaatsen.</li>
+    <li>Escape: de <code>dialog.pand</code> regelt zijn eigen Escape. De lade luistert alleen als ze open is. De uitleg van het kantoor sluit alleen op Escape als de lade en het pand allebei dicht zijn.</li>
+  </ul>
+  <h4>De werkbalk van het kantoor</h4>
+  <ul>
+    <li><code>.pk-balk</code> vervangt <code>.pk-lijst</code>: dezelfde objecten, dezelfde <code>kies()</code>. Elke knop krijgt <code>aria-expanded</code> en <code>aria-controls</code> naar de uitleg. Op smal toont <code>.bel</code> wat de medewerker zegt (dat toont <code>.pk-lijst</code> nu ook). Breed is <code>.bel</code> verborgen, want daar staan de tekstballonnen in de scène.</li>
+    <li>De nummers zijn alleen labels, geen sneltoetsen. Geen enkele toets opent of verbergt iets in het kantoor (VA-48, criterium 8).</li>
+    <li>De volgorde onder de scène wordt: werkbalk, uitleg, voettekst. De Kantoormanager-knop, zonder nummer, staat altijd als laatste in de balk (criterium 14).</li>
+    <li>Hoogte (criterium 13): breed krijgt de scène <code>max-height:calc(100vh - 270px)</code> naast haar <code>aspect-ratio</code>, met <code>min-height:240px</code>. De 3D-renderer leest de maat van <code>.pk-scene</code>, niet de breedte gedeeld door 1,45, anders rekt het beeld. Op 375 mag de pagina scrollen.</li>
+    <li>Laden zonder flits: overgangen van de lade, de achtergrond en de menu-items staan alleen onder <code>.vg.klaar</code>. Het script zet <code>klaar</code> na twee <code>requestAnimationFrame</code>'s, als de smalle stand al getekend is. Gebruik nooit <code>transition:all</code>.</li>
+  </ul>
+  <h4>Verder</h4>
+  <ul>
+    <li>Hover staat alleen onder <code>@media (hover:hover)</code>, zodat een tik op een telefoon geen hover laat hangen. <code>prefers-reduced-motion: reduce</code> zet alle overgangen van het menu, de lade en de werkbalk uit, en ook het vloeiend scrollen.</li>
+    <li>Test voor VA-64, criterium 4: elke <code>.nav a[href^="#"]</code> wijst naar een id die op de gebouwde pagina staat.</li>
+    <li>De titels met {gebied}, {n} en {drempel} worden in Python opgebouwd en door het script alleen geplaatst.</li>
+    <li>De <code>.ontwerp-noot</code>, de <code>.ontwerp-regel</code> en dit hele bord horen alleen bij dit ontwerp.</li>
+  </ul>
+</div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const root = document.documentElement;
+  const vg = document.getElementById("live");
+  const DELEN = ["kantoor", "kerncijfers", "voorraad", "proefresultaat"];
+
+  /* Teksten van het kantoor: in de bouw komen ze uit kantoor_teksten() en TEKST3D (ongewijzigd). */
+  const WIE = {
+    ingest:     {nr: 1, naam: "Ingest", rol: "haalt de BAG op", s: "werkt",
+                 zin: "Ingest heeft de BAG van Delft opgehaald op 4 aug 2026: 61.993 verblijfsobjecten.",
+                 uitleg: "Ingest haalt alle verblijfsobjecten van Delft op uit de BAG, via de open PDOK-dienst. Elke ophaling blijft bewaard als eigen, gedateerde momentopname, zodat je altijd ziet uit welke ophaling een cijfer komt."},
+    selectie:   {nr: 2, naam: "Selectie", rol: "scoort de panden", s: "werkt",
+                 zin: "Selectie heeft 2.346 panden in categorie A–E gescoord. 1.668 halen score 8 of hoger en staan op de werklijst.",
+                 uitleg: "Selectie groepeert de verblijfsobjecten per BAG-pand, sluit panden uit die buiten de briefing vallen, deelt de rest in categorie A–E in en geeft elk pand een leadscore. Van de 24.008 panden in Delft vallen er 2.346 in A–E; 1.668 halen score 8 of hoger."},
+    verrijking: {nr: 3, naam: "Verrijking", rol: "vult aan met extra bronnen", s: "slaapt",
+                 zin: "Verrijking staat uit: er is geen extra bron actief. Het energielabel telt daardoor nog niet mee in de score.",
+                 uitleg: "Verrijking vult panden aan met gegevens die de BAG niet heeft. Het energielabel van RVO EP-online staat klaar, maar staat uit. Zolang het uit staat, levert het criterium ‘Slecht of ontbrekend energielabel’ (+2) geen punten op; in de score-opbouw staat het grijs."},
+    controle:   {nr: 4, naam: "Controle", rol: "zet panden klaar voor je controle", s: "aandacht",
+                 zin: "20 panden wachten op je visuele controle: bekijk ze op de kaart, de luchtfoto en Street View.",
+                 uitleg: "Controle zet de 20 hoogst scorende panden klaar voor je visuele controle. Bekijk elk pand op de kaart, de luchtfoto en Street View voordat het een lead wordt. Bij elk pand hieronder staat een link naar de BAG-viewer."},
+    chef:       {nr: null, naam: "Kantoormanager", rol: "geen stap van de pandenselectie", s: "chef",
+                 zin: "Loopt naar Controle, die je aandacht vraagt.",
+                 uitleg: "De kantoormanager is geen stap van de pandenselectie en heeft geen eigen cijfers. Vraagt een medewerker je aandacht, dan loopt de kantoormanager daarheen. Anders loopt de kantoormanager een ronde door het kantoor."},
+  };
+
+  function vulUitleg(scope, wie) {
+    const t = WIE[wie], u = scope.querySelector(".pk-uitleg"), h = u.querySelector("h3");
+    h.textContent = (t.nr ? t.nr + " · " : "") + t.naam + " ";
+    const em = document.createElement("em"); em.textContent = t.rol; h.appendChild(em);
+    const st = u.querySelector(".pk-status"); st.className = "pk-status " + t.s; st.textContent = t.zin;
+    u.querySelector(".pk-tekst").textContent = t.uitleg;
+    u.hidden = false;
+    scope.querySelectorAll(".pk-knop").forEach(k => k.setAttribute("aria-expanded", String(k.dataset.wie === wie)));
+  }
+
+  /* ---------------- ontwerpbord: frames maken (vóór interactie, vanuit de beginstand) ---------------- */
+  const FRAMES = {
+    "1280-boven": {w: 1280, h: 1100, actief: "kantoor", hover: "kerncijfers", focus: "voorraad",
+                   balk: {hover: "selectie", focus: "verrijking", open: "controle"}, vouw: 800},
+    "1280-proef": {w: 1280, h: 800, actief: "proefresultaat", naar: "proefresultaat"},
+    "375-dicht":  {w: 375, h: 812, smal: true, actief: "kantoor"},
+    "375-open":   {w: 375, h: 812, smal: true, open: true, actief: "kerncijfers", hover: "voorraad", focus: "proefresultaat", naar: "kerncijfers"},
+    "375-terug":  {w: 375, h: 812, smal: true, actief: "proefresultaat", knopFocus: true, naar: "proefresultaat"},
+  };
+  const bron = vg.cloneNode(true);
+
+  function maakFrame(fig) {
+    const [thema, ...rest] = fig.dataset.frame.split("-");
+    const o = FRAMES[rest.join("-")];
+    const frame = document.createElement("div"); frame.className = "frame";
+    frame.dataset.w = o.w; frame.dataset.h = o.h;
+    const inn = document.createElement("div");
+    inn.className = "frame-in " + (thema === "donker" ? "thema-donker" : "thema-licht");
+    inn.style.width = o.w + "px"; inn.style.height = o.h + "px"; inn.style.setProperty("--vh", o.h + "px");
+    if (o.vouw) inn.style.setProperty("--kantoor-vh", o.vouw + "px");
+    inn.inert = true; inn.setAttribute("aria-hidden", "true");
+    const rol = document.createElement("div"); rol.className = "rol";
+    const c = bron.cloneNode(true);
+    c.removeAttribute("id"); c.querySelectorAll("[id]").forEach(e => e.removeAttribute("id"));
+    c.querySelectorAll("[aria-controls],[aria-labelledby]").forEach(e => { e.removeAttribute("aria-controls"); e.removeAttribute("aria-labelledby"); });
+    c.classList.remove("smal", "mid", "open");
+    if (o.smal) c.classList.add("smal", "mid");
+    if (o.open) c.classList.add("open");
+    c.querySelectorAll(".nav a").forEach(a => {
+      a.removeAttribute("aria-current");
+      if (a.dataset.doel === o.actief) a.setAttribute("aria-current", "location");
+      if (a.dataset.doel === o.hover) a.classList.add("is-hover");
+      if (a.dataset.doel === o.focus) a.classList.add("is-focus");
+    });
+    const mk = c.querySelector(".menuknop");
+    mk.setAttribute("aria-expanded", String(!!o.open));
+    if (o.knopFocus) mk.classList.add("is-focus");
+    if (o.balk) {
+      c.querySelector(`.pk-knop[data-wie="${o.balk.hover}"]`).classList.add("is-hover");
+      c.querySelector(`.pk-knop[data-wie="${o.balk.focus}"]`).classList.add("is-focus");
+      vulUitleg(c, o.balk.open);
+    }
+    rol.appendChild(c); inn.appendChild(rol);
+    if (o.vouw) {
+      const v = document.createElement("div"); v.className = "vouw"; v.style.top = o.vouw + "px";
+      const s = document.createElement("span"); s.textContent = "Onderkant van een scherm van 1280 × 800"; v.appendChild(s);
+      inn.appendChild(v);
+    }
+    frame.appendChild(inn);
+    fig.insertBefore(frame, fig.firstChild);
+    if (o.naar) {
+      const sec = [...c.querySelectorAll(".deel")][DELEN.indexOf(o.naar)];
+      rol.scrollTop = sec.getBoundingClientRect().top - rol.getBoundingClientRect().top + rol.scrollTop - (o.smal ? 72 : 16);
+    }
+  }
+  function schaal() {
+    document.querySelectorAll(".frame").forEach(f => {
+      const w = +f.dataset.w, h = +f.dataset.h;
+      const k = Math.min(1, f.parentElement.clientWidth / w);
+      f.style.setProperty("--k", k);
+      f.style.width = (w * k) + "px"; f.style.height = (h * k) + "px";
+    });
+  }
+  document.querySelectorAll(".frame-fig").forEach(maakFrame);
+  schaal();
+  addEventListener("resize", schaal);
+
+  /* ---------------- het werkende menu ---------------- */
+  const side = vg.querySelector(".side"), knop = vg.querySelector(".menuknop"), main = vg.querySelector(".inhoud");
+  const links = [...vg.querySelectorAll(".nav a")];
+  const delen = DELEN.map(id => document.getElementById(id));
+  const mqSmal = matchMedia("(max-width: 800px)"), mqMid = matchMedia("(max-width: 900px)");
+  const rustig = matchMedia("(prefers-reduced-motion: reduce)");
+
+  document.getElementById("themeBtn").addEventListener("click", () => {
+    root.setAttribute("data-theme", root.getAttribute("data-theme") === "dark" ? "light" : "dark");
+  });
+
+  function openMenu() {
+    vg.classList.add("open"); knop.setAttribute("aria-expanded", "true");
+    main.inert = true; document.body.style.overflow = "hidden";
+    (side.querySelector(".nav a[aria-current]") || links[0]).focus();
+  }
+  function sluitMenu(terug) {
+    if (!vg.classList.contains("open")) return;
+    vg.classList.remove("open"); knop.setAttribute("aria-expanded", "false");
+    main.inert = false; document.body.style.overflow = "";
+    if (terug) knop.focus();
+  }
+  function maat() {
+    vg.classList.toggle("smal", mqSmal.matches);
+    vg.classList.toggle("mid", mqMid.matches);
+    if (!mqSmal.matches) sluitMenu(false);
+  }
+  mqSmal.addEventListener("change", maat); mqMid.addEventListener("change", maat); maat();
+  requestAnimationFrame(() => requestAnimationFrame(() => vg.classList.add("klaar")));
+
+  knop.addEventListener("click", () => vg.classList.contains("open") ? sluitMenu(true) : openMenu());
+  vg.querySelector(".sluit-menu").addEventListener("click", () => sluitMenu(true));
+  vg.querySelector(".scrim").addEventListener("click", () => sluitMenu(true));
+
+  side.addEventListener("keydown", e => {
+    if (e.key !== "Tab" || !vg.classList.contains("open")) return;
+    const f = [...side.querySelectorAll("a[href], button")];
+    const eerste = f[0], laatste = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === eerste) { e.preventDefault(); laatste.focus(); }
+    else if (!e.shiftKey && document.activeElement === laatste) { e.preventDefault(); eerste.focus(); }
+  });
+
+  /* actief item */
+  let actief = null, slot = 0;
+  function zet(id, adres) {
+    if (id === actief) return;
+    actief = id;
+    links.forEach(a => a.dataset.doel === id ? a.setAttribute("aria-current", "location") : a.removeAttribute("aria-current"));
+    if (adres) history.replaceState(null, "", "#" + id);
+  }
+  function bepaal() {
+    if (Date.now() < slot) return;
+    const lijn = (vg.classList.contains("smal") ? 56 : 0) + innerHeight * 0.3;
+    let id = DELEN[0];
+    delen.forEach(d => { if (d.getBoundingClientRect().top <= lijn) id = d.id; });
+    if (vg.getBoundingClientRect().bottom <= innerHeight + 2) id = DELEN[DELEN.length - 1];
+    zet(id, true);
+  }
+  let wacht = false;
+  addEventListener("scroll", () => { if (!wacht) { wacht = true; requestAnimationFrame(() => { wacht = false; bepaal(); }); } }, {passive: true});
+  addEventListener("scrollend", () => { slot = 0; bepaal(); });
+
+  links.forEach(a => a.addEventListener("click", e => {
+    const id = a.dataset.doel;
+    zet(id, false); slot = Date.now() + 900;
+    if (vg.classList.contains("open")) {
+      e.preventDefault();
+      sluitMenu(true);
+      document.getElementById(id).scrollIntoView({behavior: rustig.matches ? "auto" : "smooth"});
+      history.pushState(null, "", "#" + id);
+    }
+  }));
+
+  const start = location.hash.slice(1);
+  if (DELEN.includes(start)) { zet(start, false); document.getElementById(start).scrollIntoView(); }
+  else zet(DELEN[0], false);
+
+  /* werkbalk en uitleg */
+  const uitleg = vg.querySelector(".pk-uitleg");
+  let open = null, opener = null;
+  function sluitUitleg(terug) {
+    uitleg.hidden = true; open = null;
+    vg.querySelectorAll(".pk-knop").forEach(k => k.setAttribute("aria-expanded", "false"));
+    if (terug && opener) opener.focus();
+  }
+  vg.querySelectorAll(".pk-knop").forEach(b => b.addEventListener("click", () => {
+    if (open === b.dataset.wie) { sluitUitleg(false); return; }
+    vulUitleg(vg, b.dataset.wie); open = b.dataset.wie; opener = b;
+  }));
+  uitleg.querySelector(".pk-sluit").addEventListener("click", () => sluitUitleg(true));
+
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    if (vg.classList.contains("open")) { e.preventDefault(); sluitMenu(true); }
+    else if (open) sluitUitleg(true);
+  });
+})();
+</script>
+</body>
+</html>
