@@ -268,7 +268,9 @@ class BereikEnSorteer(unittest.TestCase):
         t = bd.TEMPLATE
         self.assertIn("if (v == null || (x.van !== null && v < x.van) || (x.tm !== null && v > x.tm)) return false;", t)
         self.assertIn("if (x == null || y == null) return x == null && y == null ? na(a, b) : x == null ? 1 : -1;", t)
-        self.assertIn("teken(sorteer(treffers));", t)       # dezelfde kaarten uit 'gebouwd', in een andere volgorde
+        # Dezelfde kaarten uit 'gebouwd', in een andere volgorde. Sinds VA-90 met 'houd': na Bewaar of Verberg
+        # blijven de getoonde kaarten hangen in plaats van opnieuw opgehangen te worden.
+        self.assertIn("teken(sorteer(treffers), houd);", t)
         self.assertIn("st.ruw = leegRuw(); werk(true);", t)  # wis alle filters laat de sortering staan
         self.assertNotIn('type="number"', t)
 

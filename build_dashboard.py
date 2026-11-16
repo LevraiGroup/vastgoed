@@ -715,6 +715,7 @@ def maak_leads(top: list[dict], landelijk: bool) -> tuple[list[dict], list[list]
     """
     criteria, waarden = Tabel(), Tabel()
     leads = []
+    dp0 = gangbare_peildatum(top)
     for p in top:
         f = {k: round(v) for k, v in p["opp_per_functie"].items() if v}
         sig = [{"t": QUAL_TAG[it["label"]][0], "k": QUAL_TAG[it["label"]][1], "d": it["detail"]}
@@ -741,8 +742,57 @@ def maak_leads(top: list[dict], landelijk: bool) -> tuple[list[dict], list[list]
         if landelijk:
             lead["g"] = gemeente_naam(p.get("gemeente"))  # waarop het gemeentefilter kiest
             lead["gg"] = 1 if p.get(nederland.IN_GROOT) == "ja" else 0  # filter Gebied (VA-68 crit. 3)
+        # VA-90 bewaart per pand ook zijn pandcategorie en datapeildatum. Meestal is dat de eerste
+        # categorie en de peildatum van de hele lijst (PAYLOAD.bewaar.dp); alleen een afwijking gaat mee.
+        if p.get("pandcategorie") and p["pandcategorie"] != (p["categorieen"] or [None])[0]:
+            lead["pc"] = p["pandcategorie"]
+        if p.get("datapeildatum") != dp0:
+            lead["dp"] = p.get("datapeildatum")
         leads.append(lead)
     return leads, criteria.lijst, waarden.lijst
+
+
+# --------------------------------------------------------------- bewaren en verbergen (VA-90)
+# Ayman: "every pand needs to have a bewaar or verberg button". Bewaard en verborgen staan alleen in
+# de browser (localStorage), op dit apparaat, tot Q35 zegt waar het anders moet (VA-92). Er gaat
+# niets de pagina uit, en niets in de pijplijn leest het: verbergen is geen leveren (VA-6), het
+# verandert geen cijfer. Kopij: Ada's voorstel in gewoon Nederlands, wacht op Lumi.
+BEWAAR_TEKST = {
+    "bewaar": "Bewaar",
+    "bewaard": "Bewaard",
+    "verberg": "Verberg",
+    "verborgen": "Verborgen",
+    "terug.bewaard": "Nog eens: niet meer bewaren",
+    "terug.verborgen": "Nog eens: weer tonen",
+    "label.bewaard": "Bewaard",
+    "label.verborgen": "Verborgen",
+    "apparaat": "Bewaren en verbergen geldt alleen op dit apparaat, in deze browser. Collega's zien het niet.",
+    "status.bewaard": "{adres} is bewaard.",
+    "status.niet_bewaard": "{adres} is niet meer bewaard.",
+    "status.verborgen": "{adres} is verborgen.",
+    "status.terug": "{adres} staat weer op de werklijst.",
+    "ongedaan": "Ongedaan maken",
+    "aantal": "{n} panden verborgen",
+    "aantal.een": "1 pand verborgen",
+    "toon": "Toon verborgen panden",
+    "toon.uit": "Verberg ze weer",
+    "geen_opslag": "Bewaren en verbergen werkt niet in deze browser: hij slaat niets op (bijvoorbeeld in een "
+                   "privévenster). De rest van het dashboard werkt gewoon.",
+}
+
+
+def gangbare_peildatum(top: list[dict]) -> str | None:
+    """De datapeildatum die de meeste panden van de lijst hebben (bij gelijk: de eerste in de lijst)."""
+    tellen: dict = {}
+    for p in top:
+        tellen[p.get("datapeildatum")] = tellen.get(p.get("datapeildatum"), 0) + 1
+    return max(tellen, key=tellen.get) if tellen else None
+
+
+def bewaar_blok(top: list[dict]) -> dict:
+    """PAYLOAD.bewaar: de teksten en de peildatum die een lead zonder eigen 'dp' heeft."""
+    return {"tekst": BEWAAR_TEKST, "dp": gangbare_peildatum(top)}
+# --------------------------------------------------------------- einde bewaren en verbergen (VA-90)
 
 
 def lijst_feiten(top: list[dict]) -> list[dict]:
@@ -1085,7 +1135,7 @@ def bouw_payload_gebied(cfg: dict) -> dict:
     budget = cfg["score"].get("schaal_max", 26)
     return {"kpi": kpi, "cats": cats, "facts": facts, "leads": leads,
             "velden": detail_labels(aantal_groot), "criteria": criteria, "waarden": waarden, "plek": PLEK_SJABLOON,
-            "filter": None, "kaartfoto": kaartfoto_tekst(),
+            "filter": None, "kaartfoto": kaartfoto_tekst(), "bewaar": bewaar_blok(top),
             "budget": budget, "gebied": label, "koppen": koppen(label, drempel, len(leads)),
             "pagina": pagina("proefresultaat", f"Levrai · Pandenselectie Dashboard — {label}",
                              "Proefselectie in cijfers",
@@ -1170,7 +1220,7 @@ def bouw_payload_landelijk(cfg: dict) -> dict:
             "velden": detail_labels((cfg.get("drempels") or {}).get("aantal_grote_gemeenten")),
             "criteria": criteria, "waarden": waarden, "plek": PLEK_SJABLOON,
             "filter": {**gemeente_filter(lijst, groot), **bereik_filter(leads)} if lijst else None,
-            "kaartfoto": kaartfoto_tekst(),
+            "kaartfoto": kaartfoto_tekst(), "bewaar": bewaar_blok(lijst),
             "budget": cfg["score"].get("schaal_max", 26), "gebied": label,
             "koppen": koppen(label, drempel, n if gelezen is not None else None,
                              {"maand": maand_voluit(t.get("maand")), "n_groot": nl_getal(n_groot),
@@ -2055,6 +2105,44 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     .card-top{grid-template-columns:84px minmax(0,1fr) auto;gap:10px}
     .card-foto{width:84px;height:84px}
   }
+  /* ===================== BEWAREN EN VERBERGEN (VA-90) =====================
+     Op elke kaart en in 'Open pand': Bewaar en Verberg. De stand staat in de knop met meer dan kleur:
+     een ster (☆/★) en het woord, een stippelrand bij Verborgen, en aria-pressed. */
+  .bw-rij{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+  .bw-knop{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:5px 12px 5px 10px;border-radius:9px;
+    border:1px solid var(--ring);background:var(--surface-2);color:var(--ink);font:inherit;font-size:12.5px;
+    font-weight:650;text-align:left;cursor:pointer}
+  .bw-knop .bw-ico{flex:none;width:1.1em;text-align:center;font-size:14px;line-height:1}
+  .bw-knop .bw-tk{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+  .bw-knop .bw-terug{font-size:11px;font-weight:500;color:var(--ink-2)}
+  .bw-knop .bw-terug:empty{display:none}
+  .bw-knop.bw-bewaar[aria-pressed="true"]{background:color-mix(in srgb,var(--s1) 12%,var(--surface-2));
+    border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
+  .bw-knop.bw-bewaar[aria-pressed="true"] .bw-ico{color:var(--s1)}
+  .bw-knop.bw-weg[aria-pressed="true"]{background:var(--grid);border:1px dashed var(--ink-2)}
+  .bw-knop[aria-disabled="true"]{cursor:not-allowed;opacity:.65}
+  @media (hover:hover){ .bw-knop:not([aria-disabled="true"]):hover{background:var(--grid)} }
+  .bw-knop:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .bw-label{display:inline-flex;align-self:flex-start;width:max-content;max-width:100%;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;
+    color:var(--ink);background:color-mix(in srgb,var(--s1) 12%,var(--surface-2));border:1px solid var(--s1)}
+  .bw-label.weg{background:var(--grid);border:1px dashed var(--ink-2)}
+  .bw-label[hidden]{display:none}
+  .card.bw-is-weg{border-style:dashed;background:color-mix(in srgb,var(--grid) 35%,var(--surface))}
+  .card.bw-is-weg .card-foto{opacity:.6}
+  .bw-balk{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:0 0 12px;font-size:12.5px;color:var(--ink-2)}
+  .bw-apparaat{margin:0;flex:1 1 280px}
+  .bw-aantal{font-weight:650;color:var(--ink)}
+  .bw-aantal[hidden],.bw-toon[hidden]{display:none}
+  .bw-toon,.bw-ongedaan{font:inherit;font-size:12.5px;font-weight:650;min-height:34px;padding:4px 12px;border-radius:9px;
+    border:1px solid var(--ring);background:var(--surface-2);color:var(--ink);cursor:pointer}
+  .bw-toon[aria-pressed="true"]{border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
+  .bw-toon:focus-visible,.bw-ongedaan:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .bw-status{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;color:var(--ink)}
+  .bw-status:empty{display:none}
+  .pand-bw{margin:0 0 14px;padding:0 0 12px;border-bottom:1px solid var(--grid)}
+  .pand-bw .bw-apparaat{margin:8px 0 0;font-size:12px;color:var(--ink-2)}
+  .pand-bw .bw-status{margin-top:6px;font-size:12.5px}
+  /* ===================== einde BEWAREN EN VERBERGEN ===================== */
   /* ===================== einde WERKLIJST ===================== */
 </style>
 </head>
@@ -2154,6 +2242,14 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
       </header>
       <div class="wl">
         __FILTER__
+        <!-- BEWAREN EN VERBERGEN (VA-90) -->
+        <div class="bw-balk" id="bwBalk">
+          <p class="bw-apparaat" id="bwApparaat"></p>
+          <span class="bw-aantal" id="bwAantal" hidden></span>
+          <button class="bw-toon" id="bwToon" type="button" aria-pressed="false" hidden></button>
+          <div class="bw-status" id="bwStatus" role="status"></div>
+        </div>
+        <!-- einde BEWAREN EN VERBERGEN -->
         <div class="grid" id="leads"></div>
         <div class="schildwacht" aria-hidden="true"></div>
       </div>
@@ -2459,7 +2555,7 @@ function kaart(d){
   card.innerHTML=`
     <div class="card-top">
       <div class="card-foto"><span class="merk" aria-hidden="true"></span><span class="melding"></span></div>
-      <div class="card-kern"><div class="addr">${d.a}</div><div class="lid"></div>
+      <div class="card-kern"><div class="addr">${d.a}</div><div class="lid"></div><span class="bw-label" hidden></span>
         <div class="chips">${chips}</div>
         ${sigtags?`<div class="sigtags">${sigtags}</div>`:""}</div>
       <div class="score"><b>${d.s100}</b><small>/100</small></div>
@@ -2482,6 +2578,7 @@ function kaart(d){
   kaartFoto(card.querySelector(".card-foto"), d);
   const m=card.querySelector(".meter i");
   requestAnimationFrame(()=>{m.style.width=m.dataset.w+"%";});
+  card.insertBefore(BW.rij(d), card.querySelector(".foot")); BW.ververs(d);   // VA-90
   maakOpenbaar(card, d);
   return card;
 }
@@ -2512,6 +2609,7 @@ function openPand(d, opener) {
   document.getElementById("pandSub").textContent = `${d.p} ${d.wp} · BAG ${d.id}`;
   document.getElementById("pandScore").innerHTML = `<b>${d.s100}</b><small>/100</small>`;
   const romp = document.getElementById("pandRomp"); romp.textContent = "";
+  romp.appendChild(BW.rij(d, true));   // VA-90: Bewaar en Verberg, ook hier
   const loc = locatie(det.loc);
   if (loc) {
     const fig = maak("figure", "pand-foto"), kader = maak("div", "kader"), melding = maak("div", "melding", PAND_TEKST.laden);
@@ -2558,6 +2656,119 @@ function maakOpenbaar(card, d) {
 }
 /* ============================ einde PAND OPENEN ============================ */
 
+/* ============================ BEWAREN EN VERBERGEN (VA-90) ============================
+   Ayman: elk pand een knop Bewaar en een knop Verberg. Alleen in deze browser (localStorage), op dit
+   apparaat; er gaat niets de pagina uit en geen cijfer verandert: Verberg haalt alleen een kaart uit de
+   werklijst. Een pand is bewaard, verborgen of geen van beide; dezelfde knop nog eens zet het terug.
+   Per pand bewaart de browser ook wat VA-91 nodig heeft om het later te tonen, ook als het niet meer
+   in de data staat. Weigert de browser opslag (privévenster), dan zeggen de knoppen dat; de rest werkt.
+   Alle tekst komt uit PAYLOAD.bewaar.tekst (Python). */
+const BW = (() => {
+  const T = PAYLOAD.bewaar.tekst, DP = PAYLOAD.bewaar.dp, SLEUTEL = "levrai-vastgoed-panden", VORM = 1;
+  const PER_ID = new Map(LEADS.map(d => [d.id, d]));
+  let stand = {}, werkt = false, tonen = false, dlg = null;
+  const luisteraars = [], rijen = new Map();   // per pand-ID de knoppenrij van zijn kaart
+  function lees() {
+    try { const r = JSON.parse(localStorage.getItem(SLEUTEL) || "null");
+      stand = r && r.v === VORM && r.panden && typeof r.panden === "object" ? r.panden : {}; } catch (e) { stand = {}; }
+  }
+  function schrijf() {
+    try { localStorage.setItem(SLEUTEL, JSON.stringify({v: VORM, panden: stand})); return true; } catch (e) { return false; }
+  }
+  try { const k = SLEUTEL + "-proef"; localStorage.setItem(k, "1"); localStorage.removeItem(k); werkt = true; } catch (e) { werkt = false; }
+  if (werkt) lees();
+  const van = id => (stand[id] && stand[id].stand) || "";
+  const zichtbaar = id => tonen || van(id) !== "verborgen";
+  const aantalWeg = () => LEADS.filter(d => van(d.id) === "verborgen").length;
+  // Wat VA-91 nodig heeft om een pand te tonen dat niet meer in de werklijst staat; 'sinds' is het moment van opslaan.
+  const gegevens = (d, s) => ({stand: s, hoofdadres: d.detail ? d.detail.titel : d.a, woonplaats: d.wp, score100: d.s100,
+    pandcategorie: d.pc || d.cat[0] || null, bag_viewer_url: BAG + d.id, datapeildatum: d.dp || DP, sinds: new Date().toISOString()});
+  function zet(d, s) {   // s: "bewaard" of "verborgen"; dezelfde stand nog eens is terug naar geen van beide
+    const oud = stand[d.id] || null, nu = van(d.id) === s ? "" : s;
+    if (nu) stand[d.id] = gegevens(d, nu); else delete stand[d.id];
+    if (!schrijf()) { if (oud) stand[d.id] = oud; else delete stand[d.id]; werkt = false; overal(false); return null; }
+    overal(nu === "verborgen" || (oud && oud.stand === "verborgen")); return {oud, nu};   // alleen verbergen raakt de lijst
+  }
+  function herstel(d, oud) {   // Ongedaan maken: precies de stand van daarvoor, ook als die 'bewaard' was
+    if (oud) stand[d.id] = oud; else delete stand[d.id];
+    if (!schrijf()) { werkt = false; } overal(true);
+  }
+  const adres = d => d.detail ? d.detail.titel : d.a;
+  function knop(d, soort) {
+    const b = maak("button", "bw-knop bw-" + (soort === "bewaard" ? "bewaar" : "weg")); b.type = "button";
+    const ico = maak("span", "bw-ico"); ico.setAttribute("aria-hidden", "true");
+    const tk = maak("span", "bw-tk"); tk.append(maak("span", "bw-nm"), maak("span", "bw-terug"));
+    b.append(ico, tk, maak("span", "vh", " · " + adres(d)));
+    b.addEventListener("click", e => { e.stopPropagation(); druk(d, soort, b); });
+    return b;
+  }
+  function rij(d, inPand) {
+    const r = maak("div", inPand ? "bw-rij-pand" : "bw-rij"), k = maak("div", "bw-rij");
+    k.append(knop(d, "bewaard"), knop(d, "verborgen"));
+    if (!inPand) { rijen.set(d.id, k); werkRij(d); return k; }
+    r.className = "pand-bw"; r.append(k, maak("p", "bw-apparaat", werkt ? T.apparaat : T.geen_opslag));
+    const s = maak("div", "bw-status"); s.setAttribute("role", "status"); r.append(s);
+    dlg = {d, r: k, s}; werkRij(d); return r;
+  }
+  function werkRij(d) {
+    const s = van(d.id);
+    for (const k of [rijen.get(d.id), dlg && dlg.d.id === d.id ? dlg.r : null]) { if (!k) continue;
+      k.querySelectorAll(".bw-knop").forEach(b => { const soort = b.classList.contains("bw-bewaar") ? "bewaard" : "verborgen", aan = s === soort;
+        b.setAttribute("aria-pressed", String(aan));
+        if (werkt) b.removeAttribute("aria-disabled"); else b.setAttribute("aria-disabled", "true");
+        b.querySelector(".bw-ico").textContent = soort === "bewaard" ? (aan ? "★" : "☆") : (aan ? "◌" : "⊘");
+        b.querySelector(".bw-nm").textContent = aan ? T["label." + soort] : T[soort === "bewaard" ? "bewaar" : "verberg"];
+        b.querySelector(".bw-terug").textContent = aan ? T["terug." + soort] : ""; });
+    }
+    const card = rijen.get(d.id) && rijen.get(d.id).closest(".card");
+    if (card) { card.classList.toggle("bw-is-weg", s === "verborgen");
+      const l = card.querySelector(".bw-label"); l.hidden = !s; l.className = "bw-label" + (s === "verborgen" ? " weg" : "");
+      l.textContent = s ? (s === "bewaard" ? "★ " : "") + T["label." + s] : ""; }
+  }
+  // De statusregel boven de werklijst (en in 'Open pand'): role=status, dus voorgelezen zonder te onderbreken.
+  const balk = document.getElementById("bwBalk");
+  const el = id => document.getElementById(id);
+  function status(doel, tekst, terug) {
+    doel.textContent = ""; doel.append(maak("span", null, tekst));
+    if (!terug) return null;
+    const b = maak("button", "bw-ongedaan", T.ongedaan); b.type = "button"; b.addEventListener("click", terug); doel.append(b); return b;
+  }
+  function druk(d, soort, b) {
+    const inPand = !!b.closest("#pand"), hier = inPand ? dlg.s : el("bwStatus");
+    if (!werkt) { status(hier, T.geen_opslag); return; }
+    const uit = zet(d, soort);
+    if (!uit) { status(hier, T.geen_opslag); return; }
+    const zin = uit.nu === "verborgen" ? T["status.verborgen"] : uit.nu === "bewaard" ? T["status.bewaard"]
+      : soort === "verborgen" ? T["status.terug"] : T["status.niet_bewaard"];
+    const tekst = zin.replace("{adres}", () => adres(d));
+    const terug = () => { herstel(d, uit.oud);
+      const t = (uit.oud ? (uit.oud.stand === "verborgen" ? T["status.verborgen"] : T["status.bewaard"]) : T["status.terug"]).replace("{adres}", () => adres(d));
+      [el("bwStatus"), dlg && dlg.d.id === d.id ? dlg.s : null].forEach(s => s && status(s, t));
+      const k = (inPand ? dlg.r : rijen.get(d.id) || null);
+      const f = k && k.isConnected && k.querySelector(soort === "bewaard" ? ".bw-bewaar" : ".bw-weg"); if (f) f.focus(); };
+    const ongedaan = status(el("bwStatus"), tekst, terug);
+    if (inPand) status(dlg.s, tekst, terug);
+    // Een kaart die verdwijnt, neemt de focus niet mee: die gaat naar Ongedaan maken.
+    else if (!b.isConnected && ongedaan) ongedaan.focus();
+  }
+  function werkBalk() {
+    if (!balk) return;
+    const n = aantalWeg(), aantal = el("bwAantal"), toon = el("bwToon");
+    if (n === 0) tonen = false;   // niets verborgen: geen telling en geen knop
+    el("bwApparaat").textContent = werkt ? T.apparaat : T.geen_opslag;
+    aantal.hidden = toon.hidden = n === 0;
+    aantal.textContent = n === 1 ? T["aantal.een"] : T.aantal.replace("{n}", nl(n));
+    toon.textContent = tonen ? T["toon.uit"] : T.toon; toon.setAttribute("aria-pressed", String(tonen));
+  }
+  // lijst: alleen als een pand verborgen wordt of terugkomt, rekent de werklijst opnieuw; Bewaar verandert geen kaart van plek.
+  function overal(lijst) { rijen.forEach((k, id) => { const d = PER_ID.get(id); if (d) werkRij(d); }); if (dlg) werkRij(dlg.d); werkBalk(); if (lijst) luisteraars.forEach(f => f()); }
+  if (balk) el("bwToon").addEventListener("click", () => { tonen = !tonen; overal(true); });
+  addEventListener("storage", e => { if (e.key === SLEUTEL) { lees(); overal(true); } });   // een ander tabblad van dit dashboard
+  werkBalk();
+  return {rij, ververs: werkRij, zichtbaar, aantalWeg, op: f => luisteraars.push(f), van};
+})();
+/* ============================ einde BEWAREN EN VERBERGEN ============================ */
+
 /* ============================ WERKLIJST (VA-39, VA-68 t/m VA-70) ============================
    Tot 500 kaarten: de eerste STAP meteen, de volgende pas als je in de buurt scrolt, zodat de
    pagina op een telefoon snel staat. Elke kaart wordt één keer gebouwd en daarna teruggehangen,
@@ -2572,8 +2783,8 @@ function maakOpenbaar(card, d) {
   const io = "IntersectionObserver" in window ? new IntersectionObserver(e => {
     if (e.some(x => x.isIntersecting)) { meer(); kijk(); }
   }, {rootMargin: "0px 0px 1200px 0px"}) : null;
-  function meer() {
-    const tot = io ? Math.min(rij.length, getoond + STAP) : rij.length, deel = document.createDocumentFragment();
+  function meer(minstens) {
+    const tot = io ? Math.min(rij.length, Math.max(getoond + STAP, minstens || 0)) : rij.length, deel = document.createDocumentFragment();
     for (; getoond < tot; getoond++) {
       const d = rij[getoond];
       if (!gebouwd.has(d.id)) gebouwd.set(d.id, kaart(d));
@@ -2583,10 +2794,30 @@ function maakOpenbaar(card, d) {
   }
   // Opnieuw waarnemen geeft direct een nieuwe melding: staat de wacht nog in de buurt, dan volgt de volgende STAP.
   function kijk() { if (!io) return; io.unobserve(wacht); if (getoond < rij.length) io.observe(wacht); }
-  function teken(lijst) { rij = lijst; getoond = 0; lb.textContent = ""; meer(); kijk(); }
+  // houd: na Bewaar of Verberg (VA-90) blijven zoveel kaarten staan als er al waren, dus de pagina springt niet.
+  function teken(lijst, houd) {
+    if (!houd) { rij = lijst; getoond = 0; lb.textContent = ""; meer(); kijk(); return; }
+    // Ter plekke: kaarten die blijven, blijven hangen (een kaart die opnieuw wordt opgehangen, vraagt zijn
+    // luchtfoto opnieuw op); alleen wat weg moet gaat eruit en wat erbij komt, komt op zijn plaats.
+    // Tot en met de laatste kaart die er nu staat: een pand dat wegvalt, haalt er onderaan geen nieuwe kaart (en foto) bij;
+    // de schildwacht doet dat pas als je verder scrolt, zoals altijd.
+    rij = lijst;
+    const staat = new Set(lb.children);
+    let tot = 0; rij.forEach((d, i) => { if (staat.has(gebouwd.get(d.id))) tot = i + 1; });
+    if (!io) tot = rij.length; else if (!tot) tot = Math.min(rij.length, STAP);
+    const wil = rij.slice(0, tot).map(d => { if (!gebouwd.has(d.id)) gebouwd.set(d.id, kaart(d)); return gebouwd.get(d.id); });
+    const blijft = new Set(wil);
+    [...lb.children].forEach(c => { if (!blijft.has(c)) c.remove(); });
+    let plek = lb.firstElementChild;
+    for (const n of wil) { if (n === plek) plek = plek.nextElementSibling; else lb.insertBefore(n, plek); }
+    getoond = tot; kijk();
+  }
 
   const wl = document.querySelector(".wl"), kies = document.getElementById("gemeente");
-  if (!kies || !PAYLOAD.filter) { teken(LEADS); return; }
+  if (!kies || !PAYLOAD.filter) {   // zonder filterpaneel (een stad): alleen de verborgen panden eruit
+    const alles = houd => teken(LEADS.filter(d => BW.zichtbaar(d.id)), houd);
+    BW.op(() => alles(true)); alles(false); return;
+  }
   const F = PAYLOAD.filter;
   const T = PAYLOAD.filter.tekst, $ = s => wl.querySelector(s);
   const knop = $(".wl-knop"), paneel = $(".wl-paneel"), telling = $(".wl-telling"), chipsEl = $(".wl-chips");
@@ -2621,6 +2852,7 @@ function maakOpenbaar(card, d) {
   }
 
   function past(d, behalve) {
+    if (!BW.zichtbaar(d.id)) return false;   // VA-90: een verborgen pand telt nergens mee, tot je ze toont
     if (behalve !== "gemeente" && st.gemeente && d.g !== st.gemeente) return false;
     for (const [g] of LIJST) if (g !== behalve && st[g].size && ![...st[g]].some(w => HEEFT[g](d, w))) return false;
     // Grenzen tellen mee; een pand zonder waarde valt weg zolang er een grens staat (VA-69 crit. 4).
@@ -2659,7 +2891,7 @@ function maakOpenbaar(card, d) {
     sortEl.value = st.sort; dirEl.value = st.dir;
   }
 
-  function werk(schrijf) {
+  function werk(schrijf, houd) {
     B = Object.fromEntries(BEREIK.map(b => [b.k, bereik(b, st.ruw[b.k])]));
     const treffers = LEADS.filter(d => past(d, null)), n = treffers.length;
     const zonder = g => LEADS.filter(d => past(d, g));
@@ -2687,7 +2919,7 @@ function maakOpenbaar(card, d) {
 
     const lijst = chips(), a = lijst.length, bol = $(".wl-aantal");
     bol.hidden = !a; bol.textContent = nl(a); $(".wl-actief").textContent = a ? vul(T.actief, a) : "";
-    telling.textContent = a ? vul(T.telling, n) : T.alle;
+    telling.textContent = a || n !== LEADS.length ? vul(T.telling, n) : T.alle;   // n = de kaarten op het scherm
     toon.textContent = n === 0 ? T.toonNul : n === 1 ? T.toonEen : vul(T.toon, n);
     chipsEl.textContent = ""; chipsEl.hidden = !a;
     lijst.forEach(([tekst, weg], i) => {
@@ -2702,7 +2934,7 @@ function maakOpenbaar(card, d) {
     });
     if (a) chipsEl.append(knopje("wl-wis", T.wis, wisAlles));
     leeg.hidden = n > 0; lb.hidden = n === 0;
-    teken(sorteer(treffers));   // dezelfde kaarten uit 'gebouwd', in de nieuwe volgorde: geen tweede PDOK-verzoek
+    teken(sorteer(treffers), houd);   // dezelfde kaarten uit 'gebouwd', in de nieuwe volgorde: geen tweede PDOK-verzoek
     if (schrijf) schrijfAdres();
   }
   // De sortering blijft staan: die knop wist alleen de filters (Lumi, kopij 'wis').
@@ -2763,6 +2995,7 @@ function maakOpenbaar(card, d) {
   zetOpen(matchMedia("(min-width: 801px)").matches);
   leesAdres();
   werk(false);
+  BW.op(() => werk(false, true));   // VA-90: na Bewaar of Verberg; het adres verandert niet
 })();
 /* ============================ einde WERKLIJST ============================ */
 
@@ -4121,7 +4354,8 @@ function kantoorStart(root, data, opties = {}) {
 
 def render(payload: dict) -> str:
     """Vul het sjabloon. De payload als laatste, zodat zijn inhoud niet wordt vervangen."""
-    payload = {**payload, "kaartfoto": payload.get("kaartfoto") or kaartfoto_tekst()}  # elke kaart (VA-71)
+    payload = {**payload, "kaartfoto": payload.get("kaartfoto") or kaartfoto_tekst(),  # elke kaart (VA-71)
+               "bewaar": payload.get("bewaar") or bewaar_blok([])}  # elke kaart en elk pand (VA-90)
     tip = payload["peildatum_tip"]
     # Zonder 'pagina' (een payload van vóór VA-39, of een test) de teksten van een gebied als Delft.
     pg = payload.get("pagina") or pagina(

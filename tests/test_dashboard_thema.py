@@ -24,7 +24,13 @@ class AltijdLicht(unittest.TestCase):
         # Alleen de knop Thema schrijft data-theme; geen code leest het systeem om te starten.
         schrijvers = re.findall(r'setAttribute\(\s*"data-theme"', bd.TEMPLATE)
         self.assertEqual(len(schrijvers), 1)
-        self.assertNotRegex(bd.TEMPLATE, r"localStorage")
+        # VA-66: het thema komt nooit uit de opslag. Sinds VA-90 gebruiken Bewaar en Verberg wel localStorage;
+        # dat staat alleen tussen de VA-90-markeringen, en daar komt het thema niet voor.
+        buiten_va90 = re.sub(r"(?is)bewaren en verbergen \(VA-90\).*?einde bewaren en verbergen", "", bd.TEMPLATE)
+        self.assertNotRegex(buiten_va90, r"localStorage")
+        va90 = "".join(re.findall(r"(?is)bewaren en verbergen \(VA-90\).*?einde bewaren en verbergen", bd.TEMPLATE))
+        self.assertIn("localStorage", va90)
+        self.assertNotRegex(va90, r"data-theme|thema|theme")
 
     def test_knop_wisselt(self):
         self.assertIn('root.setAttribute("data-theme",dark?"light":"dark")', bd.TEMPLATE)

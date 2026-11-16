@@ -225,7 +225,11 @@ class Sjabloon(unittest.TestCase):
 
     def test_geen_jaartal_of_verbergen_in_de_code(self):
         bron = Path(bd.__file__).read_text(encoding="utf-8")
-        self.assertNotIn("verberg", bron)
+        # VA-39: niets verbergt de landelijke cijfers of het kantoor. Sinds VA-90 mag een pand op de werklijst
+        # wel verborgen worden (Ayman); dat staat alleen tussen de VA-90-markeringen en telt hier niet mee.
+        buiten_va90 = re.sub(r"(?is)bewaren en verbergen \(VA-90\).*?einde bewaren en verbergen", "", bron)
+        self.assertNotIn("verberg", buiten_va90)
+        self.assertGreater(bron.lower().count("bewaren en verbergen (va-90)"), 0)  # de markeringen bestaan
         self.assertEqual(re.findall(r"\b20[2-9]\d\b", bron), [])  # een datum komt uit de data
 
 

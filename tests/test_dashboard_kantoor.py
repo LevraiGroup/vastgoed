@@ -7,6 +7,7 @@ wordt overgeslagen zonder data/panden_delft.json).
 """
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -252,9 +253,13 @@ class Pagina(unittest.TestCase):
     def test_kantoor_altijd_zichtbaar(self):
         # Ayman bij de review: geen knop 'verberg kantoor', het kantoor staat er altijd.
         t = bd.TEMPLATE
-        for weg in ('id="pkKnop"', "Verberg kantoor", "Toon kantoor", "aria-pressed",
+        for weg in ('id="pkKnop"', "Verberg kantoor", "Toon kantoor",
                     ".pk[hidden]", "toon(aan)", "root.hidden = "):
             self.assertNotIn(weg, t)
+        # Geen aan/uit-knop voor het kantoor. Sinds VA-90 hebben de panden wel Bewaar en Verberg met
+        # aria-pressed; die staan alleen tussen de VA-90-markeringen en tellen hier niet mee.
+        buiten_va90 = re.sub(r"(?is)bewaren en verbergen \(VA-90\).*?einde bewaren en verbergen", "", t)
+        self.assertNotIn("aria-pressed", buiten_va90)
         for begin in ('<section class="deel" id="kantoor"', '<div class="pk" id="pk"'):
             tag = t[t.index(begin):]
             self.assertNotIn("hidden", tag[:tag.index(">")], begin)
