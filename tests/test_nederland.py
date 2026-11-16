@@ -153,7 +153,8 @@ class DraaiMetStub(unittest.TestCase):
         from unittest import mock
         with mock.patch.object(selectie, "stroom_panden", self.stroom(codes)):
             return nederland.draai(self.cfg, None, self.run_proef.KOLOMMEN, self.run_proef.csv_rij,
-                                   self.map / "uit", self.map / "data")
+                                   self.map / "uit", self.map / "data",
+                                   register_bestand=self.map / "register.csv")
 
     def test_lead_ids_uniek_en_verdeling(self):
         import csv

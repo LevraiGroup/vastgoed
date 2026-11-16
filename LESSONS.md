@@ -149,3 +149,7 @@ struck through with the reason, never deleted.
 - **An output built in a scratch run matches its commit when three checks agree:** the code copy's
   hashes equal the commit's, the output equals the commit after CRLF normalisation, and a cheap
   independent recompute agrees. *(2026-11-14, Vera, VA-78/VA-79)*
+- **The dedup register is the only state the pipeline must never rebuild: it lives in git
+  (`register/geleverde_panden.csv`), not in `data/`, and a test that runs `run_proef.main()` must point it
+  elsewhere.** `nederland.draai()` takes it as a required keyword so a forgotten test fails instead of
+  writing the real register; the Delft route follows `run_proef.BASE`. *(2026-11-16, Rex, VA-6)*

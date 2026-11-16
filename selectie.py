@@ -584,15 +584,18 @@ def werklijstvolgorde(maand: str):
     return sleutel
 
 
-def werklijst(panden: list[dict], cfg: dict, maand: str) -> tuple[list[dict], int]:
-    """Kies de maandelijkse werklijst uit de gescoorde panden (VA-5, VA-32).
+def werklijst(
+    panden: list[dict], cfg: dict, maand: str, geleverd: set[str] | frozenset[str] = frozenset()
+) -> tuple[list[dict], int]:
+    """Kies de maandelijkse werklijst uit de gescoorde panden (VA-5, VA-32, VA-6).
 
     In aanmerking komt een pand dat niet is uitgesloten, in minstens één categorie A-E
-    valt en een leadscore heeft van minstens drempels.score_min_voor_werklijst. Die
-    panden staan op leadscore, hoogste eerst; panden met dezelfde score staan in een
-    volgorde die vastligt voor de maand (JJJJ-MM, zie werklijstvolgorde). De werklijst
-    is het begin daarvan, hoogstens drempels.werklijst_max panden. Wie op de grensscore
-    meedoet, hangt dus af van de maand, niet van het BAG-pand-ID.
+    valt, een leadscore heeft van minstens drempels.score_min_voor_werklijst en niet in
+    'geleverd' staat (de BAG-pand-ID's die het dedup-register al in een andere werklijst
+    heeft, VA-6). Die panden staan op leadscore, hoogste eerst; panden met dezelfde score
+    staan in een volgorde die vastligt voor de maand (JJJJ-MM, zie werklijstvolgorde). De
+    werklijst is het begin daarvan, hoogstens drempels.werklijst_max panden. Wie op de
+    grensscore meedoet, hangt dus af van de maand, niet van het BAG-pand-ID.
 
     Geeft (werklijst, aantal panden dat in aanmerking kwam) terug.
     """
@@ -603,6 +606,7 @@ def werklijst(panden: list[dict], cfg: dict, maand: str) -> tuple[list[dict], in
         (
             p for p in panden
             if not p["uitgesloten"] and p["categorieen"] and p["leadscore"] >= score_min
+            and p["bag_pand_id"] not in geleverd
         ),
         key=werklijstvolgorde(maand),
     )
