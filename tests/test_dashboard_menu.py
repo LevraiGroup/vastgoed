@@ -193,7 +193,9 @@ class Koppen(unittest.TestCase):
     def test_geen_sjabloonplek_blijft_over(self):
         html = gebouwd()
         self.assertEqual(re.findall(r"__[A-Z][A-Z0-9_]*__", html), [])
-        self.assertIn('<h1 id="t-kantoor">Zo loopt de pandenselectie</h1>', html)
+        self.assertIn('<h1 id="t-kantoor" class="vh">Kantoor</h1>', html)
+        self.assertNotIn("Zo loopt de pandenselectie", html)
+        self.assertNotIn("Elke medewerker is een stap", html)
         self.assertIn('id="secmeta">20 panden · Delft · gesorteerd op score-index</span>', html)
 
     def test_het_script_maakt_de_meta_niet_meer(self):

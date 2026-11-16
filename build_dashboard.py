@@ -16,10 +16,13 @@ het bestand, dan staat er dat de bron onbekend is.
 from __future__ import annotations
 
 import json
+import math
 from datetime import date
 from html import escape
 from pathlib import Path
 
+import cbs_gemeenten
+import kaart_nl
 import nederland
 import snapshots
 from gebieden import resolve, slug
@@ -1179,7 +1182,10 @@ def bouw_payload_landelijk(cfg: dict) -> dict:
             "bron": bron, "bron_regels": bron_regels(bron), "bron_reden": bron_reden,
             "peildatum": peildatum(bron), "peildatum_tip": peildatum_tip(bron, bron_reden),
             "kantoor": kantoor_landelijk(bron, t if gelezen is not None else None,
-                                         n if gelezen is not None else None, cfg)}
+                                         n if gelezen is not None else None, cfg),
+            # VA-85: de landkaart boven het kantoor; de 25 grootste uit het CBS-bestand van VA-65.
+            "kaart": (landkaart(lijst, t, bron, cbs_gemeenten.grootste(groot), lees_kaart())
+                      if gelezen is not None and groot else None)}
 
 
 # --------------------------------------------------------------- menu en koppen (VA-63, VA-64)
@@ -1196,9 +1202,8 @@ MENU = [
 KANTOORMANAGER = "Kantoormanager"
 # {gebied}, {drempel} en {n} vult koppen() in; het script plaatst niets.
 KOP_TEKST = {
-    "kantoor.titel": "Zo loopt de pandenselectie",
-    "kantoor.zin": "Elke medewerker is een stap van de pandenselectie. Wat ze zeggen, komt uit de "
-                   "cijfers van dit dashboard.",
+    # Op Ayman's verzoek geen zichtbare kop of uitlegzin boven de band; de kop is er voor schermlezers.
+    "kantoor.titel": "Kantoor",
     "kerncijfers.titel": "{gebied} in vier cijfers",
     "kerncijfers.zin": "Van de ingelezen verblijfsobjecten tot de werklijst met score {drempel} of hoger.",
     "voorraad.titel": "Voorraad en proefselectie",
@@ -1289,6 +1294,145 @@ def werkbalk_html(tekst: dict | None) -> str:
     return "".join(uit)
 
 
+# --------------------------------------------------------------- landkaart (VA-85)
+# Lumi's drie richtingen uit design/richting.html samen in één navy band, alleen voor heel Nederland
+# (Ayman: "combineer ze", spectaculairder): C's landkaart, B's brein rond de kern in de
+# Noordzee, en A's stroom die langs de vijf glazen cijfers dunner wordt. Haar kopij staat hier als data; Python
+# maakt elk getal en elke zin, het script tekent alleen (les van VA-31). De vorm van het land en de
+# gemeentepunten komen uit referentie/kaart_nl_<jaar>.json (kaart_nl.py); de panden uit de werklijst.
+KAART_TEKST = {
+    "trap.label": "Van BAG naar werklijst",
+    "trap.vbo": "verblijfsobjecten",
+    "trap.panden": "panden",
+    "trap.a_e": "in A–E",
+    "trap.geschikt": "score ≥ {drempel}",
+    "trap.werklijst": "op je werklijst",
+    "legenda.cat": "in A–E",
+    "legenda.ring": "score ≥ {drempel}",
+    "legenda.wl": "op je werklijst",
+    "aria": "Selectie op de BAG van {datum}: {vbo} verblijfsobjecten, {panden} panden, {a_e} in categorie A "
+            "tot en met E, {geschikt} met score {drempel} of hoger, {werklijst} op je werklijst: {n_groot} uit de "
+            "{aantal} grootste gemeenten en {n_rest} elders. {grootste}.",
+    "kern.tip": "Je werklijst · {werklijst} panden: {n_groot} uit de {aantal} grootste gemeenten, {n_rest} elders",
+    "kern.woord": "werklijst",
+    "gemeente.tip": "{naam} · {n} {panden} op je werklijst",
+    "cat.tip": "Categorie {k} · {naam} · {n} panden",   # Lumi, concept B
+    "stroom.noot": "De stroom is niet op schaal, de cijfers wel.",   # Lumi, concept A
+}
+TRAP = ("vbo", "panden", "a_e", "geschikt", "werklijst")  # de vijf glazen cijfers, in deze volgorde
+KAART_KERN = (53.02, 3.74)  # breedte, lengte: de kern in de Noordzee, waar Lumi hem zette
+KAART_LABELS = 4            # zoveel gemeenten krijgen naam en aantal op de kaart (Lumi: de vier grootste)
+KAART_STAP = 100            # coördinaten in honderdsten van een graad: ongeveer 1 km
+
+
+def nl_datum_voluit(iso: str | None) -> str:
+    """'JJJJ-MM-DD' -> 'D maand JJJJ', maand voluit (harde spaties); onleesbaar -> 'ophaaldatum onbekend'."""
+    dag = lees_datum(iso)
+    if dag is None:
+        return "ophaaldatum onbekend"
+    return f"{dag.day}{NBSP}{MAANDEN_VOL[dag.month - 1]}{NBSP}{dag.year}"
+
+
+def _kort(breedte: float, lengte: float) -> list[int]:
+    """[breedte, lengte] in honderdsten van een graad vanaf 50° N, 3° O (zo staan ze in de payload)."""
+    return [round((breedte - 50) * KAART_STAP), round((lengte - 3) * KAART_STAP)]
+
+
+def lees_kaart(pad: Path | None = None) -> dict | None:
+    """Het nieuwste kaartbestand van kaart_nl.py, of None (dan tekent de kaart geen land en geen gemeenten)."""
+    pad = pad or kaart_nl.nieuwste()
+    if pad is None or not pad.is_file():
+        return None
+    return json.loads(pad.read_text(encoding="utf-8"))
+
+
+def kaart_bron(kaart: dict | None) -> str:
+    """De bron van de landvorm, zoals hij als commentaar in de pagina staat."""
+    b = (kaart or {}).get("bron")
+    if not b:
+        return "geen kaartbestand in referentie/, dus geen landvorm en geen gemeenten"
+    return f"{b['titel']} ({b['dienst']}, lagen {', '.join(b['lagen'])}), {b['licentie']}, opgehaald {b['opgehaald']}"
+
+
+def landkaart(lijst: list[dict], t: dict, bron: list[dict] | None, grote: list[dict],
+              kaart: dict | None) -> dict:
+    """
+    PAYLOAD.kaart: het land, de grootste gemeenten, één stip per werklijstpand (afgerond op
+    ongeveer 1 km) en alle teksten. 'pt' is plat, vier getallen per pand: breedte, lengte, kleur
+    (0-4 = categorie A-E, +5 = ring voor score ≥ drempel) en gemeente (index in 'gm', -1 = elders).
+    """
+    drempel = t.get("drempel")
+    codes = {g["gemeentecode"]: i for i, g in enumerate(grote)}
+    punten = (kaart or {}).get("gemeenten") or {}
+    tellen = [0] * len(grote)
+    pt = []
+    for p in lijst:
+        i = codes.get(p.get("gemeentecode"), -1)
+        if i >= 0:
+            tellen[i] += 1
+        plek = pand_plek(p)
+        if plek is None:
+            continue  # geen bruikbare x,y: geen stip, wel geteld
+        breedte, lengte = (float(v) for v in plek["ll"].split(","))
+        kleur = "ABCDE".index(p["pandcategorie"]) + (5 if drempel is not None and p["leadscore"] >= drempel else 0)
+        pt += _kort(breedte, lengte) + [kleur, i]
+    gm = []
+    for g, n in zip(grote, tellen):
+        naam = gemeente_naam(g["gemeente"])
+        plek = punten.get(g["gemeentecode"])
+        gm.append({"ll": _kort(*plek) if plek else None, "n": n, "naam": naam, "v": nl_getal(n), "lab": 0,
+                   "tip": KAART_TEKST["gemeente.tip"].format(naam=naam, n=nl_getal(n),
+                                                             panden="pand" if n == 1 else "panden")})
+    grootste = sorted((g for g in gm if g["n"]), key=lambda g: -g["n"])[:KAART_LABELS]
+    for g in grootste:
+        g["lab"] = 1
+    trap = {k: nl_getal(t.get(k)) for k in TRAP}
+    woorden = {**trap, "drempel": nl_getal(drempel), "n_groot": nl_getal(t.get("werklijst_25")),
+               "n_rest": nl_getal(t.get("werklijst_overig")), "aantal": nl_getal(len(grote)),
+               "datum": nl_datum_voluit(bron[0].get("ophaaldatum")) if bron else nl_datum_voluit(None),
+               "grootste": ", ".join(f"{g['naam']} {g['v']}" for g in grootste)}
+    tekst = {k: v.format(**woorden) for k, v in KAART_TEKST.items()
+             if k not in ("gemeente.tip", "cat.tip")}  # die twee vullen gm en cats per stuk
+    per_cat = t.get("categorieen") or {}
+    cats = [{"k": c, "n": per_cat.get(c) or 0,
+             "tip": KAART_TEKST["cat.tip"].format(k=c, naam=CATEGORIE_NAAM[c], n=nl_getal(per_cat.get(c)))}
+            for c in "ABCDE"]
+    # De stroom (A): de ruwe aantallen voor hoe dun hij wordt, en per cijfer de lengte van zijn balk
+    # op een logaritmische schaal (9.998.456 is 100 %, 1 zou 0 % zijn). Getoond worden alleen de teksten.
+    ruw = [t.get(c) or 0 for c in TRAP]
+    top = math.log10(max(ruw[0], 10))
+    breed = [round(100 * math.log10(max(n, 1)) / top) for n in ruw]
+    land = [[c for la, lo in ring for c in _kort(la, lo)] for ring in (kaart or {}).get("land") or []]
+    return {"land": land, "gm": gm, "pt": pt, "trap": trap, "tekst": tekst, "bron": kaart_bron(kaart),
+            "cats": cats, "ruw": ruw, "breed": breed,
+            "kern": {"ll": _kort(*KAART_KERN), "getal": trap["werklijst"], "woord": tekst["kern.woord"],
+                     "tip": tekst["kern.tip"]}}
+
+
+def band_html(k: dict | None) -> tuple[str, str, str]:
+    """
+    (klasse, trap, kaart): wat de band in het kantoordeel zet, na de kop. Zonder PAYLOAD.kaart (een
+    gebied als Delft) drie keer niets, en blijft de kop van het kantoor zoals hij was.
+    Eén canvas ligt onder de hele band; .kaart-vlak houdt alleen de plek voor de kaart vrij.
+    """
+    if not k:
+        return "", "", ""
+    t = k["tekst"]
+    items = []
+    for s, w in zip(TRAP, k["breed"]):
+        klasse = ' class="trap-wl"' if s == "werklijst" else ""
+        items.append(f'<li{klasse} style="--w:{w}%"><b>{escape(k["trap"][s])}</b><span>{escape(t["trap." + s])}</span></li>')
+    legenda = "".join(f'<span><i class="lg-{s}"></i>{escape(t["legenda." + s])}</span>' for s in ("cat", "ring", "wl"))
+    trap = (f'\n      <div class="trap-blok"><ol class="trap" aria-label="{escape(t["trap.label"])}">{"".join(items)}</ol>'
+            f'<p class="stroom-noot">{escape(t["stroom.noot"])}</p></div>')
+    kaart = (f'\n      <!-- Landkaart (VA-85). Landvorm en gemeentepunten: {escape(k["bron"])}. '
+             'De stippen: de panden van de werklijst, afgerond op ongeveer 1 km. -->\n'
+             f'      <canvas class="band-doek" id="landkaart" role="img" aria-label="{escape(t["aria"])}"></canvas>'
+             '<div class="kaart-tip" id="kaartTip" hidden></div>\n'
+             f'      <figure class="kaart"><div class="kaart-vlak"></div><figcaption class="legenda">{legenda}</figcaption></figure>')
+    return " band", trap, kaart
+
+
 TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboard" subtitle="__LABEL__ · 20-pand proefresultaat met score-opbouw" -->
 <!doctype html>
 <html lang="nl" data-theme="light"><!-- VA-66: altijd licht openen (Ayman); Thema wisselt -->
@@ -1335,6 +1479,18 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     --nav-tekst:#c6d3e4; --nav-label:#9fb3cc;
     --nav-hover:rgba(255,255,255,.08); --nav-actief:rgba(255,255,255,.14); --nav-lijn:rgba(255,255,255,.10);
   }
+  /* Landkaart (VA-85, Lumi #h-tokens): alleen mengsels van tokens die er al zijn, geen nieuwe kleur.
+     Ze volgen --brand en --s1, dus de band wordt donker met het thema. */
+  :root{
+    --brand-2:color-mix(in srgb,var(--brand) 78%,var(--s1));
+    --held:linear-gradient(155deg,var(--brand) 0%,var(--brand) 35%,var(--brand-2) 100%);
+    --gloed:color-mix(in srgb,var(--s1) 40%,transparent);
+    --schaduw-hoog:0 1px 2px rgba(11,11,11,.05),0 28px 56px -28px color-mix(in srgb,var(--brand) 60%,transparent);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])){--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9)}
+  }
+  :root[data-theme="dark"]{--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9)}
 
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
@@ -1635,6 +1791,67 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   .pk-noot{flex-basis:100%;color:var(--ink-2)}
   /* ===================== einde KANTOOR3D-blok ===================== */
 
+  /* =====================================================================
+     LANDKAART (VA-85): Lumi's concepten A, B en C samen in één navy band boven het kantoor.
+     Eén canvas onder de hele band tekent het raster, de stroom langs de cijfers (A), het brein rond
+     de kern (B) en de kaart (C); de kop, de glazen cijfers en de legenda zijn gewone HTML erboven.
+     Let op VA-64 crit. 13: met deze band staat de werkbalk van het kantoor op 1280 × 800 niet meer
+     bij het laden in beeld. Het kantoor zelf blijft even groot en altijd zichtbaar.
+     ===================================================================== */
+  .band{position:relative;isolation:isolate;overflow:hidden;margin:-26px -28px 0;padding:24px 28px 64px;
+    background:var(--held);color:#fff;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,46%);
+    grid-template-rows:auto 1fr;grid-template-areas:"kop kaart" "trap kaart";gap:18px 28px}
+  .band::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.6;
+    background:radial-gradient(42% 70% at 74% 40%,var(--gloed),transparent 70%),
+      radial-gradient(32% 55% at 8% 100%,color-mix(in srgb,var(--s3) 16%,transparent),transparent 70%)}
+  .band>*{position:relative;z-index:1;min-width:0}
+  .band>canvas.band-doek{position:absolute;inset:0;z-index:0;width:100%;height:100%;display:block;color:var(--brand-2)}
+  .band .kop{grid-area:kop;margin:0;gap:6px}
+  .band .kruimel{color:var(--nav-label)}
+  .band .kruimel b{color:#fff}
+  .band h1{color:#fff;font-size:32px}
+  .band .kop-zin{color:var(--nav-tekst)}
+  .band .pill{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.14);color:var(--nav-tekst)}
+  .band + .pk{position:relative;z-index:2;margin-top:-40px;box-shadow:var(--schaduw-hoog)}
+  /* De vijf glazen cijfers (A): onder elkaar, links een kanaal waar de stroom langs loopt. */
+  .trap-blok{grid-area:trap;align-self:end}
+  .trap{list-style:none;margin:0;padding:0 0 0 26px;display:flex;flex-direction:column;gap:7px;max-width:440px}
+  .trap li{position:relative;overflow:hidden;display:flex;align-items:baseline;gap:12px;padding:9px 14px 11px;
+    border-radius:12px;font-size:12.5px;color:var(--nav-tekst);background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.13);box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  .trap li::after{content:"";position:absolute;left:0;bottom:0;height:2px;width:var(--w);border-radius:0 2px 2px 0;
+    background:linear-gradient(90deg,var(--s1),var(--s3));opacity:.85}
+  .trap b{min-width:7.2ch;color:#fff;font-size:21px;font-weight:750;letter-spacing:-.01em;font-variant-numeric:tabular-nums;text-align:right}
+  .trap li.trap-wl{background:color-mix(in srgb,var(--s3) 20%,transparent);border-color:color-mix(in srgb,var(--s3) 58%,transparent)}
+  .stroom-noot{margin:8px 0 0 26px;font-size:11.5px;color:var(--nav-label)}
+  /* De kaart (C): het vlak houdt alleen plek vrij; het canvas eronder tekent erin. */
+  .kaart{grid-area:kaart;margin:0;display:flex;flex-direction:column;justify-content:flex-end;gap:6px}
+  .kaart-vlak{height:clamp(380px,58vh,560px);pointer-events:none}
+  .kaart-tip{position:absolute;z-index:3;pointer-events:none;transform:translate(-50%,calc(-100% - 8px));
+    background:var(--brand);color:#fff;font-size:12px;font-weight:600;padding:5px 8px;border-radius:8px;
+    border:1px solid rgba(255,255,255,.18);white-space:nowrap}
+  .kaart-tip[hidden]{display:none}
+  .legenda{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px 14px;font-size:11.5px;color:var(--nav-tekst)}
+  .legenda span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .legenda i{flex:none;display:inline-block;width:9px;height:9px;border-radius:50%}
+  .lg-cat{background:conic-gradient(var(--s1) 0 20%,var(--s2) 0 40%,var(--s3) 0 60%,var(--s4) 0 80%,var(--s5) 0)}
+  .lg-ring{border:1.5px solid #fff}
+  .lg-wl{background:var(--s1);box-shadow:0 0 6px 2px var(--gloed)}
+  @media (max-width:1100px) and (min-width:801px){ .band{grid-template-columns:minmax(0,1fr) minmax(0,50%)} .trap b{font-size:18px} }
+  @media (max-width:800px){
+    .band{margin:-18px -14px 0;padding:20px 14px 56px;grid-template-columns:minmax(0,1fr);
+      grid-template-rows:auto auto auto;grid-template-areas:"kop" "kaart" "trap";gap:14px}
+    .band h1{font-size:24px}
+    .kaart-vlak{height:400px}
+    .legenda{justify-content:center}
+    .trap{padding-left:22px;max-width:none}
+    .trap li{padding:7px 12px 9px}
+    .trap b{font-size:18px}
+    .stroom-noot{margin-left:22px}
+  }
+  /* ===================== einde LANDKAART ===================== */
+
   @media(max-width:900px){
     .kpis{grid-template-columns:repeat(2,1fr)}
     .cols{grid-template-columns:1fr}
@@ -1867,6 +2084,7 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   <main class="inhoud" id="inhoud" tabindex="-1">
 
     <section class="deel" id="kantoor" aria-labelledby="t-kantoor" tabindex="-1">
+      <div class="kantoor-kop__BAND__">
       <header class="kop">
         <div class="kop-rij">
           <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Kantoor</b></p>
@@ -1875,9 +2093,9 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
             <div class="pill"__PEILTIP__>__PEILDATUM__</div>
           </div>
         </div>
-        <h1 id="t-kantoor">__KOP_KANTOOR_TITEL__</h1>
-        <p class="kop-zin">__KOP_KANTOOR_ZIN__</p>
-      </header>
+        <h1 id="t-kantoor" class="vh">__KOP_KANTOOR_TITEL__</h1>
+      </header>__TRAP____KAART__
+      </div>
       <div class="pk" id="pk">
         <div class="pk-scene pk-start">
           <canvas aria-hidden="true"></canvas>
@@ -1959,6 +2177,202 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
 </dialog>
 <script>
 const PAYLOAD = __PAYLOAD__;
+/* ============================ LANDKAART (VA-85) ============================
+   Eén 2D-canvas onder de hele band, geen bibliotheek, niets van buiten. Lumi's drie richtingen samen:
+   A de stroom die langs de vijf cijfers dunner wordt, B het brein (categorie A–E rond de kern),
+   C de kaart met de werklijstpanden die via hun gemeente naar de kern vuren. Alles wat er staat komt
+   kant-en-klaar uit PAYLOAD.kaart (Python); het script tekent alleen. Beweging verminderen: één stil
+   beeld met alles erop. Buiten beeld of in een verborgen tabblad: pauze. */
+(() => {
+  const K = PAYLOAD.kaart, cv = document.getElementById("landkaart");
+  if (!K || !cv) return;
+  const D = document, R = D.documentElement, M = Math, TAU = M.PI * 2, band = cv.parentNode;
+  const vlak = band.querySelector(".kaart-vlak"), cijfers = [...band.querySelectorAll(".trap li")];
+  const ctx = cv.getContext("2d"), tip = D.getElementById("kaartTip"), bg = D.createElement("canvas"), bx = bg.getContext("2d");
+  const rm = matchMedia("(prefers-reduced-motion: reduce)");
+  const X0 = 3.3, Y0 = 53.62, CL = .613, EW = 2.45, EH = 2.92;   // kader van de kaart in graden; CL = cos 52°
+  let W = 0, H = 0, dpr = 1, zicht = true, raf = 0, last = 0, klok = 0, acc1 = 0, acc2 = 0, rt = 0;
+  let kl = {}, gloed = {}, vk = null, kern = null, rr = 40, G = [], S = [], C = [], poort = [], ring = [], P = [], A = [], V = [], T = [];
+  const F = (w, s) => w + " " + s + "px system-ui,-apple-system,Segoe UI,sans-serif";
+  const rgba = (h, a) => { const n = parseInt(h.slice(1), 16); return "rgba(" + (n >> 16) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")"; };
+  const rond = (x, k, px, py, r, a) => { x.globalAlpha = a; x.fillStyle = k; x.beginPath(); x.arc(px, py, r, 0, TAU); x.fill(); };
+  const cirkel = (x, k, px, py, r, a, w) => { x.globalAlpha = a; x.strokeStyle = k; x.lineWidth = w; x.beginPath(); x.arc(px, py, r, 0, TAU); x.stroke(); };
+  const lijn = (x, k, a, w, p, q) => { x.globalAlpha = a; x.strokeStyle = k; x.lineWidth = w; x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); x.stroke(); };
+  const tekst = (x, s, px, py, f, k, al) => { x.globalAlpha = 1; x.font = f; x.fillStyle = k; x.textAlign = al; x.fillText(s, px, py); };
+  const kies = w => { let s = 0; for (const x of w) s += x; let r = M.random() * s; for (let i = 0; i < w.length; i++) if ((r -= w[i]) <= 0) return i; return w.length - 1; };
+  function spriet(c) {   // zachte gloed per kleur, één keer gemaakt
+    if (gloed[c]) return gloed[c];
+    const s = D.createElement("canvas"); s.width = s.height = 64;
+    const x = s.getContext("2d"), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, rgba(c, 1)); g.addColorStop(.25, rgba(c, .45)); g.addColorStop(1, rgba(c, 0));
+    x.fillStyle = g; x.fillRect(0, 0, 64, 64); return gloed[c] = s;
+  }
+  const blob = (x, c, px, py, r, a) => { if (a <= 0) return; x.globalAlpha = M.min(1, a); x.drawImage(spriet(c), px - r, py - r, 2 * r, 2 * r); };
+  // Een boog van p naar q (kwadratisch, als kubisch bewaard), en het punt op t; h = 0 is een rechte lijn.
+  const boog = (p, q, h, v) => { const m = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2 - M.abs(q[0] - p[0]) * h];
+    return {p, q, a: [p[0] + (m[0] - p[0]) * 2 / 3, p[1] + (m[1] - p[1]) * 2 / 3], b: [q[0] + (m[0] - q[0]) * 2 / 3, q[1] + (m[1] - q[1]) * 2 / 3],
+      d: M.max(.2, M.hypot(q[0] - p[0], q[1] - p[1]) / (v || 70))}; };
+  const op = (s, t) => { const u = 1 - t, f = i => u * u * u * s.p[i] + 3 * u * u * t * s.a[i] + 3 * u * t * t * s.b[i] + t * t * t * s.q[i]; return [f(0), f(1)]; };
+  const trek = (x, s) => { x.moveTo(s.p[0], s.p[1]); x.bezierCurveTo(s.a[0], s.a[1], s.b[0], s.b[1], s.q[0], s.q[1]); };
+  const plek = el => { const r = el.getBoundingClientRect(), b = band.getBoundingClientRect(); return {x: r.left - b.left, y: r.top - b.top, w: r.width, h: r.height}; };
+
+  function kleuren() {   // uit de tokens, dus mee met het thema; de kern is --brand-2 (CSS: color van het canvas)
+    const cs = getComputedStyle(R), v = n => cs.getPropertyValue(n).trim();
+    kl = {s: ["--s1", "--s2", "--s3", "--s4", "--s5"].map(v), t2: v("--nav-tekst"), t3: v("--nav-label"), kern: getComputedStyle(cv).color};
+    gloed = {};
+  }
+  function bouw() {
+    const x = bx;
+    // Het raster van de commandokamer.
+    x.strokeStyle = "#ffffff"; x.lineWidth = 1; x.globalAlpha = .04; x.beginPath();
+    for (let i = 28; i < W; i += 28) { x.moveTo(i + .5, 0); x.lineTo(i + .5, H); }
+    for (let j = 28; j < H; j += 28) { x.moveTo(0, j + .5); x.lineTo(W, j + .5); }
+    x.stroke(); x.globalAlpha = .16; x.beginPath();
+    for (let i = 112; i < W; i += 112) for (let j = 112; j < H; j += 112) { x.moveTo(i - 3, j + .5); x.lineTo(i + 4, j + .5); x.moveTo(i + .5, j - 3); x.lineTo(i + .5, j + 4); }
+    x.stroke();
+    // De kaart (C), in het vrijgehouden vlak.
+    vk = plek(vlak);
+    // Het brein steekt links buiten de kaart uit (ring plus letters, ca. 0,03 × schaal + 22 px); smal is daar geen ruimte, dan schuift de kaart in.
+    const ruim = vk.x > 60, sc = ruim ? M.min(vk.w / EW, vk.h / EH) : M.min((vk.w - 22) / (EW + .03), vk.h / EH);
+    const extra = ruim ? 0 : .03 * sc + 22, ox = vk.x + extra + (vk.w - extra - EW * sc) / 2, oy = vk.y + (vk.h - EH * sc) / 2;
+    const pr = ll => [ox + ((ll[1] / 100 + 3) - X0) * CL * sc, oy + (Y0 - (ll[0] / 100 + 50)) * sc];
+    const k = pr(K.kern.ll);
+    rr = M.max(30, sc * .3);
+    kern = {x: k[0], y: k[1], r: M.max(13, sc * .095), f: 0, tip: K.kern.tip};
+    x.beginPath();
+    for (const r of K.land) for (let i = 0; i < r.length; i += 2) { const p = pr([r[i], r[i + 1]]); i ? x.lineTo(p[0], p[1]) : x.moveTo(p[0], p[1]); }
+    x.closePath();
+    const vul = x.createLinearGradient(0, oy, 0, oy + EH * sc); vul.addColorStop(0, "rgba(255,255,255,.11)"); vul.addColorStop(1, "rgba(255,255,255,.04)");
+    x.globalAlpha = 1; x.fillStyle = vul; x.fill("evenodd");
+    x.shadowColor = kl.s[0]; x.shadowBlur = 14; x.strokeStyle = rgba(kl.t2, .7); x.lineWidth = 1.2; x.stroke(); x.shadowBlur = 0;
+    // Gemeenten en hun lijnen naar de kern.
+    G = K.gm.map(g => { if (!g.ll) return null; const p = pr(g.ll);
+      return {x: p[0], y: p[1], n: g.n, r: g.n ? 1.8 + M.sqrt(g.n) * .5 : 2, f: 0, tip: g.tip, naam: g.naam, v: g.v, lab: g.lab, weg: g.n ? boog(p, k, .28) : null}; });
+    const meeste = M.max(1, ...G.map(g => g ? g.n : 0));
+    for (const g of G) if (g && g.weg) { x.globalAlpha = .07 + .3 * M.sqrt(g.n / meeste); x.strokeStyle = kl.s[0]; x.lineWidth = 1; x.beginPath(); trek(x, g.weg); x.stroke(); }
+    // Het brein (B): categorie A–E in een ring om de kern.
+    const cmax = M.max(1, ...K.cats.map(c => c.n));
+    C = K.cats.map((c, i) => { const h = -M.PI / 2 - i * TAU / 5;
+      return {x: k[0] + M.cos(h) * rr, y: k[1] + M.sin(h) * rr, h, r: 3.5 + M.sqrt(c.n / cmax) * 5, c: kl.s[i], k: c.k, n: c.n, f: 0, tip: c.tip}; });
+    cirkel(x, "#ffffff", k[0], k[1], rr, .12, 1);
+    for (const c of C) { lijn(x, c.c, .35, 1.2, [c.x, c.y], k);
+      blob(x, c.c, c.x, c.y, c.r * 3, .35); rond(x, c.c, c.x, c.y, c.r, 1);
+      tekst(x, c.k, c.x + M.cos(c.h) * (c.r + 9), c.y + M.sin(c.h) * (c.r + 9) + 4, F(800, 11), kl.t2, "center"); }
+    // De 500 werklijstpanden: gloed, stip en een ring voor score ≥ drempel.
+    S = []; x.globalCompositeOperation = "lighter";
+    for (let i = 0; i < K.pt.length; i += 4) {
+      const p = pr([K.pt[i], K.pt[i + 1]]), c = K.pt[i + 2], s = {x: p[0], y: p[1], c: kl.s[c % 5], g: K.pt[i + 3]};
+      S.push(s); blob(x, s.c, s.x, s.y, 6, .4); rond(x, s.c, s.x, s.y, 1.5, 1);
+      if (c >= 5) cirkel(x, s.c, s.x, s.y, 3.2, .45, .8);
+    }
+    x.globalCompositeOperation = "source-over";
+    for (const g of G) if (g) { x.setLineDash(g.n ? [] : [2, 2]); cirkel(x, "#ffffff", g.x, g.y, g.r + 1.5, g.n ? .6 : .35, 1); x.setLineDash([]); }
+    // Naam en aantal bij de grootste: de westelijke helft links van het punt, de rest rechts; per kant de zuidelijkste lager.
+    const lab = G.filter(g => g && g.lab).sort((a, b) => a.x - b.x), helft = lab.length / 2;
+    lab.forEach((g, i) => { const links = i < helft, kant = lab.filter((h, j) => (j < helft) === links);
+      const omlaag = kant.length > 1 && g.y === M.max(...kant.map(h => h.y)), px = g.x + (links ? -1 : 1) * (g.r + 6), py = g.y + (omlaag ? 13 : 4);
+      x.font = F(500, 11.5); const wv = x.measureText(" " + g.v).width; x.font = F(700, 11.5); const wn = x.measureText(g.naam).width;
+      const start = M.max(2, M.min(W - 2 - wn - wv, links ? px - wn - wv : px));
+      tekst(x, g.naam, start, py, F(700, 11.5), "#ffffff", "left"); tekst(x, " " + g.v, start + wn, py, F(500, 11.5), kl.t2, "left"); });
+    // De stroom (A): een kanaal links van de cijfers, dat na elk cijfer smaller wordt, en dan naar het brein.
+    poort = cijfers.map((li, i) => { const r = plek(li); return {x: r.x - 13, y: r.y + r.h / 2, tx: r.x, w: 1 + 4 * K.breed[i] / 100, f: 0}; });
+    if (poort.length) {
+      const begin = [poort[0].x, poort[0].y - 34];
+      ring = [boog(begin, [poort[0].x, poort[0].y], 0, 90)];
+      for (let i = 1; i < poort.length; i++) ring.push(boog([poort[i - 1].x, poort[i - 1].y], [poort[i].x, poort[i].y], 0, 90));
+      lijn(x, "#ffffff", .1, poort[0].w, begin, [poort[0].x, poort[0].y]);
+      poort.forEach((q, i) => { if (i) lijn(x, "#ffffff", .12, q.w, [poort[i - 1].x, poort[i - 1].y], [q.x, q.y]);
+        lijn(x, kl.s[0], .4, 1, [q.x, q.y], [q.tx, q.y]); rond(x, kl.s[0], q.x, q.y, 2.6, .9); });
+      const e = poort[poort.length - 1];
+      for (const c of C) { const s = boog([e.x, e.y], [c.x, c.y], -.22, 140); x.globalAlpha = .2; x.strokeStyle = c.c; x.lineWidth = 1.2; x.beginPath(); trek(x, s); x.stroke(); c.weg = s; }
+    }
+    x.globalAlpha = 1;
+  }
+  // Een werklijstpand licht op en vuurt via zijn gemeente (of van elders rechtstreeks) naar de kern (C).
+  function puls() {
+    const s = S[M.random() * S.length | 0]; if (!s) return;
+    T.push({x: s.x, y: s.y, c: s.c, t: 0});
+    const g = s.g >= 0 ? G[s.g] : null, p = [s.x, s.y];
+    const weg = g && g.weg ? [Object.assign(boog(p, [g.x, g.y], 0), {d: .5, eind: g}), Object.assign({}, g.weg, {eind: kern})]
+      : [Object.assign(boog(p, [kern.x, kern.y], .28), {eind: kern})];
+    P.push({weg, i: 0, t: 0, c: s.c, r: 1.6});
+  }
+  // Een deeltje in de stroom (A): grijs tot 'in A–E', dan de kleur van zijn categorie; na het laatste cijfer naar het brein.
+  function deeltje() { if (ring.length) A.push({i: 0, t: 0, c: kl.t3, cat: -1}); }
+  function stap(dt) {
+    klok += dt; acc1 += dt * 12; acc2 += dt * 26;
+    while (acc1 >= 1) { acc1--; if (P.length < 110) puls(); }
+    while (acc2 >= 1) { acc2--; if (A.length < 140) deeltje(); }
+    for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; p.t += dt / p.weg[p.i].d;
+      if (p.t >= 1) { p.weg[p.i].eind.f = 1; p.i++; p.t = 0; if (p.i >= p.weg.length) P.splice(i, 1); } }
+    for (let i = A.length - 1; i >= 0; i--) { const a = A[i], w = a.weg ? a.weg[0] : ring[a.i]; a.t += dt / w.d;
+      if (a.t < 1) continue;
+      if (a.weg) { a.weg[0].eind.f = 1; a.weg.shift(); a.t = 0; if (!a.weg.length) A.splice(i, 1); continue; }
+      const q = poort[a.i]; q.f = M.max(q.f, .6); a.t = 0;
+      // Wie bij dit cijfer afvalt, zakt grijs weg; de rest gaat door. Niet op schaal: (volgende / dit) ^ 0,3.
+      const blijft = a.i + 1 >= poort.length ? 1 : M.pow((K.ruw[a.i + 1] || 0) / M.max(1, K.ruw[a.i]), .3);
+      if (M.random() > blijft) { V.push({x: q.x, y: q.y, vx: -14 - M.random() * 18, vy: 6 + M.random() * 16, c: a.c, t: 0}); A.splice(i, 1); continue; }
+      if (a.i === 2) { a.cat = kies(C.map(c => c.n)); a.c = C[a.cat].c; }
+      if (a.i + 1 < poort.length) { a.i++; continue; }
+      const c = C[a.cat < 0 ? 0 : a.cat];
+      a.weg = [Object.assign({}, c.weg, {eind: c}), Object.assign(boog([c.x, c.y], [kern.x, kern.y], 0), {eind: kern})];
+    }
+    for (let i = V.length - 1; i >= 0; i--) { const v = V[i]; v.t += dt; v.x += v.vx * dt; v.y += v.vy * dt; if (v.t >= 1) V.splice(i, 1); }
+    for (let i = T.length - 1; i >= 0; i--) if ((T[i].t += dt) >= 1) T.splice(i, 1);
+    for (const n of G.concat(C, poort, kern)) if (n && n.f) n.f = M.max(0, n.f - dt * 1.6);
+  }
+  const kop = (p, s, t, c, r) => { const h = op(s, t), b = op(s, M.max(0, t - .16));
+    lijn(ctx, c, .45, r * 1.3, b, h); blob(ctx, c, h[0], h[1], r * 4, .6); rond(ctx, c, h[0], h[1], r, 1); };
+  function teken() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+    ctx.clearRect(0, 0, cv.width, cv.height); ctx.drawImage(bg, 0, 0); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+    if (!rm.matches) {   // de scanlijn: langzaam van boven naar beneden over de kaart
+      const y = vk.y + (klok / 7 % 1) * vk.h, g = ctx.createLinearGradient(0, y - 46, 0, y);
+      g.addColorStop(0, rgba(kl.s[0], 0)); g.addColorStop(1, rgba(kl.s[0], .16));
+      ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.fillRect(vk.x, y - 46, vk.w, 46); lijn(ctx, kl.t2, .35, 1, [vk.x, y], [vk.x + vk.w, y]);
+    }
+    ctx.setLineDash([3, 5]); ctx.lineDashOffset = -klok * 9; cirkel(ctx, kl.s[0], kern.x, kern.y, rr * .62, .55, 1.2); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    ctx.fillStyle = "#ffffff";
+    for (let i = 0; i < 72; i++) { const h = i * 2.39996 + klok * .05 * (i % 2 ? 1 : -1), r = rr * (1.3 + (i * 37 % 30) / 100);
+      ctx.globalAlpha = .28; ctx.fillRect(kern.x + M.cos(h) * r - .7, kern.y + M.sin(h) * r - .7, 1.4, 1.4); }
+    blob(ctx, kl.s[0], kern.x, kern.y, kern.r * 2.8 + (rm.matches ? 0 : 3 + 3 * M.sin(klok * 1.6)), .5 + kern.f * .3);
+    for (const g of G) if (g && g.f) blob(ctx, kl.s[0], g.x, g.y, g.r * 4, g.f * .6);
+    for (const c of C) if (c.f) blob(ctx, c.c, c.x, c.y, c.r * 3.5, c.f * .7);
+    for (const q of poort) if (q.f) blob(ctx, kl.s[0], q.x, q.y, 9, q.f * .8);
+    for (const w of T) { const a = M.sin(M.PI * w.t); blob(ctx, w.c, w.x, w.y, 9, a * .7); cirkel(ctx, w.c, w.x, w.y, 2 + w.t * 8, a * .7, 1); }
+    for (const p of P) kop(p, p.weg[p.i], p.t, p.c, p.r);
+    for (const a of A) kop(a, a.weg ? a.weg[0] : ring[a.i], a.t, a.c, 1.5);
+    for (const v of V) rond(ctx, v.c, v.x, v.y, 1.3, (1 - v.t) * .6);
+    ctx.globalCompositeOperation = "source-over";
+    rond(ctx, kl.kern, kern.x, kern.y, kern.r, 1); cirkel(ctx, "#ffffff", kern.x, kern.y, kern.r, .6, 1);
+    tekst(ctx, K.kern.getal, kern.x, kern.y + kern.r * .15, F(800, M.round(kern.r * .72)), "#ffffff", "center");
+    tekst(ctx, K.kern.woord, kern.x, kern.y + kern.r * .6, F(500, M.max(8, M.round(kern.r * .32))), kl.t2, "center");
+  }
+  const loopt = () => !rm.matches && zicht && !D.hidden;
+  function beeld(ts) { raf = 0; if (!loopt()) return; const dt = last ? M.min(.05, (ts - last) / 1000) : 1 / 60; last = ts; stap(dt); teken(); raf = requestAnimationFrame(beeld); }
+  function speel() { if (loopt() && !raf) { last = 0; raf = requestAnimationFrame(beeld); } }
+  function opnieuw() {
+    const r = band.getBoundingClientRect(); W = M.max(1, M.round(r.width)); H = M.max(1, M.round(r.height)); dpr = M.min(devicePixelRatio || 1, 2);
+    cv.width = bg.width = M.round(W * dpr); cv.height = bg.height = M.round(H * dpr);
+    kleuren(); P = []; A = []; V = []; T = []; acc1 = acc2 = 0; klok = 0;
+    bx.setTransform(dpr, 0, 0, dpr, 0, 0); bx.clearRect(0, 0, W, H); bouw();
+    if (rm.matches) { for (let i = 0; i < 240; i++) stap(1 / 30); for (const n of G.concat(C, poort, kern)) if (n) n.f = 0; }   // stil beeld, met alles erop
+    teken(); speel();
+  }
+  band.addEventListener("pointermove", e => { const b = band.getBoundingClientRect(), px = e.clientX - b.left, py = e.clientY - b.top;
+    let best = null, bd = 10; for (const n of G.concat(C, kern)) { if (!n) continue; const d = M.hypot(n.x - px, n.y - py) - n.r; if (d < bd) { bd = d; best = n; } }
+    if (!best) { tip.hidden = true; return; } tip.textContent = best.tip; tip.hidden = false;
+    tip.style.left = M.max(tip.offsetWidth / 2 + 4, M.min(W - tip.offsetWidth / 2 - 4, best.x)) + "px"; tip.style.top = M.max(28, best.y - best.r) + "px"; });
+  band.addEventListener("pointerleave", () => { tip.hidden = true; });
+  new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(opnieuw, 60); }).observe(band);
+  new IntersectionObserver(e => { zicht = e[e.length - 1].isIntersecting; speel(); }).observe(band);
+  D.addEventListener("visibilitychange", speel);
+  rm.addEventListener("change", opnieuw);
+  new MutationObserver(opnieuw).observe(R, {attributes: true, attributeFilter: ["data-theme"]});
+  opnieuw();
+})();
+/* ===================== einde LANDKAART ===================== */
 const {kpi:KPI, cats:CATS, facts:FACTS, leads:LEADS, budget:BUDGET} = PAYLOAD;
 const FN = {woon:"var(--s1)", winkel:"var(--s2)", kantoor:"var(--s3)", overig:"var(--s4)", bedrijf:"var(--s5)"};
 const FNL = {woon:"Wonen", winkel:"Winkel", kantoor:"Kantoor", overig:"Overig", bedrijf:"Bedrijf"};
@@ -3715,6 +4129,7 @@ def render(payload: dict) -> str:
         "De 20 hoogst scorende panden — de controlevraag uit de briefing", BRON_PIL)
     lijst = pg["lijst"]
     naam = next(n for g in menu_voor(lijst) for d, n in g["items"] if d == lijst)
+    band = band_html(payload.get("kaart"))
     html = (TEMPLATE
             .replace("__TITEL__", escape(pg["titel"]))
             .replace("__LABEL__", payload["gebied"])
@@ -3727,6 +4142,7 @@ def render(payload: dict) -> str:
             .replace("__LIJST__", lijst)
             .replace("__FILTER__", filter_html(payload.get("filter"), KAARTFOTO_TEKST["bron"]))
             .replace("__MENU__", menu_html(lijst))
+            .replace("__BAND__", band[0]).replace("__TRAP__", band[1]).replace("__KAART__", band[2])
             .replace("__WERKBALK__", werkbalk_html((payload.get("kantoor") or {}).get("tekst"))))
     # De koppen van het lijstdeel ('proefresultaat.*' of 'werklijst.*') gaan naar __KOP_LIJST_*__.
     for sleutel, tekst in (payload.get("koppen") or koppen(payload["gebied"], None, None)).items():
