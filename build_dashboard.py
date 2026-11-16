@@ -1202,9 +1202,8 @@ MENU = [
 KANTOORMANAGER = "Kantoormanager"
 # {gebied}, {drempel} en {n} vult koppen() in; het script plaatst niets.
 KOP_TEKST = {
-    "kantoor.titel": "Zo loopt de pandenselectie",
-    "kantoor.zin": "Elke medewerker is een stap van de pandenselectie. Wat ze zeggen, komt uit de "
-                   "cijfers van dit dashboard.",
+    # Op Ayman's verzoek geen zichtbare kop of uitlegzin boven de band; de kop is er voor schermlezers.
+    "kantoor.titel": "Kantoor",
     "kerncijfers.titel": "{gebied} in vier cijfers",
     "kerncijfers.zin": "Van de ingelezen verblijfsobjecten tot de werklijst met score {drempel} of hoger.",
     "voorraad.titel": "Voorraad en proefselectie",
@@ -2094,8 +2093,7 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
             <div class="pill"__PEILTIP__>__PEILDATUM__</div>
           </div>
         </div>
-        <h1 id="t-kantoor">__KOP_KANTOOR_TITEL__</h1>
-        <p class="kop-zin">__KOP_KANTOOR_ZIN__</p>
+        <h1 id="t-kantoor" class="vh">__KOP_KANTOOR_TITEL__</h1>
       </header>__TRAP____KAART__
       </div>
       <div class="pk" id="pk">
