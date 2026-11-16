@@ -65,7 +65,9 @@ class Gebouwd(unittest.TestCase):
         html, p = self.bouw(5)
         self.assertEqual(p["slot"]["n"], 5)
         self.assertEqual(p["slot"]["op_slot"], 3)
-        self.assertEqual(p["slot"]["tekst"]["titel"], "3 panden staan achter het slot")
+        # Ayman: de kop noemt geen aantal; alleen de schermlezer hoort het echte aantal.
+        self.assertEqual(p["slot"]["tekst"]["titel"], "De rest van je werklijst staat achter het slot")
+        self.assertEqual(p["slot"]["tekst"]["sr"], "3 panden staan achter het slot")
         self.assertIn("const LEADS = PAYLOAD.slot ? ALLE_LEADS.slice(0, PAYLOAD.slot.n) : ALLE_LEADS;", bd.TEMPLATE)
         self.assertEqual([l["id"] for l in p["leads"][:5]], [x["bag_pand_id"] for x in self.lijst[:5]])  # standaardvolgorde
         self.assertEqual(len(p["leads"]), 8)   # de gegevens blijven in de bron (Aymans besluit)
@@ -82,7 +84,11 @@ class Gebouwd(unittest.TestCase):
         self.assertNotRegex(blok, r"<(a|button|input|select|textarea)\b|tabindex|href=|onclick")
         self.assertIn('aria-hidden="true"', blok)   # de lege kaarten zijn vorm, geen inhoud
         self.assertEqual(len(re.findall(r"<p\b", blok)), 1)   # één tekst voor een schermlezer
-        self.assertIn("3 panden staan achter het slot.", blok)
+        self.assertIn('<b><span aria-hidden="true">De rest van je werklijst staat achter het slot.</span>'
+                      '<span class="vh">3 panden staan achter het slot.</span></b> '
+                      "Zet de datakoppeling aan om alle panden van de werklijst te zien.", blok)
+        zichtbaar = re.sub(r'<span class="vh">[^<]*</span>', "", blok)
+        self.assertNotRegex(re.sub(r"<[^>]+>", "", zichtbaar), r"\d")   # geen aantal in beeld
 
     def test_alleen_de_vrije_panden_worden_kaarten(self):
         # De kaarten, Bewaar/Verberg en 'Open pand' komen alleen uit LEADS; een oud adres #<id> opent niets.
