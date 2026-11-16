@@ -156,3 +156,6 @@ struck through with the reason, never deleted.
   (`register/geleverde_panden.csv`), not in `data/`, and a test that runs `run_proef.main()` must point it
   elsewhere.** `nederland.draai()` takes it as a required keyword so a forgotten test fails instead of
   writing the real register; the Delft route follows `run_proef.BASE`. *(2026-11-16, Rex, VA-6)*
+- **Evidence taken from a working tree only counts for the commit it was taken at: compare the run time
+  with the branch's reflog, and if the commit is newer, redo the evidence on a `git archive` export.**
+  *(2026-11-16, Vera, VA-6)*
