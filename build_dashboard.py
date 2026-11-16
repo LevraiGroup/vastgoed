@@ -776,7 +776,7 @@ BEWAAR_TEKST = {
     "apparaat": "Wat je bewaart of verbergt, staat alleen op dit apparaat, in deze browser. Op een ander apparaat "
                 "zie je het niet, ook niet met dezelfde inlog. Wis je de browsergegevens, dan ben je het kwijt.",
     "apparaat.kort": "Alleen op dit apparaat, in deze browser. Een ander apparaat ziet het niet.",
-    "status.bewaard": "{adres} is bewaard.",
+    "status.bewaard": "{adres} is bewaard. Je vindt het terug bij Bewaarde panden.",   # VA-91, copy-va91.md §4
     "status.niet_bewaard": "{adres} is niet meer bewaard.",
     "status.verborgen": "{adres} is verborgen.",
     "status.terug": "{adres} staat weer op de werklijst.",
@@ -794,6 +794,32 @@ BEWAAR_TEKST = {
     "leeg.verborgen": "Je hebt alle {m} panden verborgen die bij deze filters passen.",
     "leeg.verborgen.een": "Het enige pand dat bij deze filters past, heb je verborgen.",
     "leeg.alles_verborgen": "Je hebt alle {totaal} panden van de werklijst van deze maand verborgen.",
+    # De pagina Bewaarde panden (VA-91, Lumi, design/copy-va91.md, kolom GOEDGEKEURD). Het script vult alleen
+    # {adres}, {n}, {m} en {datum} in.
+    "pagina.titel": "Bewaarde panden",
+    "pagina.zin": "De panden die je hebt bewaard, het laatst bewaarde bovenaan. Een pand blijft hier staan, "
+                  "ook als het niet meer in de werklijst staat.",
+    "pagina.meta": "{n} panden",
+    "pagina.meta.een": "1 pand",
+    "pagina.meta.weg": "{n} panden · {m} niet in deze werklijst",
+    "pagina.meta.weg.een": "1 pand · niet in deze werklijst",
+    "pagina.menu.n": "{n}",
+    "pagina.menu.n.sr": ", {n} bewaard",
+    "pagina.apparaat": "Deze lijst staat alleen op dit apparaat, in deze browser. Op een ander apparaat zie je hem "
+                       "niet, ook niet met dezelfde inlog. Wis je de browsergegevens, dan ben je hem kwijt.",
+    "pagina.sinds": "Bewaard op {datum}",
+    "pagina.weg.label": "Niet in deze werklijst",
+    "pagina.weg.zin": "Dit pand staat niet in de werklijst van deze maand. Score en categorie komen uit de "
+                      "gegevens van {datum}.",
+    "pagina.weg.zin.onbekend": "Dit pand staat niet in de werklijst van deze maand. Van wanneer de score en "
+                               "categorie zijn, is onbekend.",
+    "pagina.status.terug": "{adres} staat weer bij je bewaarde panden.",
+    "pagina.leeg": "Je hebt nog geen panden bewaard. Druk bij een pand in de werklijst op Bewaar, dan staat het hier.",
+    "pagina.geen_opslag": "Deze browser laat het dashboard niets opslaan, dus hier staan geen bewaarde panden. Dat "
+                          "gebeurt bijvoorbeeld in een privévenster, of als opslag voor websites uit staat. Open het "
+                          "dashboard in een gewoon venster om je bewaarde panden te zien.",
+    "pagina.meer": "Toon alle {n} bewaarde panden",
+    "pagina.minder": "Toon alleen de laatste 10",
 }
 
 
@@ -806,8 +832,46 @@ def gangbare_peildatum(top: list[dict]) -> str | None:
 
 
 def bewaar_blok(top: list[dict]) -> dict:
-    """PAYLOAD.bewaar: de teksten en de peildatum die een lead zonder eigen 'dp' heeft."""
-    return {"tekst": BEWAAR_TEKST, "dp": gangbare_peildatum(top)}
+    """
+    PAYLOAD.bewaar: de teksten, de peildatum die een lead zonder eigen 'dp' heeft, en de maandnamen van
+    nl_datum(), zodat de pagina Bewaarde panden (VA-91) een datum schrijft zoals de rest van het dashboard.
+    """
+    return {"tekst": BEWAAR_TEKST, "dp": gangbare_peildatum(top), "maanden": list(MAANDEN)}
+
+
+# De pagina Bewaarde panden (VA-91). Alleen in de landelijke bouw: Lumi's 'Niet in deze werklijst' is voor
+# die bouw geschreven; de stadsbouw krijgt het deel pas met haar woorden ervoor (copy-va91.md §9).
+BEWAARD = ("bewaard", BEWAAR_TEKST["pagina.titel"])
+BEWAARD_EERST = 10   # zoveel nieuwste bewaarde panden staan er eerst; de rest achter 'Toon alle' (Lumi §6)
+
+
+def bewaard_html(lijst: str) -> str:
+    """Het deel #bewaard, tussen Voorraad en de werklijst; leeg voor een bouw zonder dit deel."""
+    if lijst != LIJST_LANDELIJK[0]:
+        return ""
+    t = {k: escape(v) for k, v in BEWAAR_TEKST.items()}
+    return f'''
+    <!-- BEWAARDE PANDEN (VA-91) -->
+    <section class="deel" id="bewaard" aria-labelledby="t-bewaard" tabindex="-1">
+      <header class="kop">
+        <div class="kop-rij">
+          <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>{t["pagina.titel"]}</b></p>
+          <span class="kop-meta" id="bwpMeta"></span>
+        </div>
+        <h2 class="titel" id="t-bewaard">{t["pagina.titel"]}</h2>
+        <p class="kop-zin">{t["pagina.zin"]}</p>
+      </header>
+      <div class="bwp" data-eerst="{BEWAARD_EERST}">
+        <div class="bw-balk">
+          <p class="bw-apparaat" id="bwpApparaat" hidden>{t["pagina.apparaat"]}</p>
+          <div class="bw-status" id="bwBewaardStatus" role="status"></div>
+        </div>
+        <div class="wl-leeg" id="bwpLeeg" hidden><p></p></div>
+        <ul class="bwp-lijst" id="bwpLijst"></ul>
+        <button class="bw-toon" id="bwpMeer" type="button" hidden></button>
+      </div>
+    </section>
+    <!-- einde BEWAARDE PANDEN -->'''
 # --------------------------------------------------------------- einde bewaren en verbergen (VA-90)
 
 # --------------------------------------------------------------- planning (VA-86)
@@ -1522,8 +1586,11 @@ def menu_voor(lijst: str) -> list[dict]:
     """MENU, met voor heel Nederland 'Werklijst' op de plek van 'Proefresultaat'."""
     if lijst != LIJST_LANDELIJK[0]:
         return MENU
-    return [dict(g, items=[LIJST_LANDELIJK if doel == "proefresultaat" else (doel, naam)
-                           for doel, naam in g["items"]]) for g in MENU]
+    # VA-91: Bewaarde panden tussen Voorraad en Werklijst, in dezelfde volgorde als de delen op de pagina.
+    return [dict(g, items=[x for doel, naam in g["items"]
+                           for x in ([LIJST_LANDELIJK] if doel == "proefresultaat" else
+                                     [(doel, naam), BEWAARD] if doel == "voorraad" else [(doel, naam)])])
+            for g in MENU]
 
 
 def menu_html(lijst: str = "proefresultaat") -> str:
@@ -1536,7 +1603,11 @@ def menu_html(lijst: str = "proefresultaat") -> str:
         items = []
         for doel, naam in g["items"]:
             actief = ' aria-current="location"' if doel == eerste else ""
-            items.append(f'<li><a href="#{doel}" data-doel="{doel}"{actief}>{escape(naam)}</a></li>')
+            # VA-91: de telling van de bewaarde panden, een pil (aria-hidden) en een zin voor de schermlezer;
+            # het script vult ze, en laat ze leeg bij 0 of zonder opslag.
+            n = ('<span class="vh" id="bwpMenuSr"></span><span class="nav-n" id="bwpMenuN" aria-hidden="true" hidden>'
+                 '</span>') if doel == BEWAARD[0] else ""
+            items.append(f'<li><a href="#{doel}" data-doel="{doel}"{actief}>{escape(naam)}{n}</a></li>')
         uit.append(f'<ul aria-labelledby="{g["id"]}">{"".join(items)}</ul>')
     return "".join(uit)
 
@@ -2408,6 +2479,31 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     border-radius:9px;padding:7px 12px;min-height:40px;color:var(--ink);cursor:pointer}
   .wl-leeg .bw-leeg-toon:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
   /* ===================== einde BEWAREN EN VERBERGEN ===================== */
+  /* ===================== BEWAARDE PANDEN (VA-91) =====================
+     Een eigen deel tussen Voorraad en de werklijst. Een korte rij per pand, in de vorm van een kaart; geen
+     luchtfoto. Alleen bestaande tokens; licht en donker komen daaruit. */
+  .nav a .nav-n{margin-left:auto;font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.4;
+    background:var(--nav-actief);color:#fff;border-radius:999px;padding:1px 8px}
+  .nav a[aria-current] .nav-n{background:rgba(255,255,255,.22)}
+  .nav a .nav-n[hidden]{display:none}
+  .bwp-lijst{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+  .bwp-lijst[hidden]{display:none}
+  .card.bwp-rij{flex-direction:row;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:12px 14px}
+  .card.bwp-rij.weg{border-style:dashed;border-color:var(--baseline)}
+  .bwp-rij .score{width:44px;height:44px;border-radius:11px}
+  .bwp-rij .score b{font-size:17px}
+  .bwp-rij .score.onb b{font-size:10px;font-weight:700}
+  .bwp-kern{flex:1 1 240px;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+  .bwp-kern .addr{max-width:100%}
+  .bwp-kern .lid{max-width:62ch}
+  .bwp-rij > .bw-rij{flex:0 1 auto;margin-top:0;align-items:center;gap:8px 12px}
+  .bwp-rij .pand-open{display:inline-flex;align-items:center;min-height:38px}
+  .bwp-rij .baglink{display:inline-block;padding:10px 0;line-height:18px}
+  .bwp-rij .baglink:focus-visible{outline:2px solid var(--s1);outline-offset:2px;border-radius:4px}
+  .bwp .wl-leeg{margin-bottom:0}
+  .bwp .bw-toon{margin-top:12px}
+  @container kaart (max-width:520px){ .bwp-rij > .bw-rij{flex-basis:100%} }
+  /* ===================== einde BEWAARDE PANDEN ===================== */
   /* ===================== SLOT (VA-96): de panden na de eerste n, achter één blok ===================== */
   .slot-blok{position:relative;margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid var(--ring);
     background:var(--surface)}
@@ -2515,7 +2611,7 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
         </div>
       </div>
     </section>
-
+__BEWAARD__
     <section class="deel" id="__LIJST__" aria-labelledby="t-__LIJST__" tabindex="-1">
       <header class="kop">
         <div class="kop-rij">
@@ -2890,10 +2986,11 @@ const VELDEN = PAYLOAD.velden || [], WAARDEN = PAYLOAD.waarden || [], PLEK = PAY
 const locatie = p => { if (!p) return null; const zet = s => s.replace("{b}", p.b).replace("{ll}", p.ll);
   return {foto: zet(PLEK.foto), maps: zet(PLEK.maps), streetview: zet(PLEK.streetview)}; };
 const pandDlg = document.getElementById("pand");
-let pandOpener = null, pandId = null;
+let pandOpener = null, pandId = null, pandVanBewaard = false;   // VA-91: geopend vanaf Bewaarde panden?
 const maak = (tag, cls, tekst) => { const e = document.createElement(tag); if (cls) e.className = cls; if (tekst != null) e.textContent = tekst; return e; };
 function openPand(d, opener) {
   const det = d.detail; pandOpener = opener; pandId = d.id;
+  pandVanBewaard = !!(opener && opener.closest && opener.closest("#bewaard"));
   document.getElementById("pandTitel").textContent = det.titel;
   document.getElementById("pandSub").textContent = `${d.p} ${d.wp} · BAG ${d.id}`;
   document.getElementById("pandScore").innerHTML = `<b>${d.s100}</b><small>/100</small>`;
@@ -2936,7 +3033,7 @@ pandDlg.addEventListener("click", e => { if (e.target === pandDlg) pandDlg.close
 // "Ongedaan maken" boven de werklijst, en is dat er niet, naar de werklijst zelf: nooit naar <body> (Lumi §8).
 pandDlg.addEventListener("close", () => {
   if (pandOpener && pandOpener.isConnected) { pandOpener.focus(); return; }
-  if (pandId != null) (BW.ongedaanVoor(pandId) || BW.lijstDeel()).focus();
+  if (pandId != null) BW.naSluiten(pandId).focus();   // VA-91: vanaf Bewaarde panden naar zijn eigen Ongedaan maken
 });
 function maakOpenbaar(card, d) {
   if (!d.detail) return;
@@ -2961,7 +3058,7 @@ const BW = (() => {
   const T = PAYLOAD.bewaar.tekst, DP = PAYLOAD.bewaar.dp, SLEUTEL = "levrai-vastgoed-panden", VORM = 1;
   const PER_ID = new Map(LEADS.map(d => [d.id, d]));
   let stand = {}, werkt = false, tonen = false, dlg = null;
-  const luisteraars = [], rijen = new Map();   // per pand-ID de knoppenrij van zijn kaart
+  const luisteraars = [], alleLuisteraars = [], rijen = new Map();   // per pand-ID de knoppenrij van zijn kaart
   function lees() {
     try { const r = JSON.parse(localStorage.getItem(SLEUTEL) || "null");
       stand = r && r.v === VORM && r.panden && typeof r.panden === "object" ? r.panden : {}; } catch (e) { stand = {}; }
@@ -2986,6 +3083,13 @@ const BW = (() => {
   function herstel(d, oud) {   // Ongedaan maken: precies de stand van daarvoor, ook als die 'bewaard' was
     if (oud) stand[d.id] = oud; else delete stand[d.id];
     if (!schrijf()) { werkt = false; } overal(true);
+  }
+  function weg(id) {   // VA-91: niet meer bewaren vanaf Bewaarde panden, ook voor een pand dat niet meer in de data staat
+    const oud = stand[id] || null;
+    if (!oud) return null;
+    delete stand[id];
+    if (!schrijf()) { stand[id] = oud; werkt = false; overal(false); return null; }
+    overal(false); return oud;
   }
   const adres = d => d.detail ? d.detail.titel : d.a;
   function knop(d, soort) {
@@ -3034,6 +3138,7 @@ const BW = (() => {
   }
   function druk(d, soort, b) {
     const inPand = !!b.closest("#pand"), hier = inPand ? dlg.s : el("bwStatus");
+    const vanB = inPand && pandVanBewaard;   // VA-91: 'Open pand' vanaf Bewaarde panden; de regel daar zegt het ook
     if (!werkt) { status(hier, T.geen_opslag); return; }
     const uit = zet(d, soort);
     if (!uit) { status(hier, T.geen_opslag); return; }
@@ -3041,15 +3146,20 @@ const BW = (() => {
       : soort === "verborgen" ? T["status.terug"] : T["status.niet_bewaard"];
     const tekst = zin.replace("{adres}", () => adres(d));
     const terug = () => { herstel(d, uit.oud);
-      const t = (uit.oud ? (uit.oud.stand === "verborgen" ? T["status.verborgen"] : T["status.bewaard"]) : T["status.terug"]).replace("{adres}", () => adres(d));
-      [el("bwStatus"), dlg && dlg.d.id === d.id ? dlg.s : null].forEach(s => s && status(s, t));
+      const t = (uit.oud ? (uit.oud.stand === "verborgen" ? T["status.verborgen"] : vanB ? T["pagina.status.terug"] : T["status.bewaard"])
+        : T["status.terug"]).replace("{adres}", () => adres(d));
+      [el("bwStatus"), vanB ? el("bwBewaardStatus") : null, dlg && dlg.d.id === d.id ? dlg.s : null].forEach(s => s && status(s, t));
       // Focus naar de knop die je nu ziet: in 'Open pand' zolang het open is, anders op de kaart (een gesloten
       // venster houdt zijn knoppen in de pagina, maar die kunnen geen focus krijgen), anders de werklijst.
       const ziet = x => x && x.isConnected && (!x.closest("dialog") || x.closest("dialog").open);
       const k = [inPand ? dlg.r : null, rijen.get(d.id)].find(ziet);
-      const f = k && k.querySelector(soort === "bewaard" ? ".bw-bewaar" : ".bw-weg"); (f || lijstDeel()).focus(); };
+      // Vanaf Bewaarde panden met het venster dicht: de Bewaar-knop van de teruggekomen rij daar, anders dat deel.
+      const opPagina = vanB && !(k && k === dlg.r) ? document.querySelector(`#bwpLijst li[data-pand="${CSS.escape(String(d.id))}"] .bw-bewaar`) : null;
+      if (vanB && !opPagina && !(k && k === dlg.r)) { el("bewaard").focus(); return; }
+      const f = opPagina || (k && k.querySelector(soort === "bewaard" ? ".bw-bewaar" : ".bw-weg")); (f || lijstDeel()).focus(); };
     const ongedaan = status(el("bwStatus"), tekst, terug, d.id);
     if (inPand) status(dlg.s, tekst, terug, d.id);
+    if (vanB) status(el("bwBewaardStatus"), tekst, terug, d.id);
     // Een kaart die verdwijnt, neemt de focus niet mee: die gaat naar Ongedaan maken.
     else if (!b.isConnected && ongedaan) ongedaan.focus();
   }
@@ -3080,14 +3190,145 @@ const BW = (() => {
   const ongedaanVoor = id => { const b = el("bwStatus") && el("bwStatus").querySelector(".bw-ongedaan");
     return b && b.dataset.pand === String(id) ? b : null; };
   const lijstDeel = () => (balk && balk.closest("section")) || el("inhoud");
+  // Na het sluiten van 'Open pand' zonder zijn kaart of rij (VA-61, Lumi VA-91 §9): Ongedaan maken van dit pand
+  // waar het vandaan kwam, en anders dat deel zelf. Nooit <body>.
+  function naSluiten(id) {
+    const vanB = pandVanBewaard; pandVanBewaard = false;
+    if (!vanB) return ongedaanVoor(id) || lijstDeel();
+    const b = el("bwBewaardStatus") && el("bwBewaardStatus").querySelector(".bw-ongedaan");
+    return (b && b.dataset.pand === String(id) ? b : null) || el("bewaard") || lijstDeel();
+  }
   // lijst: alleen als een pand verborgen wordt of terugkomt, rekent de werklijst opnieuw; Bewaar verandert geen kaart van plek.
-  function overal(lijst) { rijen.forEach((k, id) => { const d = PER_ID.get(id); if (d) werkRij(d); }); if (dlg) werkRij(dlg.d); werkBalk(); if (lijst) luisteraars.forEach(f => f()); }
+  function overal(lijst) { rijen.forEach((k, id) => { const d = PER_ID.get(id); if (d) werkRij(d); }); if (dlg) werkRij(dlg.d); werkBalk(); if (lijst) luisteraars.forEach(f => f());
+    alleLuisteraars.forEach(f => f()); }   // VA-91: Bewaarde panden en de telling in het menu volgen elke verandering
   if (balk) el("bwToon").addEventListener("click", () => { tonen = !tonen; overal(true); });
   addEventListener("storage", e => { if (e.key === SLEUTEL) { lees(); overal(true); } });   // een ander tabblad van dit dashboard
   werkBalk();
-  return {rij, ververs: werkRij, zichtbaar, aantalWeg, op: f => luisteraars.push(f), van, leeg, ongedaanVoor, lijstDeel};
+  // VA-91: wat de pagina Bewaarde panden nodig heeft. bewaarde(): [id, opgeslagen object] van elk bewaard pand.
+  const bewaarde = () => Object.keys(stand).filter(id => stand[id] && stand[id].stand === "bewaard").map(id => [id, stand[id]]);
+  return {rij, ververs: werkRij, zichtbaar, aantalWeg, op: f => luisteraars.push(f), van, leeg, ongedaanVoor, lijstDeel,
+    naSluiten, bewaarde, weg, herstelId: (id, oud) => herstel({id}, oud), status, werkt: () => werkt, opAlles: f => alleLuisteraars.push(f)};
 })();
 /* ============================ einde BEWAREN EN VERBERGEN ============================ */
+
+/* ============================ BEWAARDE PANDEN (VA-91) ============================
+   Ayman: "links in menu moet er een aparte pagina zijn voor de bewaarde panden". Een eigen deel (#bewaard)
+   tussen Voorraad en de werklijst, met alles wat in deze browser bewaard is: ook een pand dat niet meer in
+   de werklijst staat, uit wat VA-90 per pand opsloeg. Alle tekst uit PAYLOAD.bewaar.tekst (Lumi, copy-va91.md).
+   Het rekenen (volgorde, datums, adres) staat los van het tekenen, in BWP_REKEN. */
+const BWP_REKEN = (() => {
+  const M = PAYLOAD.bewaar.maanden || [], NB = " ";
+  const tijd = s => { const t = typeof s === "string" && s ? Date.parse(s) : NaN; return Number.isFinite(t) ? t : null; };
+  // 'sinds' is een ISO-tijd in UTC: de datum is de kalenderdag in de lokale tijd van deze browser.
+  const sindsDatum = s => { const t = tijd(s); if (t === null) return null; const d = new Date(t);
+    return d.getDate() + NB + M[d.getMonth()] + NB + d.getFullYear(); };
+  // 'datapeildatum' is JJJJ-MM-DD: gelezen als kalenderdatum, niet via new Date() (dat schuift een dag op).
+  const peilDatum = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(typeof s === "string" ? s : "");
+    if (!m) return null;
+    const j = +m[1], mm = +m[2], dd = +m[3];
+    if (mm < 1 || mm > 12 || dd < 1 || dd > new Date(Date.UTC(j, mm, 0)).getUTCDate()) return null;   // geen 31 februari
+    return dd + NB + M[mm - 1] + NB + j; };
+  // Nieuwste 'sinds' bovenaan; zonder leesbare 'sinds' onderaan; bij gelijke 'sinds' het adres op alfabet.
+  const volgorde = r => r.slice().sort((a, b) => { const ta = tijd(a[1].sinds), tb = tijd(b[1].sinds);
+    if (ta !== tb) { if (ta === null) return 1; if (tb === null) return -1; return tb - ta; }
+    return String(a[1].hoofdadres || "").localeCompare(String(b[1].hoofdadres || ""), "nl"); });
+  // Het adres met de woonplaats erachter, als die er nog niet aan het eind staat: altijd één keer.
+  const adres = v => { const a = String(v.hoofdadres || ""), w = String(v.woonplaats || "");
+    return !w || a.endsWith(w) ? a : a ? a + ", " + w : w; };
+  const categorie = c => typeof c === "string" && /^[A-E]$/.test(c) ? c : null;
+  const score = s => typeof s === "number" && Number.isFinite(s) ? s : null;
+  return {sindsDatum, peilDatum, volgorde, adres, categorie, score};
+})();
+const BWP = (() => {
+  const sec = document.getElementById("bewaard");
+  if (!sec) return null;   // een bouw zonder dit deel (een stad)
+  const T = PAYLOAD.bewaar.tekst, R = BWP_REKEN, $ = id => document.getElementById(id);
+  const lijst = $("bwpLijst"), leeg = $("bwpLeeg"), meer = $("bwpMeer"), meta = $("bwpMeta"), app = $("bwpApparaat");
+  const regel = $("bwBewaardStatus"), menuN = $("bwpMenuN"), menuSr = $("bwpMenuSr"), wl = $("werklijst");
+  const EERST = +sec.querySelector(".bwp").dataset.eerst || 10;
+  const PER = new Map(LEADS.map(d => [String(d.id), d]));   // wat in de huidige werklijst te zien is (met het slot: de eerste n)
+  const gebouwd = new Map();   // per pand-ID {k: de opgeslagen gegevens als tekst, li}: een rij die niet verandert, blijft hangen
+  let alles = false;
+  const vul = (t, w) => t.replace(/\{(\w+)\}/g, (x, k) => k in w ? w[k] : x);
+  const naamVan = v => String(v.hoofdadres || "") || R.adres(v);
+  function rij(id, v) {
+    const d = PER.get(id), li = maak("li", "card bwp-rij" + (d ? "" : " weg")); li.dataset.pand = id;
+    const s = R.score(v.score100), sc = maak("div", "score" + (s === null ? " onb" : ""));
+    if (s === null) sc.append(maak("b", null, "onbekend")); else sc.append(maak("b", null, String(s)), maak("small", null, "/100"));
+    const kern = maak("div", "bwp-kern");
+    kern.append(maak("div", "addr", R.adres(v)));
+    if (!d) kern.append(maak("span", "bw-label weg", T["pagina.weg.label"]));
+    const c = R.categorie(v.pandcategorie);
+    if (c) { const ch = maak("div", "chips"); ch.append(maak("span", "chip c" + c, c)); kern.append(ch); }
+    const sinds = R.sindsDatum(v.sinds);
+    if (sinds) kern.append(maak("div", "lid", vul(T["pagina.sinds"], {datum: sinds})));
+    if (!d) { const p = R.peilDatum(v.datapeildatum);
+      kern.append(maak("div", "lid", p ? vul(T["pagina.weg.zin"], {datum: p}) : T["pagina.weg.zin.onbekend"])); }
+    const knoppen = maak("div", "bw-rij");
+    if (d && d.detail) {   // in de huidige data: 'Open pand' (VA-61), zoals vanaf de kaart
+      const o = maak("button", "pand-open", PAND_TEKST.open); o.type = "button";
+      o.setAttribute("aria-haspopup", "dialog"); o.setAttribute("aria-label", PAND_TEKST.openLabel(d.detail.titel));
+      o.addEventListener("click", () => openPand(d, o)); knoppen.append(o);
+    } else {   // niet meer in de data: alleen de opgeslagen link naar de BAG-viewer (VA-62)
+      const url = d ? BAG + d.id : typeof v.bag_viewer_url === "string" && v.bag_viewer_url.startsWith(BAG) ? v.bag_viewer_url : null;
+      if (url) { const a = maak("a", "baglink", PAND_TEKST.bag), pijl = maak("span", null, "↗"); pijl.setAttribute("aria-hidden", "true");
+        a.append(" ", pijl); a.href = url; a.target = "_blank"; a.rel = "noopener"; knoppen.append(a); }
+    }
+    // De Bewaar-knop van VA-90, in de ingedrukte stand; nog eens drukken is niet meer bewaren.
+    const b = maak("button", "bw-knop bw-bewaar"); b.type = "button"; b.setAttribute("aria-pressed", "true");
+    b.setAttribute("aria-label", vul(T["naam.bewaard"], {adres: naamVan(v)}));
+    const ico = maak("span", "bw-ico", "★"); ico.setAttribute("aria-hidden", "true");
+    const tk = maak("span", "bw-tk"); tk.append(maak("span", "bw-nm", T["label.bewaard"]), maak("span", "bw-terug", T["terug.bewaard"]));
+    b.append(ico, tk); b.addEventListener("click", () => haalWeg(id));
+    knoppen.append(b); li.append(sc, kern, knoppen);
+    return li;
+  }
+  function haalWeg(id) {
+    const oud = BW.weg(id);   // tekent deze lijst, de werklijst en het menu opnieuw
+    if (!oud) { regel.textContent = T["pagina.geen_opslag"]; sec.focus(); return; }
+    const naam = naamVan(oud);
+    const terug = () => { BW.herstelId(id, oud);   // het oude object, met zijn oude 'sinds': dezelfde plek
+      BW.status(regel, vul(T["pagina.status.terug"], {adres: naam}));
+      const k = lijst.querySelector(`li[data-pand="${CSS.escape(id)}"] .bw-bewaar`); (k || sec).focus(); };
+    const b = BW.status(regel, vul(T["status.niet_bewaard"], {adres: naam}), terug, id);
+    (b || sec).focus();   // de rij is weg: de focus naar zijn Ongedaan maken, ook als de lijst nu leeg is
+  }
+  function teken() {
+    const werkt = BW.werkt(), r = werkt ? R.volgorde(BW.bewaarde()) : [];
+    const n = r.length, m = r.filter(([id]) => !PER.has(id)).length;
+    menuN.hidden = !n; menuN.textContent = n ? vul(T["pagina.menu.n"], {n: nl(n)}) : "";
+    menuSr.textContent = n ? vul(T["pagina.menu.n.sr"], {n: nl(n)}) : "";
+    meta.textContent = !n ? "" : m ? (n === 1 ? T["pagina.meta.weg.een"] : vul(T["pagina.meta.weg"], {n: nl(n), m: nl(m)}))
+      : n === 1 ? T["pagina.meta.een"] : vul(T["pagina.meta"], {n: nl(n)});
+    app.hidden = !werkt;
+    leeg.hidden = werkt && n > 0;
+    leeg.querySelector("p").textContent = werkt ? T["pagina.leeg"] : T["pagina.geen_opslag"];
+    if (n <= EERST) alles = false;
+    const wil = (alles ? r : r.slice(0, EERST)).map(([id, v]) => { const k = JSON.stringify(v), g = gebouwd.get(id);
+      if (!g || g.k !== k) gebouwd.set(id, {k, li: rij(id, v)}); return gebouwd.get(id).li; });
+    // Ter plekke, zoals de werklijst: een rij die blijft, wordt niet opnieuw opgehangen (de focus blijft erop).
+    const blijft = new Set(wil);
+    [...lijst.children].forEach(c => { if (!blijft.has(c)) c.remove(); });
+    let plek = lijst.firstElementChild;
+    for (const li of wil) { if (li === plek) plek = plek.nextElementSibling; else lijst.insertBefore(li, plek); }
+    lijst.hidden = !wil.length;
+    meer.hidden = n <= EERST;
+    meer.textContent = alles ? T["pagina.minder"] : vul(T["pagina.meer"], {n: nl(n)});
+  }
+  // Niet verspringen (Lumi §9): ligt dit deel helemaal boven het scherm, dan blijft de werklijst staan waar hij
+  // stond. Safari kent geen scroll-anchoring, dus het script doet het zelf. In Chrome heeft scroll-anchoring het al
+  // gedaan als 'na' gemeten wordt; het verschil is dan 0 en er schuift niets dubbel (gemeten, met en zonder).
+  function ververs() {
+    const boven = wl && sec.getBoundingClientRect().bottom <= 0, voor = boven ? wl.getBoundingClientRect().top : 0;
+    teken();
+    if (boven) { const na = wl.getBoundingClientRect().top; if (na !== voor) scrollBy({top: na - voor, behavior: "instant"}); }   // niet glijden (html heeft smooth)
+  }
+  meer.addEventListener("click", () => { alles = !alles; teken(); });   // de focus blijft op de knop
+  BW.opAlles(ververs);
+  teken();
+  return {teken};
+})();
+/* ============================ einde BEWAARDE PANDEN ============================ */
 
 /* ============================ WERKLIJST (VA-39, VA-68 t/m VA-70) ============================
    Tot 500 kaarten: de eerste STAP meteen, de volgende pas als je in de buurt scrolt, zodat de
@@ -4701,6 +4942,7 @@ def render(payload: dict) -> str:
             .replace("__LIJST__", lijst)
             .replace("__FILTER__", filter_html(payload.get("filter"), KAARTFOTO_TEKST["bron"]))
             .replace("__MENU__", menu_html(lijst))
+            .replace("__BEWAARD__", bewaard_html(lijst))
             .replace("__PLANNING__", planning_paneel(payload.get("planning")))
             .replace("__SLOT__", slot_html(payload.get("slot")))
             .replace("__BAND__", band[0]).replace("__TRAP__", band[1]).replace("__KAART__", band[2])
