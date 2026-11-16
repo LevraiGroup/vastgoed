@@ -924,6 +924,73 @@ def met_planning(payload: dict, cfg: dict) -> dict:
     return {**payload, "planning": pl, "planning_waarschuwingen": let}
 # --------------------------------------------------------------- einde planning (VA-86)
 
+# --------------------------------------------------------------- slot op de werklijst (VA-96)
+# Ayman: "een lock ... dat er maar 5 panden getoond worden en die andere achter de verborgen slot scherm met
+# text (data link aan zetten)", omdat hij eerst betaling wil. Een visueel slot, op zijn besluit ("statisch
+# afschermen is genoeg"): de gegevens van alle panden blijven in de broncode van de pagina staan. Met
+# werklijst.vrij_zichtbaar in config.yaml zijn alleen de eerste n panden van de werklijst te zien (in de
+# volgorde van de run); de rest staat achter één slotblok. Uit of afwezig: de pagina is precies als zonder
+# dit verhaal. Geen cijfer verandert: de kerncijfers, de band en zijn 500 stippen blijven hetzelfde.
+# Kopij: Ada, wacht op Lumi.
+SLOT_TEKST = {
+    "titel": "{n} panden staan achter het slot",
+    "titel.een": "1 pand staat achter het slot",
+    "regel": "Zet de datakoppeling aan om alle panden van de werklijst te zien.",
+    "telling.alle": "De {n} zichtbare panden",
+    "telling": "{n} van de {totaal} zichtbare panden",
+}
+
+
+def lees_slot(cfg: dict) -> tuple[int | None, list[str]]:
+    """Hoeveel panden vrij zichtbaar zijn (None = geen slot), en een waarschuwing bij een onleesbare waarde."""
+    w = (cfg.get("werklijst") or {}) if isinstance(cfg.get("werklijst"), (dict, type(None))) else {}
+    n = w.get("vrij_zichtbaar")
+    if n is None or n is False:
+        return None, []
+    if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+        return None, [f"werklijst.vrij_zichtbaar: {n!r} is geen positief geheel getal; het slot staat uit"]
+    return n, []
+
+
+def met_slot(payload: dict, cfg: dict) -> dict:
+    """
+    Met het slot op: PAYLOAD.slot {'n', 'op_slot', 'tekst'} en de telling van het filterpaneel over de n
+    zichtbare panden (crit. 4). Zonder slot, of als de werklijst er niet meer heeft: de payload ongewijzigd.
+    """
+    n, let = lees_slot(cfg)
+    if let:   # de build drukt het af, net als de waarschuwingen van de planning
+        payload = {**payload, "planning_waarschuwingen": (payload.get("planning_waarschuwingen") or []) + let}
+    totaal = len(payload.get("leads") or [])
+    if n is None or totaal <= n:
+        return payload
+    op_slot = totaal - n
+    tekst = {"titel": (SLOT_TEKST["titel.een"] if op_slot == 1 else SLOT_TEKST["titel"].format(n=nl_getal(op_slot))),
+             "regel": SLOT_TEKST["regel"]}
+    filt = payload.get("filter")
+    if filt and filt.get("tekst"):
+        filt = {**filt, "tekst": {**filt["tekst"], "alle": SLOT_TEKST["telling.alle"].format(n=nl_getal(n)),
+                                  "telling": SLOT_TEKST["telling"].replace("{totaal}", nl_getal(n))}}
+    return {**payload, "filter": filt, "slot": {"n": n, "op_slot": op_slot, "tekst": tekst}}
+
+
+SLOT_SCHIM = 3   # zoveel lege kaarten achter het slot (vorm, geen inhoud)
+
+
+def slot_html(s: dict | None) -> str:
+    """Het slotblok na de vrije kaarten: lege kaarten, een slot en één tekst. Geen knop, niets om op te tabben."""
+    if not s:
+        return ""
+    schim = "".join('<div class="slot-kaart"><i></i><i></i><i></i><i></i></div>' for _ in range(SLOT_SCHIM))
+    slot = ('<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">'
+            '<rect x="5" y="10.5" width="14" height="10" rx="2.2" fill="currentColor"/>'
+            '<path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>')
+    return ('\n        <!-- SLOT (VA-96) -->\n'
+            f'        <div class="slot-blok" id="slotBlok"><div class="grid slot-schim" aria-hidden="true">{schim}</div>'
+            f'<div class="slot-paneel"><span class="slot-icoon">{slot}</span>'
+            f'<p class="slot-tekst"><b>{escape(s["tekst"]["titel"])}.</b> {escape(s["tekst"]["regel"])}</p></div></div>'
+            '\n        <!-- einde SLOT -->')
+# --------------------------------------------------------------- einde slot op de werklijst (VA-96)
+
 
 def lijst_feiten(top: list[dict]) -> list[dict]:
     """Bereik van score en bouwjaar en de gemiddelde oppervlakte van de panden op de pagina."""
@@ -1192,8 +1259,8 @@ def pagina(lijst: str, titel: str, feiten_titel: str, feiten_cap: str, bronpil: 
 def bouw_payload() -> dict:
     cfg = load_config()
     if nederland.is_nederland(cfg):
-        return met_planning(bouw_payload_landelijk(cfg), cfg)
-    return met_planning(bouw_payload_gebied(cfg), cfg)
+        return met_slot(met_planning(bouw_payload_landelijk(cfg), cfg), cfg)
+    return met_slot(met_planning(bouw_payload_gebied(cfg), cfg), cfg)
 
 
 def bouw_payload_gebied(cfg: dict) -> dict:
@@ -2279,6 +2346,26 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     border-radius:9px;padding:7px 12px;min-height:40px;color:var(--ink);cursor:pointer}
   .wl-leeg .bw-leeg-toon:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
   /* ===================== einde BEWAREN EN VERBERGEN ===================== */
+  /* ===================== SLOT (VA-96): de panden na de eerste n, achter één blok ===================== */
+  .slot-blok{position:relative;margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid var(--ring);
+    background:var(--surface)}
+  .slot-schim{padding:14px;filter:blur(2px);opacity:.6;pointer-events:none;user-select:none}
+  .slot-kaart{display:flex;flex-direction:column;gap:10px;min-height:190px;padding:16px;border-radius:14px;
+    border:1px solid var(--ring);background:var(--surface-2)}
+  .slot-kaart i{display:block;height:12px;border-radius:6px;background:var(--grid)}
+  .slot-kaart i:nth-child(1){width:55%;height:16px}
+  .slot-kaart i:nth-child(2){width:35%}
+  .slot-kaart i:nth-child(3){width:100%;height:8px;margin-top:auto}
+  .slot-kaart i:nth-child(4){width:80%}
+  .slot-kaart:nth-child(n+3){display:none}
+  .slot-paneel{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:12px;padding:20px;text-align:center;background:color-mix(in srgb,var(--surface) 62%,transparent)}
+  .slot-icoon{display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:var(--brand);color:#fff;
+    box-shadow:0 0 0 6px color-mix(in srgb,var(--brand) 12%,transparent)}
+  .slot-tekst{margin:0;max-width:46ch;font-size:14px;line-height:1.5;color:var(--ink-2)}
+  .slot-tekst b{display:block;margin-bottom:2px;font-size:16px;color:var(--ink)}
+  @media (max-width:900px){ .slot-kaart:nth-child(n+2){display:none} }
+  /* ===================== einde SLOT ===================== */
   /* ===================== einde WERKLIJST ===================== */
 </style>
 </head>
@@ -2386,7 +2473,7 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
           <div class="bw-status" id="bwStatus" role="status"></div>
         </div>
         <!-- einde BEWAREN EN VERBERGEN -->
-        <div class="grid" id="leads"></div>
+        <div class="grid" id="leads"></div>__SLOT__
         <div class="schildwacht" aria-hidden="true"></div>
       </div>
 
@@ -2605,7 +2692,10 @@ const PAYLOAD = __PAYLOAD__;
   opnieuw();
 })();
 /* ===================== einde LANDKAART ===================== */
-const {kpi:KPI, cats:CATS, facts:FACTS, leads:LEADS, budget:BUDGET} = PAYLOAD;
+const {kpi:KPI, cats:CATS, facts:FACTS, leads:ALLE_LEADS, budget:BUDGET} = PAYLOAD;
+// VA-96: met het slot op zijn alleen de eerste n panden van de werklijst te zien; filters, sorteren, Bewaar
+// en Verberg werken op die n. De rest staat achter het slotblok, dat Python al in de HTML zette.
+const LEADS = PAYLOAD.slot ? ALLE_LEADS.slice(0, PAYLOAD.slot.n) : ALLE_LEADS;
 const FN = {woon:"var(--s1)", winkel:"var(--s2)", kantoor:"var(--s3)", overig:"var(--s4)", bedrijf:"var(--s5)"};
 const FNL = {woon:"Wonen", winkel:"Winkel", kantoor:"Kantoor", overig:"Overig", bedrijf:"Bedrijf"};
 const BAG="https://bagviewer.kadaster.nl/lvbag/bag-viewer/index.html#?searchQuery=";
@@ -4549,6 +4639,7 @@ def render(payload: dict) -> str:
             .replace("__FILTER__", filter_html(payload.get("filter"), KAARTFOTO_TEKST["bron"]))
             .replace("__MENU__", menu_html(lijst))
             .replace("__PLANNING__", planning_pillen(payload.get("planning")))
+            .replace("__SLOT__", slot_html(payload.get("slot")))
             .replace("__BAND__", band[0]).replace("__TRAP__", band[1]).replace("__KAART__", band[2])
             .replace("__WERKBALK__", werkbalk_html((payload.get("kantoor") or {}).get("tekst"))))
     # De koppen van het lijstdeel ('proefresultaat.*' of 'werklijst.*') gaan naar __KOP_LIJST_*__.

@@ -148,6 +148,11 @@ bronnen:
     slechte_labels: ["E", "F", "G"]
     max_bevragingen: 2000       # veiligheidsplafond per run in API-modus
 
+# Slot op de werklijst (VA-96). Zolang Levrai niet betaald heeft, zijn alleen de eerste panden te zien; de rest
+# staat achter een slotblok. Openen is Aymans besluit: zet null, bouw het dashboard opnieuw en push.
+werklijst:
+  vrij_zichtbaar: 5             # aantal zichtbare panden; null of weglaten = alles zichtbaar (geen slot)
+
 # Wanneer de volgende run is, voor het dashboard (VA-86). Het Kantoor toont het naast Bron en Peildatum.
 planning:
   maandrun:

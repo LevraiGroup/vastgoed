@@ -308,3 +308,21 @@ in de CSV's.
 
 Zonder betaalde databronnen zijn de vaste lasten vrijwel nul; de maandelijkse inspanning
 zit in de visuele controle (sectie 6), circa 4-8 uur per 200-500 leads.
+
+## Slot op de werklijst (VA-96)
+
+Zolang Levrai nog niet betaald heeft, laat het dashboard alleen de eerste panden van de werklijst zien. De rest
+staat achter één slotblok met de tekst dat de datakoppeling aan moet om alle panden te zien. Het slot staat in
+`config.yaml`:
+
+    werklijst:
+      vrij_zichtbaar: 5     # zoveel panden zijn te zien; null of weglaten = alles zichtbaar
+
+Het slot openen is Aymans besluit, gekoppeld aan de betaling. Dan: zet `vrij_zichtbaar` op `null`, draai
+`python build_dashboard.py`, commit `design/index.html` en `config.yaml`, en push. Er is geen knop op de pagina
+die iets openzet.
+
+Wat het slot niet doet: het is een visueel slot. De gegevens van alle panden staan nog in de broncode van de
+pagina, en wie de broncode bekijkt, ziet ze. Ayman koos daarvoor ("statisch afschermen is genoeg"). De
+kerncijfers, de band met zijn 500 stippen en de tellingen per gemeente blijven kloppen: een telling noemt
+geen pand.
