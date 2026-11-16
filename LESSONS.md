@@ -155,3 +155,15 @@ struck through with the reason, never deleted.
 - **A closed `<dialog>` keeps its children in the page: `isConnected` stays true but they cannot take focus, so
   focus sent there lands on `<body>`.** Check `closest("dialog").open` before focusing inside one. *(2026-11-16, Ada,
   VA-90)*
+- **The dedup register is the only state the pipeline must never rebuild: it lives in git
+  (`register/geleverde_panden.csv`), not in `data/`, and a test that runs `run_proef.main()` must point it
+  elsewhere.** `nederland.draai()` takes it as a required keyword so a forgotten test fails instead of
+  writing the real register; the Delft route follows `run_proef.BASE`. *(2026-11-16, Rex, VA-6)*
+- **Evidence taken from a working tree only counts for the commit it was taken at: compare the run time
+  with the branch's reflog, and if the commit is newer, redo the evidence on a `git archive` export.**
+  *(2026-11-16, Vera, VA-6)*
+- **A CDP key event sent to a background tab closes a `<dialog>`, but the page's `focus()` is lost, so focus
+  reads as `<body>`.** In multi-tab tests, `Page.bringToFront` the tab that gets the keys before trusting a
+  focus result. *(2026-11-16, Vera, VA-90)*
+- **A copy pin that only checks "occurs somewhere in the copy table" also accepts the superseded draft
+  column.** Pin to the approved column, and prove it with one mutant. *(2026-11-16, Vera, VA-90)*

@@ -24,6 +24,7 @@ from contextlib import closing
 from pathlib import Path
 
 import cbs_gemeenten
+import register
 import selectie
 import snapshots
 from selectie import mastervolgorde, nl_tal, werklijstvolgorde
@@ -125,8 +126,13 @@ def nieuwste_snapshot(cfg: dict, keuze: str | None) -> snapshots.Snapshot:
     return snap
 
 
-def draai(cfg: dict, keuze: str | None, kolommen: list[str], rij, uit: Path, data: Path) -> int:
-    """De landelijke run. 'kolommen' en 'rij' komen uit run_proef.py, zodat de CSV's gelijk lopen."""
+def draai(cfg: dict, keuze: str | None, kolommen: list[str], rij, uit: Path, data: Path, *,
+          register_bestand: Path) -> int:
+    """
+    De landelijke run. 'kolommen' en 'rij' komen uit run_proef.py, zodat de CSV's gelijk lopen.
+    'register_bestand' is het dedup-register (VA-6); verplicht, zodat een test nooit stil het
+    echte register beschrijft.
+    """
     snap = nieuwste_snapshot(cfg, keuze)
     print(f"Snapshot {NAAM}: {snap.omschrijving()}")
     gemeenten = cbs_gemeenten.lees()
@@ -134,6 +140,11 @@ def draai(cfg: dict, keuze: str | None, kolommen: list[str], rij, uit: Path, dat
     n_groot, plaatsen_groot, plaatsen_overig = aantallen(cfg)
     groot = {g["gemeentecode"] for g in gemeenten if g["rang"] <= n_groot}
     maand = snap.ophaaldatum[:7]
+    werklijst_naam = f"werklijst_{SLUG}_{maand}.csv"
+    # VA-6: panden die in een andere werklijst zijn geleverd, doen niet mee. Het register wordt
+    # vóór de lange stroom gelezen, zodat een onleesbaar register meteen stopt.
+    reg = register.Register(register_bestand)
+    geleverd = reg.elders(werklijst_naam)
     score_min = cfg["drempels"]["score_min_voor_werklijst"]
     bron = f"PDOK BAG GeoPackage ({snap.pad.name})"
 
@@ -160,6 +171,8 @@ def draai(cfg: dict, keuze: str | None, kolommen: list[str], rij, uit: Path, dat
             p["bron"] = bron
             p["gemeente"] = naam_van.get(code, "")
             p[IN_GROOT] = "ja" if code in groot else "nee"
+            # In een eerdere (andere) werklijst geleverd; dus nooit waar voor de werklijst zelf.
+            p["eerder_geselecteerd"] = p["bag_pand_id"] in geleverd
             tel["panden"] += 1
             tel["vbo"] += p["aantal_vbo"]
             if p["uitgesloten"]:
@@ -174,11 +187,12 @@ def draai(cfg: dict, keuze: str | None, kolommen: list[str], rij, uit: Path, dat
                            (p["leadscore"], p["bag_pand_id"], json.dumps(rij_nl(p), ensure_ascii=False)))
             proef.voeg_toe(p)
             if p["leadscore"] >= score_min:
-                if code in groot:
-                    tel["geschikt_groot"] += 1
+                tel["geschikt_groot" if code in groot else "geschikt_overig"] += 1
+                if p["eerder_geselecteerd"]:
+                    tel["al_geleverd"] += 1  # telt mee als geschikt, maar komt niet meer op een werklijst
+                elif code in groot:
                     beste_groot.voeg_toe(p)
                 else:
-                    tel["geschikt_overig"] += 1
                     beste_overig.voeg_toe(p)
 
         ontbreekt = sorted(groot - codes_gezien)
@@ -189,6 +203,10 @@ def draai(cfg: dict, keuze: str | None, kolommen: list[str], rij, uit: Path, dat
 
         lijst, meldingen = verdeel(beste_groot.lijst(), beste_overig.lijst(), plaatsen_groot,
                                    plaatsen_overig, maand, n_groot)
+        # VA-6 crit. 8: een geleverde werklijst verandert niet stil. Stopt vóór het eerste bestand.
+        lijst_ids = [p["bag_pand_id"] for p in lijst]
+        reg.controleer(werklijst_naam, maand, lijst_ids)
+        nieuw_geregistreerd = reg.leg_vast(werklijst_naam, maand, lijst_ids)
         velden = kolommen + ["gemeentecode", "gemeente", IN_GROOT, "bag_viewer_url"]
         master_csv = uit / f"mastervoorraad_{SLUG}.csv"
         with open(master_csv, "w", newline="", encoding="utf-8-sig") as fh:
@@ -197,7 +215,7 @@ def draai(cfg: dict, keuze: str | None, kolommen: list[str], rij, uit: Path, dat
             for (tekst,) in master.execute("SELECT rij FROM m ORDER BY score DESC, id"):
                 w.writerow(json.loads(tekst))
     proef_csv = uit / f"proefresultaat_20_{SLUG}.csv"
-    werklijst_csv = uit / f"werklijst_{SLUG}_{maand}.csv"
+    werklijst_csv = uit / werklijst_naam
     for pad, panden in ((proef_csv, proef.lijst()), (werklijst_csv, lijst)):
         with open(pad, "w", newline="", encoding="utf-8-sig") as fh:
             w = csv.DictWriter(fh, fieldnames=velden, delimiter=";")
@@ -233,9 +251,10 @@ def draai(cfg: dict, keuze: str | None, kolommen: list[str], rij, uit: Path, dat
     print(f"Mastervoorraad  -> {master_csv.name}  ({nl_tal(tel['a_e'])} panden, "
           f"{nl_tal(master_csv.stat().st_size)} bytes)")
     print(f"Proefresultaat  -> {proef_csv.name}  (20 panden)")
+    print(register.regel(reg, nieuw_geregistreerd, tel["al_geleverd"]))
     for m in meldingen:
         print(f"LET OP: {m}", file=sys.stderr)
-    waarschuwing = selectie.werklijst_waarschuwing(totalen["geschikt"], cfg)
+    waarschuwing = selectie.werklijst_waarschuwing(totalen["geschikt"] - tel["al_geleverd"], cfg)
     if waarschuwing:
         print(f"\n{waarschuwing}", file=sys.stderr)
     return 0
