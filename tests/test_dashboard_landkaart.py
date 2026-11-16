@@ -102,7 +102,11 @@ class Gebouwd(unittest.TestCase):
         self.assertEqual([x["v"] for x in p["kpi"]], list(k["trap"].values())[:4])
         self.assertEqual(next(f["val"] for f in p["facts"] if f["k"] == "Panden op de werklijst"), k["trap"]["werklijst"])
         trap = html[html.index('<ol class="trap"'):html.index("</ol>", html.index('<ol class="trap"'))]
-        self.assertEqual(re.findall(r"<b>([^<]*)</b>", trap), list(k["trap"].values()))
+        # Ayman: de band noemt het aantal op de werklijst niet; het vijfde cijfer heet alleen "Werklijst".
+        self.assertEqual(re.findall(r"<b>([^<]*)</b>", trap), list(k["trap"].values())[:4] + ["Werklijst"])
+        self.assertNotIn("op je werklijst", trap)
+        self.assertEqual((k["kern"]["label"], "getal" in k["kern"]), ("Werklijst", False))
+        self.assertNotRegex(k["kern"]["tip"], r"\b4 panden")
 
     def test_tekstalternatief_van_lumi(self):
         html, k = self.bouw(self.lijst())
@@ -142,7 +146,7 @@ class Sjabloon(unittest.TestCase):
         for weg in ("toLocaleString", "Intl.", "toFixed", "new Date", "fetch(", "XMLHttpRequest", "https://",
                     "import(", "THREE", "<script", "<li>"):
             self.assertNotIn(weg, js)
-        for tekst in ("K.kern.getal", "K.kern.woord", "g.tip", "c.tip", "K.kern.tip"):
+        for tekst in ("K.kern.label", "g.tip", "c.tip", "K.kern.tip"):
             self.assertIn(tekst, js)
 
     def test_stil_beeld_en_pauze(self):

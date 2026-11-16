@@ -1591,8 +1591,12 @@ KAART_TEKST = {
     "aria": "Selectie op de BAG van {datum}: {vbo} verblijfsobjecten, {panden} panden, {a_e} in categorie A "
             "tot en met E, {geschikt} met score {drempel} of hoger, {werklijst} op je werklijst: {n_groot} uit de "
             "{aantal} grootste gemeenten en {n_rest} elders. {grootste}.",
-    "kern.tip": "Je werklijst · {werklijst} panden: {n_groot} uit de {aantal} grootste gemeenten, {n_rest} elders",
-    "kern.woord": "werklijst",
+    # Ayman: "500 on werklijst dont sound like a lot ... replace that with just stating werklijst". De band noemt
+    # het aantal niet; het vijfde glazen cijfer en de kern heten alleen "Werklijst". De schermlezertekst ('aria')
+    # houdt het echte aantal, want die vertelt wat er is.
+    "trap.werklijst.naam": "Werklijst",
+    "kern.tip": "Je werklijst: {n_groot} uit de {aantal} grootste gemeenten, {n_rest} elders",
+    "kern.label": "Werklijst",
     "gemeente.tip": "{naam} · {n} {panden} op je werklijst",
     "cat.tip": "Categorie {k} · {naam} · {n} panden",   # Lumi, concept B
     "stroom.noot": "De stroom is niet op schaal, de cijfers wel.",   # Lumi, concept A
@@ -1683,8 +1687,7 @@ def landkaart(lijst: list[dict], t: dict, bron: list[dict] | None, grote: list[d
     land = [[c for la, lo in ring for c in _kort(la, lo)] for ring in (kaart or {}).get("land") or []]
     return {"land": land, "gm": gm, "pt": pt, "trap": trap, "tekst": tekst, "bron": kaart_bron(kaart),
             "cats": cats, "ruw": ruw, "breed": breed,
-            "kern": {"ll": _kort(*KAART_KERN), "getal": trap["werklijst"], "woord": tekst["kern.woord"],
-                     "tip": tekst["kern.tip"]}}
+            "kern": {"ll": _kort(*KAART_KERN), "label": tekst["kern.label"], "tip": tekst["kern.tip"]}}
 
 
 def band_html(k: dict | None) -> tuple[str, str, str]:
@@ -1698,8 +1701,10 @@ def band_html(k: dict | None) -> tuple[str, str, str]:
     t = k["tekst"]
     items = []
     for s, w in zip(TRAP, k["breed"]):
-        klasse = ' class="trap-wl"' if s == "werklijst" else ""
-        items.append(f'<li{klasse} style="--w:{w}%"><b>{escape(k["trap"][s])}</b><span>{escape(t["trap." + s])}</span></li>')
+        if s == "werklijst":   # zonder aantal, alleen de naam (Ayman)
+            items.append(f'<li class="trap-wl" style="--w:{w}%"><b>{escape(t["trap.werklijst.naam"])}</b></li>')
+            continue
+        items.append(f'<li style="--w:{w}%"><b>{escape(k["trap"][s])}</b><span>{escape(t["trap." + s])}</span></li>')
     legenda = "".join(f'<span><i class="lg-{s}"></i>{escape(t["legenda." + s])}</span>' for s in ("cat", "ring", "wl"))
     trap = (f'\n      <div class="trap-blok"><ol class="trap" aria-label="{escape(t["trap.label"])}">{"".join(items)}</ol>'
             f'<p class="stroom-noot">{escape(t["stroom.noot"])}</p></div>')
@@ -2613,8 +2618,10 @@ const PAYLOAD = __PAYLOAD__;
     const extra = ruim ? 0 : .03 * sc + 22, ox = vk.x + extra + (vk.w - extra - EW * sc) / 2, oy = vk.y + (vk.h - EH * sc) / 2;
     const pr = ll => [ox + ((ll[1] / 100 + 3) - X0) * CL * sc, oy + (Y0 - (ll[0] / 100 + 50)) * sc];
     const k = pr(K.kern.ll);
-    rr = M.max(30, sc * .3);
-    kern = {x: k[0], y: k[1], r: M.max(13, sc * .095), f: 0, tip: K.kern.tip};
+    // De kern is groot genoeg voor het woord "Werklijst"; de ring van A–E blijft er ruim omheen.
+    x.font = F(750, 10.5);
+    kern = {x: k[0], y: k[1], r: M.max(13, sc * .095, x.measureText(K.kern.label).width / 2 + 6), f: 0, tip: K.kern.tip};
+    rr = M.max(30, sc * .3, kern.r + 18);
     x.beginPath();
     for (const r of K.land) for (let i = 0; i < r.length; i += 2) { const p = pr([r[i], r[i + 1]]); i ? x.lineTo(p[0], p[1]) : x.moveTo(p[0], p[1]); }
     x.closePath();
@@ -2708,7 +2715,7 @@ const PAYLOAD = __PAYLOAD__;
       g.addColorStop(0, rgba(kl.s[0], 0)); g.addColorStop(1, rgba(kl.s[0], .16));
       ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.fillRect(vk.x, y - 46, vk.w, 46); lijn(ctx, kl.t2, .35, 1, [vk.x, y], [vk.x + vk.w, y]);
     }
-    ctx.setLineDash([3, 5]); ctx.lineDashOffset = -klok * 9; cirkel(ctx, kl.s[0], kern.x, kern.y, rr * .62, .55, 1.2); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    ctx.setLineDash([3, 5]); ctx.lineDashOffset = -klok * 9; cirkel(ctx, kl.s[0], kern.x, kern.y, M.max(rr * .62, kern.r + 5), .55, 1.2); ctx.setLineDash([]); ctx.lineDashOffset = 0;
     ctx.fillStyle = "#ffffff";
     for (let i = 0; i < 72; i++) { const h = i * 2.39996 + klok * .05 * (i % 2 ? 1 : -1), r = rr * (1.3 + (i * 37 % 30) / 100);
       ctx.globalAlpha = .28; ctx.fillRect(kern.x + M.cos(h) * r - .7, kern.y + M.sin(h) * r - .7, 1.4, 1.4); }
@@ -2722,8 +2729,7 @@ const PAYLOAD = __PAYLOAD__;
     for (const v of V) rond(ctx, v.c, v.x, v.y, 1.3, (1 - v.t) * .6);
     ctx.globalCompositeOperation = "source-over";
     rond(ctx, kl.kern, kern.x, kern.y, kern.r, 1); cirkel(ctx, "#ffffff", kern.x, kern.y, kern.r, .6, 1);
-    tekst(ctx, K.kern.getal, kern.x, kern.y + kern.r * .15, F(800, M.round(kern.r * .72)), "#ffffff", "center");
-    tekst(ctx, K.kern.woord, kern.x, kern.y + kern.r * .6, F(500, M.max(8, M.round(kern.r * .32))), kl.t2, "center");
+    tekst(ctx, K.kern.label, kern.x, kern.y + 3.7, F(750, 10.5), "#ffffff", "center");
   }
   const loopt = () => !rm.matches && zicht && !D.hidden;
   function beeld(ts) { raf = 0; if (!loopt()) return; const dt = last ? M.min(.05, (ts - last) / 1000) : 1 / 60; last = ts; stap(dt); teken(); raf = requestAnimationFrame(beeld); }
