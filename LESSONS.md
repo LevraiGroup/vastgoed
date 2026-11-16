@@ -149,3 +149,6 @@ struck through with the reason, never deleted.
 - **An output built in a scratch run matches its commit when three checks agree:** the code copy's
   hashes equal the commit's, the output equals the commit after CRLF normalisation, and a cheap
   independent recompute agrees. *(2026-11-14, Vera, VA-78/VA-79)*
+- **A headless browser never makes `document.hidden` true, even when a second tab is in front; prove
+  "pauses when the tab is hidden" by overriding `document.hidden` and firing `visibilitychange`, then
+  counting frames, and say in the close-out that it was simulated.** *(2026-11-16, Vera, VA-85)*
