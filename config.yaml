@@ -165,6 +165,11 @@ betaalde_bronnen:
                                 # "Koopsom API", "Kosten: € 0,45 per adres", gelezen 2026-11-13; VA-59)
     sleutel_variabele: KADASTER_KOOPSOM_KEY
 
+# Slot op de werklijst (VA-96). Zolang Levrai niet betaald heeft, zijn alleen de eerste panden te zien; de rest
+# staat achter een slotblok. Openen is Aymans besluit: zet null, bouw het dashboard opnieuw en push.
+werklijst:
+  vrij_zichtbaar: 5             # aantal zichtbare panden; null of weglaten = alles zichtbaar (geen slot)
+
 # Wanneer de volgende run is, voor het dashboard (VA-86). Het Kantoor toont het naast Bron en Peildatum.
 planning:
   maandrun:
