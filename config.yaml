@@ -147,3 +147,12 @@ bronnen:
     bulk_csv: ""                # optioneel: pad naar maand-CSV; aanrader i.p.v. per-adres API
     slechte_labels: ["E", "F", "G"]
     max_bevragingen: 2000       # veiligheidsplafond per run in API-modus
+
+# Wanneer de volgende run is, voor het dashboard (VA-86). Het Kantoor toont het naast Bron en Peildatum.
+planning:
+  maandrun:
+    wijze: handmatig            # handmatig | automatisch. Automatisch pas als een planner de run echt start (VA-77)
+    dag: null                   # dag van de maand (1 t/m 28) waarop de run ongeveer valt; leeg tot Ayman kiest (Q33)
+  dagcontrole:
+    actief: false               # true pas als de nachtelijke controle echt is ingepland (VA-77)
+    tijd: null                  # Amsterdamse tijd als tekst tussen aanhalingstekens, bijvoorbeeld "03:00"

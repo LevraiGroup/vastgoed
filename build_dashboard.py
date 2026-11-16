@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from datetime import date
 from html import escape
 from pathlib import Path
@@ -809,6 +810,120 @@ def bewaar_blok(top: list[dict]) -> dict:
     return {"tekst": BEWAAR_TEKST, "dp": gangbare_peildatum(top)}
 # --------------------------------------------------------------- einde bewaren en verbergen (VA-90)
 
+# --------------------------------------------------------------- planning (VA-86)
+# Ayman: "wanneer de nieuwe run weer is" en "bovenaan ... wanneer de volgende scrape plaatsvindt". Bovenaan
+# het Kantoor, naast Bron en Peildatum: van welke maand de werklijst is, wanneer de volgende maandrun is
+# en of er een dagelijkse controle draait. De maand komt uit de naam van het nieuwste werklijstbestand,
+# het schema uit config.yaml (planning). Hier staat geen datum, dag of tijd: alles komt uit die twee.
+# Zolang de run met de hand gaat, zegt de pagina dat; het woord 'automatisch' verschijnt alleen bij
+# wijze: automatisch (dat zet pas het verhaal dat de run echt inplant, VA-77). Kopij: Ada, wacht op Lumi.
+OUTPUT = BASE / "output"
+PLANNING_TEKST = {
+    "werklijst": "Werklijst {maand}",
+    "werklijst.geen": "Werklijst: nog geen werklijstbestand",
+    "volgende.handmatig": "Volgende run: handmatig, begin {maand}",
+    "volgende.handmatig.dag": "Volgende run: handmatig, rond {dag} {maand}",
+    "volgende.handmatig.geen": "Volgende run: handmatig",
+    "volgende.automatisch": "Volgende run: {dag} {maand}",
+    "volgende.automatisch.geen": "Volgende run: automatisch, op dag {dag} van de maand",
+    "controle.uit": "Dagelijkse controle nog niet actief",
+    "controle.aan": "Dagelijkse controle: elke nacht om {tijd}",
+}
+PLANNING_WIJZEN = ("handmatig", "automatisch")
+PLANNING_DAG = range(1, 29)   # dag 1 tot en met 28: die bestaat in elke maand
+WERKLIJST_NAAM = re.compile(r"werklijst_(?P<gebied>[a-z0-9]+)_(?P<maand>\d{4}-\d{2})\.csv")
+TIJD = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
+
+
+def werklijst_maand(gebied_slug: str, map_: Path | None = None) -> str | None:
+    """'JJJJ-MM' van het nieuwste output/werklijst_<gebied>_<JJJJ-MM>.csv, of None als er geen is."""
+    maanden = sorted(m.group("maand") for pad in (map_ or OUTPUT).glob(f"werklijst_{gebied_slug}_*.csv")
+                     if (m := WERKLIJST_NAAM.fullmatch(pad.name)) and m.group("gebied") == gebied_slug)
+    return maanden[-1] if maanden else None
+
+
+def volgende_maand(jjjj_mm: str) -> str:
+    """'JJJJ-MM' -> de maand erna, als 'JJJJ-MM'."""
+    j, m = (int(x) for x in jjjj_mm.split("-"))
+    return f"{j + m // 12:04d}-{m % 12 + 1:02d}"
+
+
+def lees_planning(cfg: dict) -> tuple[dict, list[str]]:
+    """
+    {'wijze', 'dag', 'controle', 'tijd'} uit config.yaml (planning), en de waarschuwingen. Een fout schema
+    breekt de build niet (VA-86 crit. 7): dan geldt handmatig, zonder dag, en geen dagelijkse controle, en
+    de waarschuwing noemt de sleutel.
+    """
+    let = []
+    p = cfg.get("planning")
+    if not isinstance(p, dict):
+        let.append("planning ontbreekt in config.yaml; het dashboard toont: handmatig, geen dagelijkse controle")
+        p = {}
+    mr = p.get("maandrun") if isinstance(p.get("maandrun"), dict) else {}
+    dc = p.get("dagcontrole") if isinstance(p.get("dagcontrole"), dict) else {}
+    wijze, dag = mr.get("wijze"), mr.get("dag")
+    if wijze not in PLANNING_WIJZEN:
+        let.append(f"planning.maandrun.wijze: onbekende waarde {wijze!r} (kies {' of '.join(PLANNING_WIJZEN)}); "
+                   "het dashboard toont handmatig")
+        wijze, dag = PLANNING_WIJZEN[0], None
+    if dag is not None and (isinstance(dag, bool) or not isinstance(dag, int) or dag not in PLANNING_DAG):
+        let.append(f"planning.maandrun.dag: {dag!r} is geen dag van {PLANNING_DAG.start} tot en met "
+                   f"{PLANNING_DAG.stop - 1}; het dashboard toont handmatig, zonder dag")
+        wijze, dag = PLANNING_WIJZEN[0], None
+    if wijze == "automatisch" and dag is None:
+        let.append("planning.maandrun.dag ontbreekt: bij wijze automatisch hoort een dag; het dashboard toont handmatig")
+        wijze = PLANNING_WIJZEN[0]
+    actief, tijd = dc.get("actief"), dc.get("tijd")
+    if actief not in (True, False, None):
+        let.append(f"planning.dagcontrole.actief: {actief!r} is geen true of false; het dashboard toont: nog niet actief")
+        actief = False
+    if tijd is not None and not (isinstance(tijd, str) and TIJD.fullmatch(tijd.strip())):
+        let.append(f"planning.dagcontrole.tijd: {tijd!r} is geen tijd als \"UU:MM\" (zet hem tussen aanhalingstekens); "
+                   "het dashboard toont: nog niet actief")
+        tijd = None
+    controle = bool(actief) and tijd is not None
+    return {"wijze": wijze, "dag": dag, "controle": controle, "tijd": tijd.strip() if controle else None}, let
+
+
+def planning_teksten(cfg: dict, gebied_slug: str, map_: Path | None = None) -> tuple[dict, list[str]]:
+    """
+    De drie regels naast Bron en Peildatum, en de zin van de kantoormanager (VA-86 crit. 2, 3, 5, 6):
+    {'werklijst', 'volgende', 'controle', 'zin'}, plus de waarschuwingen voor de build.
+    """
+    plan, let = lees_planning(cfg)
+    maand = werklijst_maand(gebied_slug, map_)
+    T = PLANNING_TEKST
+    werklijst = T["werklijst"].format(maand=maand_voluit(maand)) if maand else T["werklijst.geen"]
+    if plan["wijze"] == "automatisch":
+        volgende = (T["volgende.automatisch"].format(dag=plan["dag"], maand=maand_voluit(volgende_maand(maand)))
+                    if maand else T["volgende.automatisch.geen"].format(dag=plan["dag"]))
+    elif not maand:
+        volgende = T["volgende.handmatig.geen"]
+    elif plan["dag"] is not None:
+        volgende = T["volgende.handmatig.dag"].format(dag=plan["dag"], maand=maand_voluit(volgende_maand(maand)))
+    else:
+        volgende = T["volgende.handmatig"].format(maand=maand_voluit(volgende_maand(maand)))
+    controle = T["controle.aan"].format(tijd=plan["tijd"]) if plan["controle"] else T["controle.uit"]
+    return {"werklijst": werklijst, "volgende": volgende, "controle": controle,
+            "zin": f"{volgende}. {controle}."}, let
+
+
+def planning_pillen(pl: dict | None) -> str:
+    """De drie regels als pillen in de rij van Bron en Peildatum; zonder planning niets."""
+    if not pl:
+        return ""
+    return "".join(f'<div class="pill">{escape(pl[k])}</div>' for k in ("werklijst", "volgende", "controle"))
+
+
+def met_planning(payload: dict, cfg: dict) -> dict:
+    """De planning in de payload, en de zin erachter bij wat de kantoormanager zegt (crit. 6)."""
+    pl, let = planning_teksten(cfg, slug(payload["gebied"]))
+    tekst = (payload.get("kantoor") or {}).get("tekst") or {}
+    if tekst.get("chef"):
+        tekst["chef"] = {**tekst["chef"], "zin": f"{tekst['chef']['zin']} {pl['zin']}"}
+    return {**payload, "planning": pl, "planning_waarschuwingen": let}
+# --------------------------------------------------------------- einde planning (VA-86)
+
 
 def lijst_feiten(top: list[dict]) -> list[dict]:
     """Bereik van score en bouwjaar en de gemiddelde oppervlakte van de panden op de pagina."""
@@ -1077,8 +1192,8 @@ def pagina(lijst: str, titel: str, feiten_titel: str, feiten_cap: str, bronpil: 
 def bouw_payload() -> dict:
     cfg = load_config()
     if nederland.is_nederland(cfg):
-        return bouw_payload_landelijk(cfg)
-    return bouw_payload_gebied(cfg)
+        return met_planning(bouw_payload_landelijk(cfg), cfg)
+    return met_planning(bouw_payload_gebied(cfg), cfg)
 
 
 def bouw_payload_gebied(cfg: dict) -> dict:
@@ -2199,7 +2314,7 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
           <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Kantoor</b></p>
           <div class="spills">
             <div class="pill">__BRONPIL__</div>
-            <div class="pill"__PEILTIP__>__PEILDATUM__</div>
+            <div class="pill"__PEILTIP__>__PEILDATUM__</div>__PLANNING__
           </div>
         </div>
         <h1 id="t-kantoor" class="vh">__KOP_KANTOOR_TITEL__</h1>
@@ -4433,6 +4548,7 @@ def render(payload: dict) -> str:
             .replace("__LIJST__", lijst)
             .replace("__FILTER__", filter_html(payload.get("filter"), KAARTFOTO_TEKST["bron"]))
             .replace("__MENU__", menu_html(lijst))
+            .replace("__PLANNING__", planning_pillen(payload.get("planning")))
             .replace("__BAND__", band[0]).replace("__TRAP__", band[1]).replace("__KAART__", band[2])
             .replace("__WERKBALK__", werkbalk_html((payload.get("kantoor") or {}).get("tekst"))))
     # De koppen van het lijstdeel ('proefresultaat.*' of 'werklijst.*') gaan naar __KOP_LIJST_*__.
@@ -4440,6 +4556,8 @@ def render(payload: dict) -> str:
         deel, _, rest = sleutel.partition(".")
         plek = f"lijst.{rest}" if deel == lijst else sleutel
         html = html.replace("__KOP_" + plek.upper().replace(".", "_") + "__", escape(tekst))
+    # De waarschuwingen van de planning zijn voor wie bouwt, niet voor de pagina.
+    payload = {k: v for k, v in payload.items() if k != "planning_waarschuwingen"}
     return html.replace("__PAYLOAD__", json.dumps(payload, ensure_ascii=False))
 
 
@@ -4447,6 +4565,8 @@ def main() -> int:
     payload = bouw_payload()
     OUT.write_text(render(payload), encoding="utf-8")
     print(f"dashboard geschreven -> {OUT.relative_to(BASE)} ({OUT.stat().st_size/1024:.1f} KB)")
+    for regel in payload.get("planning_waarschuwingen") or []:
+        print(f"LET OP: {regel}")
     if payload["bron"] is None:
         print(f"Snapshot: {BRON_ONBEKEND} ({payload['bron_reden']})")
     else:
