@@ -356,7 +356,7 @@ zit in de visuele controle (sectie 6), circa 4-8 uur per 200-500 leads.
 ## Slot op de werklijst (VA-96)
 
 Zolang Levrai nog niet betaald heeft, laat het dashboard alleen de eerste panden van de werklijst zien. De rest
-staat achter één slotblok met de tekst dat de datakoppeling aan moet om alle panden te zien. Het slot staat in
+staat achter één slotblok met de tekst "Ik zal het openzetten, volgt na betaling." Het slot staat in
 `config.yaml`:
 
     werklijst:

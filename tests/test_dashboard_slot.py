@@ -86,7 +86,7 @@ class Gebouwd(unittest.TestCase):
         self.assertEqual(len(re.findall(r"<p\b", blok)), 1)   # één tekst voor een schermlezer
         self.assertIn('<b><span aria-hidden="true">De rest van je werklijst staat achter het slot.</span>'
                       '<span class="vh">3 panden staan achter het slot.</span></b> '
-                      "Zet de datakoppeling aan om alle panden van de werklijst te zien.", blok)
+                      "Ik zal het openzetten, volgt na betaling.", blok)
         zichtbaar = re.sub(r'<span class="vh">[^<]*</span>', "", blok)
         self.assertNotRegex(re.sub(r"<[^>]+>", "", zichtbaar), r"\d")   # geen aantal in beeld
 
@@ -145,7 +145,7 @@ class Vastgelegd(unittest.TestCase):
     def test_kopij_nederlands(self):
         for t in bd.SLOT_TEKST.values():
             self.assertNotRegex(t.lower(), r"snapshot|\block\b|\bunlock\b|\blive\b|\bonline\b|\bpay")
-        self.assertIn("datakoppeling", bd.SLOT_TEKST["regel"])
+        self.assertIn("volgt na betaling", bd.SLOT_TEKST["regel"])
 
 
 if __name__ == "__main__":
