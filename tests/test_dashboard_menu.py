@@ -107,7 +107,7 @@ class MenuWijstNaarDelen(unittest.TestCase):
 
     def test_groepen_en_namen_uit_de_kopijtabel(self):
         self.assertEqual([(g["groep"], [n for _, n in g["items"]]) for g in bd.MENU],
-                         [("Overzicht", ["Kantoor", "Kerncijfers"]),
+                         [("Overzicht", ["Kantoor", "Kerncijfers", "Brein"]),  # Brein: eigen pagina, VA-98
                           ("Panden", ["Voorraad", "Proefresultaat"])])
 
 
@@ -311,7 +311,8 @@ class MenuLandelijk(unittest.TestCase):
 
     def test_werklijst_op_de_plek_van_proefresultaat(self):
         self.assertEqual([(g["groep"], g["items"]) for g in bd.menu_voor("werklijst")],
-                         [("Overzicht", [("kantoor", "Kantoor"), ("kerncijfers", "Kerncijfers")]),
+                         [("Overzicht", [("kantoor", "Kantoor"), ("kerncijfers", "Kerncijfers"),
+                                         ("brein", "Brein")]),
                           ("Panden", [("voorraad", "Voorraad"), ("werklijst", "Werklijst")]),
                           # Bewaarde panden: een eigen pagina in een eigen groep (Ayman 11-17)
                           ("Mijn selectie", [("bewaard", "Bewaarde panden")])])

@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="nl" data-theme="light"><!-- VA-66: altijd licht openen (Ayman); Thema wisselt -->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Levrai · Pandenselectie — Brein</title>
+<style>
+  :root{
+    color-scheme: light;
+    --plane:#f9f9f7; --surface:#fcfcfb; --surface-2:#ffffff;
+    --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --baseline:#c3c2b7; --ring:rgba(11,11,11,.10);
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4;
+    --good:#0ca30c; --crit:#d03b3b;
+    --shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -12px rgba(11,11,11,.12);
+    --brand:#12233b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])){
+      color-scheme: dark;
+      --plane:#0d0d0d; --surface:#1a1a19; --surface-2:#201f1e;
+      --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,.10);
+      --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+      --good:#0ca30c; --crit:#e06666;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);
+      --brand:#0a1524;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --plane:#0d0d0d; --surface:#1a1a19; --surface-2:#201f1e;
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,.10);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+    --good:#0ca30c; --crit:#e06666;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);
+    --brand:#0a1524;
+  }
+
+  /* Menu-tinten: bestaande kleuren uit de vroegere kop (VA-63). */
+  :root{
+    --nav-tekst:#c6d3e4; --nav-label:#9fb3cc;
+    --nav-hover:rgba(255,255,255,.08); --nav-actief:rgba(255,255,255,.14); --nav-lijn:rgba(255,255,255,.10);
+  }
+  /* Landkaart (VA-85, Lumi #h-tokens): alleen mengsels van tokens die er al zijn, geen nieuwe kleur.
+     Ze volgen --brand en --s1, dus de band wordt donker met het thema. */
+  :root{
+    --brand-2:color-mix(in srgb,var(--brand) 78%,var(--s1));
+    --held:linear-gradient(155deg,var(--brand) 0%,var(--brand) 35%,var(--brand-2) 100%);
+    --gloed:color-mix(in srgb,var(--s1) 40%,transparent);
+    --schaduw-hoog:0 1px 2px rgba(11,11,11,.05),0 28px 56px -28px color-mix(in srgb,var(--brand) 60%,transparent);
+    --glans:rgba(255,255,255,.75);   /* het glimlicht bovenin een glazen strook (Bewaar en Verberg, Lumi) */
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])){--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9);
+      --glans:rgba(255,255,255,.06)}
+  }
+  :root[data-theme="dark"]{--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9);--glans:rgba(255,255,255,.06)}
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  @media (prefers-reduced-motion: no-preference){ html{scroll-behavior:smooth} }
+  body{margin:0;background:var(--plane);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.45}
+  a{color:inherit}
+
+  /* =====================================================================
+     MENU (VA-63, Lumi; gebouwd in VA-64)
+     ===================================================================== */
+  .skip{position:absolute;left:12px;top:-60px;z-index:100;background:var(--brand);color:#fff;
+    padding:10px 14px;border-radius:10px;font-size:14px;font-weight:650;text-decoration:none}
+  .skip:focus{top:12px;outline:2px solid #fff;outline-offset:2px}
+
+  .vg{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh;background:var(--plane);color:var(--ink)}
+
+  .side{grid-column:1;grid-row:1 / span 2;position:sticky;top:0;align-self:start;height:100vh;overflow:auto;
+    background:var(--brand);color:#fff;border-right:1px solid var(--nav-lijn);
+    display:flex;flex-direction:column;padding:22px 12px 16px;scrollbar-width:thin}
+  .side-kop{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .side .merk{padding:2px 10px 18px}
+  .mark{font-weight:800;letter-spacing:.16em;font-size:15px;color:#fff;white-space:nowrap}
+  .mark small{display:block;letter-spacing:.28em;font-weight:600;font-size:10px;color:var(--nav-label);margin-top:3px}
+  .merk-sub{margin:12px 0 0;font-size:12.5px;color:var(--nav-tekst)}
+
+  .nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+  .nav .groep{margin:0;padding:16px 12px 6px;font-size:10px;font-weight:700;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--nav-label)}
+  .nav .groep:first-child{padding-top:4px}
+  .nav a{position:relative;display:flex;align-items:center;min-height:40px;padding:8px 12px 8px 14px;
+    border-radius:10px;color:var(--nav-tekst);font-size:14px;font-weight:500;text-decoration:none}
+  .vg.klaar .nav a{transition:background-color .15s ease,color .15s ease}
+  @media (hover:hover){ .nav a:hover{background:var(--nav-hover);color:#fff} }
+  .nav a:focus-visible{outline:2px solid #fff;outline-offset:-2px}
+  /* actief: meer dan kleur alleen — streep links, vet, lichter vlak, aria-current */
+  .nav a[aria-current]{background:var(--nav-actief);color:#fff;font-weight:700}
+  .nav a[aria-current]::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;
+    border-radius:0 3px 3px 0;background:#fff}
+
+  .side-voet{margin-top:auto;padding:16px 10px 0;border-top:1px solid var(--nav-lijn);
+    display:flex;flex-wrap:wrap;gap:8px}
+  .toggle{cursor:pointer;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);
+    color:#fff;font:inherit;font-size:12px;padding:7px 12px;border-radius:999px;min-height:32px}
+  @media (hover:hover){ .toggle:hover{background:rgba(255,255,255,.18)} }
+  .toggle:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .uitlog{margin:0}   /* VA-106: het formulier om de knop neemt geen eigen ruimte */
+
+  .sluit-menu{display:none;align-items:center;gap:6px;cursor:pointer;flex:none;
+    background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#fff;
+    font:inherit;font-size:13px;font-weight:650;min-height:40px;padding:0 12px;border-radius:10px}
+  .sluit-menu span{font-size:18px;line-height:1}
+  .sluit-menu:focus-visible{outline:2px solid #fff;outline-offset:2px}
+
+  .topbalk{display:none}
+  .menuknop{display:inline-flex;align-items:center;gap:10px;cursor:pointer;min-height:44px;padding:0 14px;
+    background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#fff;
+    font:inherit;font-size:14px;font-weight:650;border-radius:10px}
+  .menuknop .streep{width:18px;height:12px;flex:none;
+    background:linear-gradient(#fff 0 0) top/100% 2px no-repeat,
+               linear-gradient(#fff 0 0) center/100% 2px no-repeat,
+               linear-gradient(#fff 0 0) bottom/100% 2px no-repeat}
+  .menuknop:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .scrim{display:none}
+
+  .inhoud{grid-column:2;min-width:0;padding:26px 28px 64px}
+  .inhoud:focus{outline:none}
+  .deel{scroll-margin-top:16px}
+  .deel:focus{outline:none}
+  .deel + .deel{margin-top:44px}
+  .kop{display:flex;flex-direction:column;gap:6px;margin:0 2px 16px}
+  .kop-rij{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 14px;min-height:28px}
+  .kruimel{margin:0;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+  .kruimel b{color:var(--ink);font-weight:800}
+  .kruimel span{margin:0 .35em}
+  .kop h1,.kop .titel{margin:0;font-weight:750;letter-spacing:-.02em;line-height:1.15}
+  .kop h1{font-size:30px}
+  .kop .titel{font-size:22px}
+  .kop-zin{margin:0;font-size:14.5px;color:var(--ink-2);max-width:78ch}
+  .spills{display:flex;flex-wrap:wrap;gap:6px}
+  .pill{font-size:12px;color:var(--ink-2);background:var(--surface);border:1px solid var(--ring);
+    padding:4px 11px;border-radius:999px;white-space:nowrap}
+  .kop-meta{font-size:12px;color:var(--ink-2)}
+  /* ---- MENU smal (≤ 800 px, VA-63): bovenbalk met menuknop, de zijbalk wordt een lade ---- */
+  @media (max-width:800px){
+    .vg{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr}
+    .topbalk{grid-column:1;grid-row:1;display:flex;position:sticky;top:0;z-index:20;align-items:center;
+      justify-content:space-between;gap:12px;height:56px;padding:0 10px 0 16px;background:var(--brand);color:#fff;
+      box-shadow:0 1px 0 var(--nav-lijn)}
+    .topbalk .mark{font-size:13px}
+    .topbalk .mark small{font-size:9px;margin-top:2px}
+    .inhoud{grid-column:1;grid-row:2;padding:18px 14px 48px}
+    .deel{scroll-margin-top:72px}
+    .kop h1{font-size:24px}
+    .kop .titel{font-size:19px}
+    .kop-zin{font-size:14px}
+    .side{position:fixed;top:0;bottom:0;left:0;width:min(304px,86%);height:auto;z-index:40;
+      transform:translateX(-100%);visibility:hidden;box-shadow:0 0 40px rgba(0,0,0,.35);padding-top:14px}
+    .vg.open .side{transform:none;visibility:visible}
+    /* Overgangen pas na de eerste frames (.klaar), anders schuift de lade bij elke laadbeurt zichtbaar weg. */
+    .vg.klaar .side{transition:transform .22s ease,visibility 0s linear .22s}
+    .vg.klaar.open .side{transition:transform .22s ease}
+    .sluit-menu{display:inline-flex}
+    .side .merk{padding-top:8px}
+    .scrim{display:block;position:fixed;inset:0;z-index:30;background:rgba(11,11,11,.55);opacity:0;visibility:hidden}
+    .vg.open .scrim{opacity:1;visibility:visible}
+    .vg.klaar .scrim{transition:opacity .22s ease,visibility 0s linear .22s}
+    .vg.klaar.open .scrim{transition:opacity .22s ease}
+    .kpi .v{font-size:26px}
+    .pk-balk{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;padding:8px}
+    .pk-balk .tussen{display:none}
+    .pk-knop{width:100%;align-items:flex-start;padding:8px 10px 8px 8px}
+    .pk-knop .bel{display:block}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .vg.klaar .nav a,.vg.klaar .side,.vg.klaar.open .side,.vg.klaar .scrim,.vg.klaar.open .scrim,.pk-knop{transition:none}
+  }
+
+  .vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  /* ===================== BREIN (VA-98, VA-99, Lumi): de navy van de band, glas, één hoge schaduw ===================== */
+  .brein{position:relative;isolation:isolate;overflow:hidden;background:var(--held);border-radius:18px;
+    box-shadow:var(--schaduw-hoog);color:#fff;display:grid;grid-template-columns:minmax(0,58fr) minmax(0,42fr);
+    gap:18px;padding:22px}
+  .brein::before{content:"";position:absolute;left:8%;top:6%;width:50%;aspect-ratio:1;border-radius:50%;z-index:-1;
+    background:radial-gradient(circle,var(--gloed),transparent 62%);pointer-events:none}
+  .doek-vak{position:relative;align-self:start;min-width:0}
+  @media (min-width:801px){ .doek-vak{position:sticky;top:16px} }   /* de ring van een open stap blijft in beeld */
+  .brein canvas{display:block;width:100%;aspect-ratio:1;max-width:620px;margin:0 auto}
+  .stil-knop{position:absolute;right:22px;top:16px;z-index:2;font:inherit;font-size:12px;font-weight:650;color:#fff;
+    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:5px 11px;
+    min-height:28px;cursor:pointer}
+  @media (hover:hover){ .stil-knop:hover{background:rgba(255,255,255,.16)} }
+  .stil-knop:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  @media (prefers-reduced-motion: reduce){ .stil-knop{display:none} }
+  .route{list-style:none;margin:30px 0 0;padding:0;display:flex;flex-direction:column;gap:7px;min-width:0}
+  .route>li{border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+  .brein.klaar .route>li{transition:background-color .2s,border-color .2s}
+  .route>li.actief{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.34)}
+  .route>li.wl{background:color-mix(in srgb,var(--s3) 20%,transparent);border-color:color-mix(in srgb,var(--s3) 58%,transparent)}
+  .stap{all:unset;box-sizing:border-box;display:grid;grid-template-columns:22px minmax(0,1fr) auto 14px;align-items:baseline;
+    column-gap:10px;width:100%;padding:9px 12px 10px;cursor:pointer;border-radius:12px}
+  .stap:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .stap .nr{font-size:11px;font-weight:800;color:var(--nav-label);font-variant-numeric:tabular-nums}
+  .stap .naam{font-weight:700;font-size:14px;min-width:0}
+  .stap .sub{grid-column:2 / 4;font-size:12px;color:var(--nav-tekst);min-width:0}
+  .stap .sub .noot{display:block;margin-top:3px}
+  .stap .getal{font-size:19px;font-weight:750;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+  .stap .pijl{font-size:11px;color:var(--nav-label)}
+  .brein.klaar .stap .pijl{transition:transform .2s}
+  .stap[aria-expanded="true"] .pijl{transform:rotate(90deg)}
+  .letters{display:inline-flex;flex-wrap:wrap;gap:4px 10px}
+  .letters i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
+  .regel{padding:2px 14px 12px 44px;font-size:13px;line-height:1.55;color:#e8eef6}
+  .regel p{margin:0 0 8px}
+  .regel h3{margin:10px 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--nav-label)}
+  .regel ul{margin:0 0 8px;padding-left:18px}
+  .regel table{width:100%;border-collapse:collapse;margin:2px 0 8px}
+  .regel td{padding:3px 0;vertical-align:top;border-top:1px solid rgba(255,255,255,.08)}
+  .regel td:last-child{text-align:right;font-weight:750;font-variant-numeric:tabular-nums;white-space:nowrap;padding-left:10px}
+  .regel .klein{display:block;font-size:11.5px;color:var(--nav-label)}
+  .regel .uit{color:var(--nav-label);font-weight:600}
+  .noten{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:4px 18px;font-size:11.5px;color:var(--nav-label);margin:0}
+  .noten p{margin:0}
+  .brein-tip{position:fixed;pointer-events:none;z-index:5;background:var(--brand);color:#fff;font-size:12px;font-weight:600;
+    padding:5px 9px;border-radius:8px;border:1px solid rgba(255,255,255,.18);white-space:nowrap}
+  .brein-tip[hidden]{display:none}
+  @media (max-width:800px){
+    .brein{grid-template-columns:minmax(0,1fr);padding:48px 12px 16px}
+    .brein canvas{max-width:420px}
+    .stil-knop{right:12px;top:12px}
+    .route{margin-top:4px}
+    .regel{padding-left:14px}
+  }
+  /* ===================== einde BREIN ===================== */
+</style>
+</head>
+<body>
+<a class="skip" href="#inhoud">Sla het menu over</a>
+<div class="vg" id="vg">
+  <header class="topbalk">
+    <div class="mark">LEVRAI GROUP<small>VASTGOED</small></div>
+    <button class="menuknop" type="button" aria-expanded="false" aria-controls="menu"><span class="streep" aria-hidden="true"></span>Menu</button>
+  </header>
+  <div class="scrim" aria-hidden="true"></div>
+
+  <aside class="side" id="menu" aria-label="Menu">
+    <div class="side-kop">
+      <div class="merk">
+        <div class="mark">LEVRAI GROUP<small>VASTGOED</small></div>
+        <p class="merk-sub">Pandenselectie&nbsp;·&nbsp;Nederland</p>
+      </div>
+      <button class="sluit-menu" type="button"><span aria-hidden="true">×</span>Sluit menu</button>
+    </div>
+    <nav class="nav" aria-label="Onderdelen van het dashboard"><p class="groep" id="g-overzicht">Overzicht</p><ul aria-labelledby="g-overzicht"><li><a href="index.html#kantoor">Kantoor</a></li><li><a href="index.html#kerncijfers">Kerncijfers</a></li><li><a href="brein.html" aria-current="page">Brein</a></li></ul><p class="groep" id="g-panden">Panden</p><ul aria-labelledby="g-panden"><li><a href="index.html#voorraad">Voorraad</a></li><li><a href="index.html#werklijst">Werklijst</a></li></ul><p class="groep" id="g-selectie">Mijn selectie</p><ul aria-labelledby="g-selectie"><li><a href="index.html#bewaard">Bewaarde panden</a></li></ul></nav>
+    <div class="side-voet">
+      <button class="toggle" id="themeBtn" type="button">◐ Thema</button>
+      <!-- VA-106: uitloggen via serve.py (VA-50), alleen met POST; een gewoon formulier, werkt zonder JavaScript -->
+      <form class="uitlog" method="post" action="/uitloggen"><button class="toggle" type="submit">Uitloggen</button></form>
+    </div>
+  </aside>
+
+  <main class="inhoud" id="inhoud" tabindex="-1">
+    <header class="kop">
+      <div class="kop-rij"><p class="kruimel">Overzicht<span aria-hidden="true">·</span><b>Brein</b></p></div>
+      <h1>Brein</h1>
+      <p class="kop-zin">Van elk verblijfsobject in de BAG tot je werklijst, stap voor stap, met het echte aantal uit de selectie van 1 november 2026.</p>
+    </header>
+    <section class="brein" id="brein" aria-labelledby="t-route">
+      <h2 class="vh" id="t-route">Van BAG naar werklijst</h2>
+      <div class="doek-vak"><canvas id="doek" aria-hidden="true"></canvas></div>
+      <button class="stil-knop" id="stil" type="button" aria-label="Zet het brein stil">Zet stil</button>
+      <ol class="route" id="route" aria-label="Van BAG naar werklijst"><li data-i="0"><button class="stap" type="button" id="stap-vbo" aria-expanded="false" aria-controls="regel-vbo"><span class="nr">1</span><span class="naam">Verblijfsobjecten</span><span class="getal">9.998.456</span><span class="pijl" aria-hidden="true">▶</span><span class="sub">in de BAG van 1 november 2026</span></button><div class="regel" id="regel-vbo" hidden><p>Het systeem leest de hele BAG in, het openbare register van het Kadaster met elk gebouw en elk adres in Nederland, uit het bestand van PDOK van 1 november 2026. Een verblijfsobject is één woning, winkel, kantoor of andere ruimte met een eigen adres.</p></div></li><li data-i="1"><button class="stap" type="button" id="stap-panden" aria-expanded="false" aria-controls="regel-panden"><span class="nr">2</span><span class="naam">Panden</span><span class="getal">6.568.913</span><span class="pijl" aria-hidden="true">▶</span><span class="sub">verblijfsobjecten samengevoegd per gebouw</span></button><div class="regel" id="regel-panden" hidden><p>Verblijfsobjecten in hetzelfde gebouw horen bij één BAG-pand. Het systeem voegt ze per pand samen en telt hoeveel woningen, winkels, kantoren en andere ruimtes erin zitten, hoeveel adressen het pand heeft, de oppervlakte van alles samen en het bouwjaar. Vanaf hier is het pand de eenheid: één pand is één lead.</p></div></li><li data-i="2"><button class="stap" type="button" id="stap-a_e" aria-expanded="false" aria-controls="regel-a_e"><span class="nr">3</span><span class="naam">Categorie A–E</span><span class="getal">441.997</span><span class="pijl" aria-hidden="true">▶</span><span class="sub"><span class="letters"><span><i style="background:var(--s1)"></i><span aria-hidden="true">A 45.359</span><span class="vh">A, Winkel + wonen: 45.359</span></span><span><i style="background:var(--s2)"></i><span aria-hidden="true">B 54.325</span><span class="vh">B, Bedrijf/kantoor + wonen: 54.325</span></span><span><i style="background:var(--s3)"></i><span aria-hidden="true">C 175.135</span><span class="vh">C, Klein wooncomplex: 175.135</span></span><span><i style="background:var(--s4)"></i><span aria-hidden="true">D 151.174</span><span class="vh">D, Groot oud pand: 151.174</span></span><span><i style="background:var(--s5)"></i><span aria-hidden="true">E 135.662</span><span class="vh">E, Afwijkende combinatie: 135.662</span></span></span><span class="noot">Een pand kan in meer dan één categorie vallen. Daarom tellen A tot en met E samen op tot meer dan 441.997.</span></span></button><div class="regel" id="regel-a_e" hidden><p>Een pand gaat door als het in minstens één van vijf categorieën uit de briefing van Levrai valt:</p><ul><li><b>A · Winkel + wonen.</b> Minstens 1 winkel en 1 woning, samen minstens 2 verblijfsobjecten, 150–1.000 m², gebouwd vóór 2000.</li><li><b>B · Bedrijf/kantoor + wonen.</b> Minstens 1 woning en 1 kantoor- of bedrijfsruimte, minstens 2 verblijfsobjecten of adressen, 200–1.500 m², gebouwd vóór 2000. Een ruimte met een overige gebruiksfunctie, vaak een berging, telt alleen mee als het pand geen winkel heeft.</li><li><b>C · Klein wooncomplex.</b> 3 tot en met 15 woningen, 150–1.500 m², gebouwd vóór 2000.</li><li><b>D · Groot oud pand.</b> Gebouwd vóór 1940, minstens 250 m², met 1 tot en met 2 verblijfsobjecten.</li><li><b>E · Afwijkende combinatie.</b> Minstens 400 m² met hoogstens 2 verblijfsobjecten, of minstens 3 adressen met minstens 3 soorten gebruik in één pand (wonen, winkel, kantoor, bedrijf, overig).</li></ul><p>Een pand kan in meer dan één categorie vallen; het telt dan in elke categorie mee, maar het blijft één pand. Grenzen tellen mee.</p><h3>Wat altijd afvalt</h3><p>Sommige panden doen nooit mee, ook niet als ze in een categorie passen:</p><ul><li>panden met de BAG-status ‘Pand gesloopt’, ‘Niet gerealiseerd pand’ of ‘Bouwvergunning verleend’;</li><li>panden groter dan 2.000 m², en panden zonder bekende oppervlakte;</li><li>panden die alleen een of meer van deze gebruiksdoelen hebben: industriefunctie, logiesfunctie, onderwijsfunctie, gezondheidszorgfunctie, bijeenkomstfunctie, celfunctie of sportfunctie;</li><li>grote moderne complexen: 16 of meer verblijfsobjecten en gebouwd in 1990 of later.</li></ul><p>Leegstand sluit niet uit. Een pand dat buiten gebruik is, krijgt juist 4 punten extra (zie Score).</p><p>475.372 panden vallen hierdoor af.</p></div></li><li data-i="3"><button class="stap" type="button" id="stap-geschikt" aria-expanded="false" aria-controls="regel-geschikt"><span class="nr">4</span><span class="naam">Score 8 of hoger</span><span class="getal">263.319</span><span class="pijl" aria-hidden="true">▶</span><span class="sub">panden in A–E met genoeg punten</span></button><div class="regel" id="regel-geschikt" hidden><p>Elk pand in A–E krijgt punten voor wat het kansrijk maakt. Opgeteld is dat de leadscore.</p><table><tr><td>Winkel en woning in één pand</td><td>+5</td></tr><tr><td>Kantoor of bedrijf en woning in één pand<span class="klein">Niet samen met winkel en woning: dan telt alleen die.</span></td><td>+4</td></tr><tr><td>3 tot en met 10 verblijfsobjecten</td><td>+3</td></tr><tr><td>400 m² of meer, met 1 of 2 verblijfsobjecten<span class="klein">Kan niet samen met 3 tot en met 10 verblijfsobjecten.</span></td><td>+3</td></tr><tr><td>Gebouwd vóór 1940</td><td>+3</td></tr><tr><td>200–800 m²</td><td>+3</td></tr><tr><td>3 of meer adressen</td><td>+2</td></tr><tr><td>3 of meer soorten gebruik in één pand</td><td>+2</td></tr><tr><td>Leegstaand: buiten gebruik volgens de BAG</td><td>+4</td></tr><tr><td>In verbouwing volgens de BAG</td><td>+2</td></tr><tr><td>Slecht of geen energielabel (E, F of G)<span class="klein">Staat uit: telt nu niet mee.</span></td><td class="uit">uit</td></tr></table><h3>Aftrek</h3><table><tr><td>Gebouwd in 2000 of later</td><td>−4</td></tr><tr><td>16 of meer verblijfsobjecten</td><td>−5</td></tr></table><p>Een pand komt in aanmerking voor de werklijst bij 8 punten of meer. Grenzen tellen mee.</p><p>Op de kaarten van de werklijst staat de score als index: 26 punten is 100, 8 punten is 31.</p></div></li><li data-i="4"><button class="stap" type="button" id="stap-register" aria-expanded="false" aria-controls="regel-register"><span class="nr">5</span><span class="naam">Nooit twee keer</span><span class="getal"></span><span class="pijl" aria-hidden="true">▶</span><span class="sub">Een geleverd pand komt niet terug</span></button><div class="regel" id="regel-register" hidden><p>Een pand dat op een werklijst is geleverd, komt niet opnieuw op een werklijst, in welk gebied ook. Het register legt per pand vast in welke maand en op welke werklijst het is geleverd.</p></div></li><li data-i="5"><button class="stap" type="button" id="stap-loting" aria-expanded="false" aria-controls="regel-loting"><span class="nr">6</span><span class="naam">Rangorde en loting</span><span class="getal"></span><span class="pijl" aria-hidden="true">▶</span><span class="sub">hoogste score eerst, bij gelijke score de loting van november 2026</span></button><div class="regel" id="regel-loting" hidden><p>De geschikte panden staan op leadscore, de hoogste eerst. Bij gelijke score beslist een loting die voor de hele maand vastligt: wie de werklijst van november 2026 opnieuw maakt, krijgt precies dezelfde volgorde. Elke maand heeft zijn eigen loting, en waar een pand in het land staat, telt daarin niet mee.</p></div></li><li data-i="6"><button class="stap" type="button" id="stap-verdeling" aria-expanded="false" aria-controls="regel-verdeling"><span class="nr">7</span><span class="naam">Verdeling</span><span class="getal"><span aria-hidden="true">450 + 50</span></span><span class="pijl" aria-hidden="true">▶</span><span class="sub"><span class="letters" aria-hidden="true"><span><i style="background:var(--s1)"></i>uit de 25 grootste gemeenten</span><span><i style="background:#fff"></i>elders</span></span><span class="vh">450 uit de 25 grootste gemeenten en 50 elders</span></span></button><div class="regel" id="regel-verdeling" hidden><p>Op de werklijst zijn 450 plaatsen voor panden in de 25 gemeenten met de meeste inwoners (CBS) en 50 voor panden daarbuiten. Elk deel neemt de hoogste scores van heel Nederland. Heeft een deel te weinig geschikte panden, dan vult het andere deel aan.</p></div></li><li data-i="7" class="wl"><button class="stap" type="button" id="stap-werklijst" aria-expanded="false" aria-controls="regel-werklijst"><span class="nr">8</span><span class="naam">Werklijst<span class="vh"> — 500 panden</span></span><span class="getal"></span><span class="pijl" aria-hidden="true">▶</span><span class="sub">november 2026, klaar voor je visuele controle</span></button><div class="regel" id="regel-werklijst" hidden><p>Wat overblijft, is je werklijst van november 2026: de hoogst scorende panden die je nog niet kreeg, klaar voor je visuele controle op de kaart, de luchtfoto en Street View.</p></div></li></ol>
+      <div class="noten"><p>De ringen zijn niet op schaal, de cijfers wel.</p><p>Open een stap om te lezen hoe de regel werkt.</p></div>
+    </section>
+  </main>
+</div>
+<div class="brein-tip" id="tip" aria-hidden="true" hidden></div>
+<script>
+const BREIN = {"stappen": [{"id": "vbo", "tip": "Verblijfsobjecten · 9.998.456"}, {"id": "panden", "tip": "Panden · 6.568.913"}, {"id": "a_e", "tip": "Categorie A–E · 441.997"}, {"id": "geschikt", "tip": "Score 8 of hoger · 263.319"}, {"id": "register", "tip": "Nooit twee keer"}, {"id": "loting", "tip": "Rangorde en loting"}, {"id": "verdeling", "tip": "Verdeling · 450 + 50"}, {"id": "werklijst", "tip": "Werklijst"}], "cats": [{"k": "A", "n": 45359, "tip": "Categorie A · Winkel + wonen · 45.359 panden"}, {"k": "B", "n": 54325, "tip": "Categorie B · Bedrijf/kantoor + wonen · 54.325 panden"}, {"k": "C", "n": 175135, "tip": "Categorie C · Klein wooncomplex · 175.135 panden"}, {"k": "D", "n": 151174, "tip": "Categorie D · Groot oud pand · 151.174 panden"}, {"k": "E", "n": 135662, "tip": "Categorie E · Afwijkende combinatie · 135.662 panden"}], "split": [450, 50], "kern": {"label": "Werklijst", "tip": "Je werklijst: 450 uit de 25 grootste gemeenten, 50 elders"}, "bots": false, "knop": {"knop.stil": "Zet stil", "knop.stil.aria": "Zet het brein stil", "knop.beweeg": "Laat bewegen", "knop.beweeg.aria": "Laat het brein bewegen"}};
+/* ============================ MENU (VA-63, VA-64): alleen de lade; deze pagina heeft één deel ============================ */
+(() => {
+  const vg = document.getElementById("vg");
+  const side = vg.querySelector(".side"), knop = vg.querySelector(".menuknop"), main = vg.querySelector(".inhoud");
+  const mqSmal = matchMedia("(max-width: 800px)");
+  const isOpen = () => vg.classList.contains("open");
+  function openMenu() {
+    vg.classList.add("open"); knop.setAttribute("aria-expanded", "true");
+    main.inert = true; document.body.style.overflow = "hidden";
+    side.querySelector(".nav a[aria-current]").focus();
+  }
+  function sluitMenu(terug) {
+    if (!isOpen()) return;
+    vg.classList.remove("open"); knop.setAttribute("aria-expanded", "false");
+    main.inert = false; document.body.style.overflow = "";
+    if (terug) knop.focus();
+  }
+  mqSmal.addEventListener("change", () => { if (!mqSmal.matches) sluitMenu(false); });
+  requestAnimationFrame(() => requestAnimationFrame(() => vg.classList.add("klaar")));
+  knop.addEventListener("click", () => isOpen() ? sluitMenu(true) : openMenu());
+  vg.querySelector(".sluit-menu").addEventListener("click", () => sluitMenu(true));
+  vg.querySelector(".scrim").addEventListener("click", () => sluitMenu(true));
+  side.addEventListener("keydown", e => {
+    if (e.key !== "Tab" || !isOpen()) return;
+    const f = [...side.querySelectorAll("a[href], button")];
+    if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape" || !isOpen()) return;
+    e.preventDefault(); e.stopPropagation(); sluitMenu(true);
+  }, true);
+})();
+
+/* ============================ BREIN (VA-98, VA-99) ============================
+   Elke ring is één stap van de route, van buiten naar binnen in dezelfde volgorde als de lijst; het nummer staat
+   op twaalf uur. De ringen zijn niet op schaal; binnen een ring wel (A–E en de verdeling). Alle tekst staat al in
+   de HTML of in BREIN; het script tekent alleen. */
+(() => {
+  "use strict";
+  const M = Math, D = document, root = D.documentElement;
+  const vak = D.getElementById("brein"), cv = D.getElementById("doek"), x = cv.getContext("2d");
+  const rm = matchMedia("(prefers-reduced-motion: reduce)");
+  const STAPPEN = BREIN.stappen, N = STAPPEN.length, CATS = BREIN.cats, SPLIT = BREIN.split;
+  // Straal per stap (deel van de halve breedte), buiten naar binnen. Alleen beeld.
+  const STRAAL = {vbo: .93, panden: .80, a_e: .685, geschikt: .575, register: .49, loting: .415, verdeling: .33, werklijst: .17};
+  const R = STAPPEN.map(s => STRAAL[s.id]);
+  const idx = id => STAPPEN.findIndex(s => s.id === id);
+  const I = {vbo: idx("vbo"), panden: idx("panden"), a_e: idx("a_e"), geschikt: idx("geschikt"), register: idx("register"),
+             loting: idx("loting"), verdeling: idx("verdeling"), werklijst: idx("werklijst")};
+  // Hoeveel stippen een ring doorlaat: alleen beeld, geen cijfer.
+  const DOOR = {vbo: .9, panden: .5, a_e: .62, geschikt: .97, register: 1, loting: .9, verdeling: 1, werklijst: 1};
+  const KERN = R[I.werklijst];
+  let W = 0, c = 0, act = -1, hover = -1, klok = 0, raf = 0, last = 0, zicht = true, stil = false, kl = {};
+  const css = n => getComputedStyle(root).getPropertyValue(n).trim();
+  const catTot = CATS.reduce((s, k) => s + k.n, 0) || 1;
+  const catHoek = [];
+  { let a = -M.PI / 2 + .06; for (const k of CATS) { const w = (k.n / catTot) * (2 * M.PI - .3); catHoek.push([a, a + M.max(w - .06, 0)]); a += w; } }
+  const inBoog = (h, [p, q]) => { let t = h; while (t < p) t += 2 * M.PI; while (t > p + 2 * M.PI) t -= 2 * M.PI; return t <= q; };
+
+  function maat() {
+    const b = cv.getBoundingClientRect(), dpr = M.min(2, devicePixelRatio || 1);
+    if (!b.width) return;
+    W = b.width; c = W / 2; cv.width = M.round(W * dpr); cv.height = M.round(W * dpr); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    kl = Object.fromEntries(["--s1", "--s2", "--s3", "--s4", "--s5", "--nav-tekst", "--nav-label", "--brand", "--muted"].map(k => [k, css(k)]));
+    teken();
+  }
+  const alfa = i => act < 0 ? (hover === i ? 1 : .8) : (act === i ? 1 : .3);
+  function boog(r, a0, a1, kleur, a, dik, streep) {
+    x.beginPath(); x.arc(c, c, r, a0, a1); x.globalAlpha = a; x.strokeStyle = kleur; x.lineWidth = dik;
+    x.setLineDash(streep || []); x.stroke(); x.setLineDash([]); x.globalAlpha = 1;
+  }
+  // Stippen lopen van buiten naar de kern; vallen grijs weg of gaan door; krijgen hun kleur bij A–E.
+  const S = [];
+  function nieuw(s) { s.h = M.random() * 2 * M.PI; s.r = .97 + M.random() * .03; s.v = .05 + M.random() * .05; s.k = null; s.weg = 0; s.ring = 0; s.bots = 0; return s; }
+  for (let i = 0; i < 260; i++) {
+    const s = nieuw({}); s.r = KERN + M.random() * (1 - KERN); s.ring = R.findIndex(q => q < s.r); if (s.ring < 0) s.ring = N - 1;
+    if (s.ring > I.a_e) { const j = CATS.findIndex((k, n) => inBoog(s.h, catHoek[n])); s.k = "--s" + ((j < 0 ? 2 : j) + 1); }
+    S.push(s);
+  }
+  function stap(dt) {
+    klok += dt;
+    for (const s of S) {
+      if (s.weg) { s.weg -= dt; if (s.weg <= 0) nieuw(s); continue; }
+      if (s.bots) { s.bots -= dt; s.r += s.v * dt * 1.5; continue; }
+      s.r -= s.v * dt * (1 - s.r * .3);
+      if (s.ring < N - 1 && s.r <= R[s.ring]) {
+        const id = STAPPEN[s.ring].id;
+        if (id === "register" && BREIN.bots && M.random() < .04) { s.bots = .5; continue; }   // een geleverd pand kaatst terug
+        if (M.random() > DOOR[id]) { s.weg = .9; continue; }
+        if (s.ring === I.a_e) { const j = CATS.findIndex((k, n) => inBoog(s.h, catHoek[n])); s.k = "--s" + ((j < 0 ? 2 : j) + 1); }
+        s.ring++;
+      }
+      if (s.r < KERN * .9) nieuw(s);
+    }
+  }
+  function teken() {
+    if (!W) return;
+    x.clearRect(0, 0, W, W);
+    const h = c * .96, licht = kl["--nav-tekst"];
+    STAPPEN.forEach((st, i) => {
+      const r = h * R[i], a = alfa(i);
+      if (st.id === "vbo") {          // een wijd veld van vage stippen
+        x.fillStyle = licht;
+        for (let j = 0; j < 340; j++) { const hk = j * 2.39996 + klok * .02, rr = h * (.86 + (j * 37 % 13) / 100);
+          x.globalAlpha = .18 * a / .8; x.fillRect(c + M.cos(hk) * rr, c + M.sin(hk) * rr, 1.3, 1.3); }
+        x.globalAlpha = 1;
+      } else if (st.id === "panden") boog(r, 0, 2 * M.PI, licht, .55 * a, 1.4, [1.5, 4]);
+      else if (st.id === "a_e") CATS.forEach((k, j) => { if (catHoek[j][1] > catHoek[j][0]) boog(r, catHoek[j][0], catHoek[j][1], kl["--s" + (j + 1)], a, M.max(6, h * .04)); });
+      else if (st.id === "geschikt") { x.lineDashOffset = -klok * 9; boog(r, 0, 2 * M.PI, kl["--s3"], .75 * a, 1.3, [3, 5]); x.lineDashOffset = 0; }
+      else if (st.id === "register") boog(r, -M.PI / 2 + .12, 1.5 * M.PI - .12, "#fff", .5 * a, 1.2);
+      else if (st.id === "loting") {  // korte streepjes, schudden één keer per ronde en liggen dan stil
+        const schud = (klok % 8) < 1.2 ? M.sin(klok * 40) * .03 : 0;
+        x.strokeStyle = "#fff"; x.lineWidth = 1.2; x.globalAlpha = .55 * a;
+        for (let j = 0; j < 60; j++) { const hk = j / 60 * 2 * M.PI + schud * ((j * 7) % 3 - 1);
+          x.beginPath(); x.moveTo(c + M.cos(hk) * (r - 3), c + M.sin(hk) * (r - 3)); x.lineTo(c + M.cos(hk) * (r + 3), c + M.sin(hk) * (r + 3)); x.stroke(); }
+        x.globalAlpha = 1;
+      } else if (st.id === "verdeling" && SPLIT) {   // twee bogen in de verhouding van de werklijst
+        const tot = (SPLIT[0] + SPLIT[1]) || 1, g = SPLIT[0] / tot * (2 * M.PI - .2), a0 = -M.PI / 2 + .05, dik = M.max(4, h * .025);
+        if (SPLIT[0]) boog(r, a0, a0 + g, kl["--s1"], a, dik);
+        if (SPLIT[1]) boog(r, a0 + g + .1, a0 + 2 * M.PI - .05, "#fff", .8 * a, dik);
+      }
+    });
+    for (const s of S) {
+      const r = h * s.r;
+      x.globalAlpha = s.weg ? M.max(0, s.weg) * .35 : .85;
+      x.fillStyle = s.weg ? kl["--muted"] : (s.k ? kl[s.k] : "#fff");
+      x.beginPath(); x.arc(c + M.cos(s.h) * r, c + M.sin(s.h) * r, s.k ? 1.8 : 1.2, 0, 2 * M.PI); x.fill();
+    }
+    x.globalAlpha = 1;
+    // de kern: de werklijst
+    const kr = h * KERN, gl = x.createRadialGradient(c, c, kr * .2, c, c, kr * 1.9);
+    gl.addColorStop(0, "rgba(27,175,122,.55)"); gl.addColorStop(1, "rgba(27,175,122,0)");
+    x.fillStyle = gl; x.beginPath(); x.arc(c, c, kr * 1.9, 0, 2 * M.PI); x.fill();
+    x.fillStyle = kl["--s3"]; x.globalAlpha = act >= 0 && act !== I.werklijst ? .6 : 1;
+    x.beginPath(); x.arc(c, c, kr * (1 + .03 * M.sin(klok * 2.2)), 0, 2 * M.PI); x.fill();
+    x.globalAlpha = 1; x.fillStyle = "#fff"; x.font = `750 ${M.max(11, M.round(kr * .3))}px system-ui,sans-serif`;
+    x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(BREIN.kern.label, c, c);
+    // de stapnummers op twaalf uur
+    x.font = "800 10px system-ui,sans-serif";
+    STAPPEN.forEach((st, i) => { if (i === I.werklijst) return; const y = c - h * R[i];
+      x.globalAlpha = act === i ? 1 : (act < 0 ? .85 : .35);
+      x.fillStyle = kl["--brand"]; x.beginPath(); x.arc(c, y, 8, 0, 2 * M.PI); x.fill();
+      x.fillStyle = act === i ? "#fff" : kl["--nav-label"]; x.fillText(String(i + 1), c, y + .5); });
+    x.globalAlpha = 1;
+  }
+  const loopt = () => !rm.matches && zicht && !D.hidden && !stil;
+  function beeld(ts) { raf = 0; if (!loopt()) return; const dt = last ? M.min(.05, (ts - last) / 1000) : 1 / 60; last = ts; stap(dt); teken(); raf = requestAnimationFrame(beeld); }
+  function start() { if (!raf && loopt()) { last = 0; raf = requestAnimationFrame(beeld); } else teken(); }
+
+  // De route: één stap tegelijk open; zijn ring licht op.
+  const items = [...D.querySelectorAll("#route > li")];
+  function zet(i) {
+    items.forEach((li, j) => { const open = j === i;
+      li.querySelector(".stap").setAttribute("aria-expanded", String(open));
+      li.querySelector(".regel").hidden = !open; li.classList.toggle("actief", open); });
+    act = i; teken();
+  }
+  items.forEach((li, i) => {
+    li.querySelector(".stap").addEventListener("click", () => zet(act === i ? -1 : i));
+    li.addEventListener("pointerenter", () => { hover = i; if (act < 0) teken(); });
+    li.addEventListener("pointerleave", () => { hover = -1; if (act < 0) teken(); });
+    li.addEventListener("focusin", () => { hover = i; if (act < 0) teken(); });
+    li.addEventListener("focusout", () => { hover = -1; if (act < 0) teken(); });
+  });
+  D.addEventListener("keydown", e => {
+    if (e.key !== "Escape" || act < 0) return;
+    const b = items[act].querySelector(".stap"); zet(-1); b.focus();
+  });
+
+  // Wijs een ring aan: de tip noemt de stap en het getal.
+  const tip = D.getElementById("tip");
+  cv.addEventListener("pointermove", e => {
+    const b = cv.getBoundingClientRect(), dx = e.clientX - b.left - c, dy = e.clientY - b.top - c, d = M.hypot(dx, dy) / (c * .96);
+    let i = -1, best = .05;
+    R.forEach((q, j) => { if (j !== I.vbo && M.abs(q - d) < best) { best = M.abs(q - d); i = j; } });
+    if (d < KERN) i = I.werklijst; else if (d > .86 && d < 1.02) i = I.vbo;
+    if (i < 0) { tip.hidden = true; return; }
+    let t = STAPPEN[i].tip;
+    if (i === I.a_e) { const j = CATS.findIndex((k, n) => inBoog(M.atan2(dy, dx), catHoek[n])); if (j >= 0) t = CATS[j].tip; }
+    if (i === I.werklijst) t = BREIN.kern.tip;
+    tip.textContent = t; tip.hidden = false; tip.style.left = e.clientX + 12 + "px"; tip.style.top = e.clientY + 12 + "px";
+  });
+  cv.addEventListener("pointerleave", () => { tip.hidden = true; });
+
+  const knop = D.getElementById("stil"), K = BREIN.knop;
+  knop.addEventListener("click", () => {
+    stil = !stil;
+    knop.textContent = stil ? K["knop.beweeg"] : K["knop.stil"];
+    knop.setAttribute("aria-label", stil ? K["knop.beweeg.aria"] : K["knop.stil.aria"]);
+    start();
+  });
+  D.getElementById("themeBtn").addEventListener("click", () => {
+    const cur = root.getAttribute("data-theme");
+    const dark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.setAttribute("data-theme", dark ? "light" : "dark");
+    maat();
+  });
+  new IntersectionObserver(es => { zicht = es[0].isIntersecting; start(); }).observe(cv);
+  D.addEventListener("visibilitychange", start);
+  rm.addEventListener("change", start);
+  new ResizeObserver(maat).observe(cv);
+  requestAnimationFrame(() => requestAnimationFrame(() => vak.classList.add("klaar")));
+  maat(); start();
+})();
+</script>
+</body>
+</html>
