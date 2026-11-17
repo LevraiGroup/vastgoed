@@ -23,7 +23,7 @@ import test_serve as ts  # noqa: E402
 
 DELFT = bd.DATA / "panden_delft.json"
 NL = bd.DATA / "panden_nederland.json"
-GEBOUWD = bd.BASE / "design" / "brein.html"
+GEBOUWD = bd.OUT.with_name(bd.BREIN_NAAM)
 
 
 class Pagina(HTMLParser):
@@ -181,11 +181,12 @@ class Menu(unittest.TestCase):
         html, p = bouw(cfg_basis())
         self.assertEqual([a["href"] for a in p.menu],
                          ["index.html#kantoor", "index.html#kerncijfers", "brein.html", "index.html#voorraad",
-                          "index.html#werklijst"])
-        self.assertEqual([a.get("aria-current") for a in p.menu], [None, None, "page", None, None])
+                          "index.html#bewaard", "index.html#werklijst"])
+        self.assertEqual([a.get("aria-current") for a in p.menu], [None, None, "page", None, None, None])
         # elk anker bestaat op het dashboard van dezelfde lijst
         from test_dashboard_menu import Pagina as DashPagina, gebouwd
-        ids = DashPagina(gebouwd()).ids + ["werklijst"]   # gebouwd() is Delft; 'werklijst' is de landelijke naam
+        # gebouwd() is Delft; 'werklijst' en 'bewaard' (VA-91) staan alleen op de landelijke pagina
+        ids = DashPagina(gebouwd()).ids + ["werklijst", "bewaard"]
         for a in p.menu:
             if "#" in a["href"]:
                 self.assertIn(a["href"].split("#")[1], ids)

@@ -5,6 +5,7 @@ rekenwerk zit in het script van VA-90. Dat script wordt hier ook echt gedraaid, 
 localStorage en een vaste klok. Zonder Node slaan alleen die tests over; de bronpinnen blijven.
 """
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -65,6 +66,25 @@ class Script(unittest.TestCase):
         self.assertIn('if (r.stand !== "verborgen") continue;', js.replace("!r || ", ""))   # bewaard verloopt nooit
         self.assertIn('SLEUTEL = "levrai-vastgoed-panden", VORM = 1', js)   # dezelfde sleutel en vorm als VA-90
 
+    def test_geen_tweede_datumnotatie(self):
+        # VA-31 (LESSONS, Vera): geen datum- of getalnotatie in het script; de klok (Date.now, new Date) mag wel.
+        js = re.sub(r"//[^\n]*", "", re.sub(r"/\*.*?\*/", "", blok(), flags=re.S))
+        for weg in ("toLocaleString", "toLocaleDateString", "toLocaleTimeString", "Intl.", "toDateString",
+                    "toUTCString", "toFixed", '"nl-NL"'):
+            self.assertNotIn(weg, js)
+        self.assertIn("const MND = PAYLOAD.bewaar.maanden, SP = PAYLOAD.bewaar.nbsp;", js)
+        self.assertEqual(bd.bewaar_blok([])["maanden"], list(bd.MAANDEN))
+        self.assertEqual(bd.bewaar_blok([])["nbsp"], bd.NBSP)
+        p = bd.met_duur_verborgen({}, {})
+        self.assertEqual((p["bewaar"]["maanden"], p["bewaar"]["nbsp"]), (list(bd.MAANDEN), bd.NBSP))
+
+    def test_kopij_van_lumi(self):
+        t = bd.VERBERG_DUUR_TEKST
+        self.assertEqual(t["status.verborgen"],
+                         "{adres} is verborgen tot {datum}. Staat het dan nog op je werklijst, dan zie je het weer.")
+        self.assertEqual(t["label.verborgen"], "Verborgen tot {datum}")
+        self.assertNotIn("wacht op Lumi", Path(bd.__file__).read_text(encoding="utf-8").split("VERBERG_DAGEN = 30")[0][-800:])
+
     def test_kopij_uit_python_en_nederlands(self):
         js = re.sub(r"//[^\n]*", "", re.sub(r"/\*.*?\*/", "", blok(), flags=re.S))
         for t in bd.VERBERG_DUUR_TEKST.values():
@@ -78,9 +98,8 @@ class Script(unittest.TestCase):
 class Gedraaid(unittest.TestCase):
     """Het script van VA-90 in Node: wat staat er na het laden in de opslag, en wat is verborgen."""
 
-    def draai(self, panden, dagen=30, nu=NU, leads=("1", "2", "3", "4")):
-        payload = {"bewaar": {"tekst": bd.BEWAAR_TEKST, "dp": "2026-11-01", "dagen": dagen,
-                              "duur": bd.VERBERG_DUUR_TEKST}}
+    def draai(self, panden, dagen=30, nu=NU, leads=("1", "2", "3", "4"), datum_van=None):
+        payload = {"bewaar": {**bd.bewaar_blok([], dagen), "dp": "2026-11-01"}}
         opslag = {"levrai-vastgoed-panden": json.dumps({"v": 1, "panden": panden})}
         prog = """
 const vm = require("vm"), fs = require("fs");
@@ -99,14 +118,18 @@ const ctx = {
 vm.createContext(ctx);
 vm.runInContext(inv.js + "\\n;this.BW = BW;", ctx);
 const uit = {opslag: JSON.parse(winkel["levrai-vastgoed-panden"]), van: {}};
+if (inv.datum_van) uit.datum = ctx.__datum({sinds: inv.datum_van});
 for (const id of inv.leads) uit.van[id] = ctx.BW.van(id);
 process.stdout.write(JSON.stringify(uit));
 """
         js = blok()
         js = js[js.index("const BW = "):]
+        js = js.replace("return {rij, ververs", "globalThis.__datum = datum; return {rij, ververs", 1)
         r = subprocess.run([NODE, "-e", prog], input=json.dumps({"payload": payload, "opslag": opslag, "nu": nu,
-                                                                  "js": js, "leads": list(leads)}),
-                           capture_output=True, text=True, encoding="utf-8", timeout=60)
+                                                                  "js": js, "leads": list(leads),
+                                                                  "datum_van": datum_van}),
+                           capture_output=True, text=True, encoding="utf-8", timeout=60,
+                           env={**os.environ, "TZ": "Europe/Amsterdam"})
         self.assertEqual(r.returncode, 0, r.stderr)
         return json.loads(r.stdout)
 
@@ -155,6 +178,16 @@ process.stdout.write(JSON.stringify(uit));
         self.assertEqual(uit["van"]["1"], "")
         uit = self.draai({"1": self.rec("verborgen", self.iso(NU - 8 * DAG))}, dagen=30)
         self.assertEqual(uit["van"]["1"], "verborgen")
+
+    def test_datum_is_die_van_nl(self):
+        # {datum} is de korte datum van _nl() ("16 dec 2026", harde spaties), in de tijdzone van de gebruiker.
+        from datetime import date
+        uit = self.draai({}, datum_van="2026-11-16T10:00:00.000Z")
+        self.assertEqual(uit["datum"], bd._nl(date(2026, 12, 16)))
+        self.assertEqual(uit["datum"], "16\u00a0dec\u00a02026")
+        # 23:30 UTC is na middernacht in Amsterdam: de dag van de gebruiker telt.
+        self.assertEqual(self.draai({}, datum_van="2026-11-16T23:30:00.000Z")["datum"], bd._nl(date(2026, 12, 17)))
+        self.assertEqual(self.draai({}, datum_van="2026-12-05T12:00:00.000Z")["datum"], bd._nl(date(2027, 1, 4)))
 
     def test_pand_buiten_de_lijst_verloopt_ook(self):
         uit = self.draai({"99": self.rec("verborgen", self.iso(NU - 31 * DAG)),
