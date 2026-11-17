@@ -5933,7 +5933,8 @@ def render(payload: dict) -> str:
         html = html.replace("__KOP_" + plek.upper().replace(".", "_") + "__", escape(tekst))
     # De waarschuwingen van de planning zijn voor wie bouwt, niet voor de pagina.
     payload = {k: v for k, v in payload.items() if k != "planning_waarschuwingen"}
-    return html.replace("__PAYLOAD__", json.dumps(payload, ensure_ascii=False))
+    # Zonder spaties na , en : (compact): dezelfde data, de pagina blijft onder 1 MB (VA-39 crit. 5).
+    return html.replace("__PAYLOAD__", json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
 
 
 def main() -> int:
