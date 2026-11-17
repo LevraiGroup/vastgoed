@@ -172,3 +172,6 @@ struck through with the reason, never deleted.
   errors included.** On Railway the client address is the last `X-Real-IP` line, never
   `X-Forwarded-For`, and only five wrong logins after the first deploy prove it. *(2026-11-13, Vera,
   VA-50)*
+- **A CDP `Input.dispatchKeyEvent` Enter does not press a focused `<button>` unless the keyDown carries
+  `text: "\r"` (Space needs `text: " "`).** Without it the key test reads "Enter does nothing" on a
+  page that works. *(2026-11-17, Ada, VA-99)*

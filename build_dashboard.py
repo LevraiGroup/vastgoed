@@ -27,7 +27,7 @@ import kaart_nl
 import nederland
 import snapshots
 from gebieden import resolve, slug
-from selectie import load_config
+from selectie import load_config, naar_100
 
 BASE = Path(__file__).parent
 DATA = BASE / "data"
@@ -1505,7 +1505,7 @@ def bouw_payload_landelijk(cfg: dict) -> dict:
 # (VA-39, menu_voor()); Koppelingen (VA-56/58) komt er pas bij als zijn verhaal Done is.
 MENU = [
     {"groep": "Overzicht", "id": "g-overzicht",
-     "items": [("kantoor", "Kantoor"), ("kerncijfers", "Kerncijfers")]},
+     "items": [("kantoor", "Kantoor"), ("kerncijfers", "Kerncijfers"), ("brein", "Brein")]},
     {"groep": "Panden", "id": "g-panden",
      "items": [("voorraad", "Voorraad"), ("proefresultaat", "Proefresultaat")]},
 ]
@@ -1558,8 +1558,12 @@ def menu_voor(lijst: str) -> list[dict]:
                            for doel, naam in g["items"]]) for g in MENU]
 
 
-def menu_html(lijst: str = "proefresultaat") -> str:
-    """De groepen en items van de zijbalk. Het eerste item is actief tot het script het zet."""
+def menu_html(lijst: str = "proefresultaat", hier: str | None = None) -> str:
+    """
+    De groepen en items van de zijbalk. Op het dashboard is het eerste item actief tot het script het zet; een item
+    uit APARTE_PAGINAS (Brein, VA-98) opent zijn eigen bestand. Op zo'n pagina ('hier') wijzen de andere items
+    terug naar hun deel van index.html, en draagt het eigen item aria-current="page".
+    """
     menu = menu_voor(lijst)
     eerste = menu[0]["items"][0][0]
     uit = []
@@ -1567,8 +1571,14 @@ def menu_html(lijst: str = "proefresultaat") -> str:
         uit.append(f'<p class="groep" id="{g["id"]}">{escape(g["groep"])}</p>')
         items = []
         for doel, naam in g["items"]:
-            actief = ' aria-current="location"' if doel == eerste else ""
-            items.append(f'<li><a href="#{doel}" data-doel="{doel}"{actief}>{escape(naam)}</a></li>')
+            if doel in APARTE_PAGINAS:
+                actief = ' aria-current="page"' if doel == hier else ""
+                items.append(f'<li><a href="{APARTE_PAGINAS[doel]}"{actief}>{escape(naam)}</a></li>')
+            elif hier is not None:
+                items.append(f'<li><a href="index.html#{doel}">{escape(naam)}</a></li>')
+            else:
+                actief = ' aria-current="location"' if doel == eerste else ""
+                items.append(f'<li><a href="#{doel}" data-doel="{doel}"{actief}>{escape(naam)}</a></li>')
         uit.append(f'<ul aria-labelledby="{g["id"]}">{"".join(items)}</ul>')
     return "".join(uit)
 
@@ -4731,6 +4741,681 @@ function kantoorStart(root, data, opties = {}) {
 """
 
 
+# --------------------------------------------------------------- brein (VA-98, VA-99)
+# Een eigen pagina, design/brein.html: het selectiebrein groot, en de route van de hele BAG tot de werklijst met
+# het echte aantal bij elke stap; elke stap opent tot zijn regel (VA-99). Ontwerp en kopij van Lumi
+# (copy-va98-99.md, brein-mockup.html, 2026-11-16), uitspraken van Nova in BACKLOG.md. Python maakt elke regel en
+# elk getal af; het script tekent alleen (les van VA-31). De aantallen komen uit hetzelfde kantoorblok als het
+# dashboard, dus ze zijn gelijk aan die van het dashboard voor dezelfde bouw.
+BREIN_OUT = BASE / "design" / "brein.html"
+APARTE_PAGINAS = {"brein": "brein.html"}   # menu-items die een eigen bestand openen, geen deel van index.html
+
+# Tot VA-104 staan deze voorwaarden als getal in selectie.scoor() en categoriseer(), niet in config.yaml.
+# De pagina leest ze uit deze ene tabel; tests/test_brein.py houdt elke waarde tegen de code (VA-99 crit. 3).
+SCORE_GRENZEN = {
+    "vbo_min": 3, "vbo_max": 10,           # vbo_3_tot_10: 3 <= aantal_vbo <= 10
+    "bouwjaar_voor": 1940,                 # bouwjaar_voor_1940: 0 < bouwjaar < 1940
+    "opp_min": 200, "opp_max": 800,        # opp_200_800: 200 <= oppervlakte <= 800
+    "adressen_min": 3,                     # min_3_adressen: aantal_adressen >= 3
+    "groot_opp": 400, "groot_vbo_max": 2,  # groot_opp_1_2_eenheden: oppervlakte >= 400 en aantal_vbo <= 2
+    "functiegroepen_min": 3,               # opvallende_functiecombinatie, en categorie E: >= 3 soorten gebruik
+}
+
+BREIN_TEKST = {
+    "pagina.titel": "Levrai · Pandenselectie — Brein",
+    "kruimel.groep": "Overzicht",
+    "kop.titel": "Brein",
+    "kop.zin": "Van elk verblijfsobject in de BAG tot je werklijst, stap voor stap, met het echte aantal uit de "
+               "selectie van {datum}.",
+    "route.label": "Van BAG naar werklijst",
+    "noot.schaal": "De ringen zijn niet op schaal, de cijfers wel.",
+    "noot.open": "Open een stap om te lezen hoe de regel werkt.",
+    "knop.stil": "Zet stil", "knop.stil.aria": "Zet het brein stil",
+    "knop.beweeg": "Laat bewegen", "knop.beweeg.aria": "Laat het brein bewegen",
+    "tip.ring": "{naam} · {getal}",
+    # de stappen: naam en regel eronder
+    "vbo.naam": "Verblijfsobjecten",
+    "vbo.sub": "in de BAG van {datum}",
+    "vbo.sub.gebied": "in {gebied}, uit de BAG van {datum}",
+    "panden.naam": "Panden",
+    "panden.sub": "verblijfsobjecten samengevoegd per gebouw",
+    "a_e.naam": "Categorie A–E",
+    "a_e.letter": "{k} {n}",
+    "a_e.letter.sr": "{k}, {naam}: {n}",
+    "a_e.noot": "Een pand kan in meer dan één categorie vallen. Daarom tellen A tot en met E samen op tot meer dan "
+                "{a_e}.",
+    "geschikt.naam": "Score {drempel} of hoger",
+    "geschikt.sub": "panden in A–E met genoeg punten",
+    "register.naam": "Nooit twee keer",
+    "register.sub": "Een geleverd pand komt niet terug",
+    "loting.naam": "Rangorde en loting",
+    "loting.sub": "hoogste score eerst, bij gelijke score de loting van {maand}",
+    "verdeling.naam": "Verdeling",
+    "verdeling.getal": "{n_groot} + {n_rest}",
+    "verdeling.groot": "uit de {aantal} grootste gemeenten",
+    "verdeling.rest": "elders",
+    "verdeling.sr": "{n_groot} uit de {aantal} grootste gemeenten en {n_rest} elders",
+    "werklijst.naam": "Werklijst",
+    "werklijst.sr": " — {werklijst} panden",
+    "werklijst.sub": "{maand}, klaar voor je visuele controle",
+    # VA-99: de regels
+    "regel.vbo": "Het systeem leest de hele BAG in, het openbare register van het Kadaster met elk gebouw en elk "
+                 "adres in Nederland, uit het bestand van PDOK van {datum}. Een verblijfsobject is één woning, "
+                 "winkel, kantoor of andere ruimte met een eigen adres.",
+    "regel.vbo.gebied": "Het systeem haalt alle verblijfsobjecten van {gebied} op uit de BAG, het openbare register "
+                        "van het Kadaster, via de open dienst van PDOK. Deze ophaling is van {datum}.",
+    "regel.panden": "Verblijfsobjecten in hetzelfde gebouw horen bij één BAG-pand. Het systeem voegt ze per pand "
+                    "samen en telt hoeveel woningen, winkels, kantoren en andere ruimtes erin zitten, hoeveel "
+                    "adressen het pand heeft, de oppervlakte van alles samen en het bouwjaar. Vanaf hier is het pand "
+                    "de eenheid: één pand is één lead.",
+    "regel.a_e": "Een pand gaat door als het in minstens één van vijf categorieën uit de briefing van Levrai valt:",
+    "cat.A": "Minstens {min_winkel} winkel en {min_woon} woning, samen minstens {min_vbo} verblijfsobjecten, "
+             "{opp_min}–{opp_max} m², gebouwd vóór {bouwjaar_voor}.",
+    "cat.B": "Minstens {min_woon} woning en {min_overig_bedrijfsmatig} kantoor- of bedrijfsruimte, minstens "
+             "{min_vbo_of_adressen} verblijfsobjecten of adressen, {opp_min}–{opp_max} m², gebouwd vóór "
+             "{bouwjaar_voor}. Een ruimte met een overige gebruiksfunctie, vaak een berging, telt alleen mee als het "
+             "pand geen winkel heeft.",
+    "cat.C": "{woon_vbo_min} tot en met {woon_vbo_max} woningen, {opp_min}–{opp_max} m², gebouwd vóór "
+             "{bouwjaar_voor}.",
+    "cat.D": "Gebouwd vóór {bouwjaar_voor}, minstens {opp_min} m², met {vbo_min} tot en met {vbo_max} "
+             "verblijfsobjecten.",
+    "cat.E": "Minstens {groot_opp_weinig_eenheden_opp} m² met hoogstens {groot_opp_weinig_eenheden_vbo} "
+             "verblijfsobjecten, of minstens {min_adressen} adressen met minstens {functiegroepen_min} soorten "
+             "gebruik in één pand (wonen, winkel, kantoor, bedrijf, overig).",
+    "cat.noot": "Een pand kan in meer dan één categorie vallen; het telt dan in elke categorie mee, maar het blijft "
+                "één pand.",
+    "grenzen": "Grenzen tellen mee.",
+    "uit.kop": "Wat altijd afvalt",
+    "uit.intro": "Sommige panden doen nooit mee, ook niet als ze in een categorie passen:",
+    "uit.status": "panden met de BAG-status {statussen};",
+    "uit.opp": "panden groter dan {opp_groter_dan} m², en panden zonder bekende oppervlakte;",
+    "uit.doel": "panden die alleen een of meer van deze gebruiksdoelen hebben: {doelen};",
+    "uit.complex": "grote moderne complexen: {modern_complex_vbo_min} of meer verblijfsobjecten en gebouwd in "
+                   "{modern_complex_bouwjaar_vanaf} of later.",
+    "uit.leegstand": "Leegstand sluit niet uit. Een pand dat buiten gebruik is, krijgt juist {buiten_gebruik_bag} "
+                     "punten extra (zie Score).",
+    "uit.aantal": "{uitgesloten} panden vallen hierdoor af.",
+    "regel.score": "Elk pand in A–E krijgt punten voor wat het kansrijk maakt. Opgeteld is dat de leadscore.",
+    "score.winkel_plus_wonen": "Winkel en woning in één pand",
+    "score.bedrijf_kantoor_plus_wonen": "Kantoor of bedrijf en woning in één pand",
+    "score.bedrijf_kantoor_plus_wonen.noot": "Niet samen met winkel en woning: dan telt alleen die.",
+    "score.vbo_3_tot_10": "{vbo_min} tot en met {vbo_max} verblijfsobjecten",
+    "score.groot_opp_1_2_eenheden": "{groot_opp} m² of meer, met 1 of {groot_vbo_max} verblijfsobjecten",
+    "score.groot_opp_1_2_eenheden.noot": "Kan niet samen met {vbo_min} tot en met {vbo_max} verblijfsobjecten.",
+    "score.bouwjaar_voor_1940": "Gebouwd vóór {bouwjaar_voor}",
+    "score.opp_200_800": "{opp_min}–{opp_max} m²",
+    "score.min_3_adressen": "{adressen_min} of meer adressen",
+    "score.opvallende_functiecombinatie": "{functiegroepen_min} of meer soorten gebruik in één pand",
+    "score.buiten_gebruik_bag": "Leegstaand: buiten gebruik volgens de BAG",
+    "score.verbouwing_bag": "In verbouwing volgens de BAG",
+    "score.slecht_of_ontbrekend_energielabel": "Slecht of geen energielabel ({labels})",
+    "score.uit": "uit",
+    "score.uit.noot": "Staat uit: telt nu niet mee.",
+    "score.aftrek": "Aftrek",
+    "score.recent_gebouwd_of_vernieuwd": "Gebouwd in {bouwjaar_vanaf} of later",
+    "score.groot_appartementencomplex": "{modern_complex_vbo_min} of meer verblijfsobjecten",
+    "score.drempel": "Een pand komt in aanmerking voor de werklijst bij {drempel} punten of meer.",
+    "score.index": "Op de kaarten van de werklijst staat de score als index: {schaal_max} punten is 100, {drempel} "
+                   "punten is {drempel_index}.",
+    "regel.register": "Een pand dat op een werklijst is geleverd, komt niet opnieuw op een werklijst, in welk gebied "
+                      "ook. Het register legt per pand vast in welke maand en op welke werklijst het is geleverd.",
+    "regel.loting": "De geschikte panden staan op leadscore, de hoogste eerst. Bij gelijke score beslist een loting "
+                    "die voor de hele maand vastligt: wie de werklijst van {maand} opnieuw maakt, krijgt precies "
+                    "dezelfde volgorde. Elke maand heeft zijn eigen loting, en waar een pand in het land staat, telt "
+                    "daarin niet mee.",
+    # Nova, uitspraak Q1 (VA-99 crit. 4): geen zin noemt het totaal van de werklijst; de plaatsen staan als de twee
+    # delen. Lumi's opening "De werklijst heeft plaats voor {werklijst_max} panden" is daarom herschreven (Ada).
+    "regel.verdeling": "Op de werklijst zijn {plaatsen_groot} plaatsen voor panden in de {aantal} gemeenten met de "
+                       "meeste inwoners (CBS) en {plaatsen_rest} voor panden daarbuiten. Elk deel neemt de hoogste "
+                       "scores van heel Nederland. Heeft een deel te weinig geschikte panden, dan vult het andere "
+                       "deel aan.",
+    "regel.werklijst": "Wat overblijft, is je werklijst van {maand}: de hoogst scorende panden die je nog niet kreeg, "
+                       "klaar voor je visuele controle op de kaart, de luchtfoto en Street View.",
+    "regel.werklijst.gebied": "Wat overblijft, is je werklijst van {maand}: de hoogst scorende panden van {gebied} "
+                              "die je nog niet kreeg, klaar voor je visuele controle op de kaart, de luchtfoto en "
+                              "Street View.",
+}
+# De signalen in Lumi's volgorde, dan de aftrek. Sleutels van config.yaml 'score'.
+BREIN_SIGNALEN = ("winkel_plus_wonen", "bedrijf_kantoor_plus_wonen", "vbo_3_tot_10", "groot_opp_1_2_eenheden",
+                  "bouwjaar_voor_1940", "opp_200_800", "min_3_adressen", "opvallende_functiecombinatie",
+                  "buiten_gebruik_bag", "verbouwing_bag", "slecht_of_ontbrekend_energielabel")
+BREIN_AFTREK = ("recent_gebouwd_of_vernieuwd", "groot_appartementencomplex")
+CATEGORIE_SLEUTEL = {"A": "A_winkel_wonen", "B": "B_bedrijf_kantoor_wonen", "C": "C_klein_wooncomplex",
+                     "D": "D_groot_oud_pand", "E": "E_afwijkend"}
+MIN = "−"   # het minteken van Lumi, geen streepje
+
+
+def _of(items: list) -> str:
+    """'a, b of c' (één item: alleen dat; geen: leeg)."""
+    items = [str(i) for i in items]
+    if len(items) < 2:
+        return "".join(items)
+    return ", ".join(items[:-1]) + " of " + items[-1]
+
+
+def _waarde(sleutel: str, v):
+    """Een jaar blijft een jaar (2000, VA-69); elk ander getal krijgt de punt van het dashboard (1.000)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return v
+    return str(v) if "bouwjaar" in sleutel else nl_getal(v)
+
+
+def _m2(tekst: str) -> str:
+    """'150–1.000 m²' breekt niet tussen getal en eenheid."""
+    return tekst.replace(" m²", NBSP + "m²")
+
+
+def _punten(w: int) -> str:
+    return f"+{nl_getal(w)}" if w >= 0 else f"{MIN}{nl_getal(-w)}"
+
+
+def brein_maand(cfg: dict, payload: dict) -> tuple[str | None, dict]:
+    """
+    De maand van de werklijst ('JJJJ-MM') en de landelijke totalen (leeg voor een gebied). Nederland: uit
+    panden_nederland.json, het bestand waar het dashboard zijn cijfers uit haalt; een gebied: uit de naam van de
+    nieuwste output/werklijst_<gebied>_<JJJJ-MM>.csv.
+    """
+    if nederland.is_nederland(cfg):
+        gelezen, _ = lees_landelijk(DATA / f"panden_{nederland.SLUG}.json")
+        t = (gelezen or {}).get("totalen") or {}
+        return t.get("maand"), t
+    return werklijst_maand(slug(payload["gebied"])), {}
+
+
+def brein_blok(payload: dict, cfg: dict, maand: str | None, totalen: dict | None = None) -> dict:
+    """
+    Alles wat brein.html toont, af: per stap naam, getal, regel eronder, schermlezertekst en de uitleg van VA-99
+    als HTML; voor het canvas de getallen en tips. De aantallen uit payload['kantoor'], dezelfde als op het
+    dashboard; de regels uit config.yaml en SCORE_GRENZEN. Onbekend is 'onbekend', nooit een verzonnen getal.
+    """
+    T = BREIN_TEKST
+    t = totalen or {}
+    k = payload.get("kantoor") or {}
+    sel, ing = k.get("selectie") or {}, k.get("ingest") or {}
+    landelijk = bool(sel.get("landelijk"))
+    gebied = payload["gebied"]
+    bron = payload.get("bron")
+    datum = nl_datum_voluit(bron[0].get("ophaaldatum")) if bron and bron[0].get("ophaaldatum") else LEEG
+    maand_v = maand_voluit(maand) if maand else LEEG
+    drempel = sel.get("drempel")
+    geschikt = sel.get("geschikt") if landelijk else sel.get("werklijst")
+    per_cat = sel.get("categorieen") or {}
+    a_e = sel.get("a_e")
+    cfg_u, cfg_s = cfg["uitsluitingen"], cfg["score"]
+
+    def stap(sid: str, naam: str, getal: str, sub: str, regel: str, sr: str = "", getal_sr: bool = False) -> dict:
+        return {"id": sid, "naam": naam, "getal": getal, "sub": sub, "sr": sr, "regel": regel, "getal_sr": getal_sr}
+
+    def p(tekst: str) -> str:
+        return f"<p>{escape(tekst)}</p>"
+
+    # 1 en 2
+    stappen = [
+        stap("vbo", T["vbo.naam"], nl_getal(ing.get("vbo")),
+             escape((T["vbo.sub"] if landelijk else T["vbo.sub.gebied"]).format(datum=datum, gebied=gebied)),
+             p((T["regel.vbo"] if landelijk else T["regel.vbo.gebied"]).format(datum=datum, gebied=gebied))),
+        stap("panden", T["panden.naam"], nl_getal(sel.get("panden")), escape(T["panden.sub"]), p(T["regel.panden"])),
+    ]
+
+    # 3 categorie A–E, met wat altijd afvalt
+    letters = []
+    for c in "ABCDE":
+        n = nl_getal(per_cat.get(c)) if per_cat else LEEG
+        letters.append(f'<span><i style="background:{CATEGORIE_KLEUR[c]}"></i>'
+                       f'<span aria-hidden="true">{escape(T["a_e.letter"].format(k=c, n=n))}</span>'
+                       f'<span class="vh">{escape(T["a_e.letter.sr"].format(k=c, naam=CATEGORIE_NAAM[c], n=n))}</span>'
+                       '</span>')
+    sub = f'<span class="letters">{"".join(letters)}</span>'
+    if per_cat and a_e is not None and sum(per_cat.get(c) or 0 for c in "ABCDE") > a_e:
+        sub += f'<span class="noot">{escape(T["a_e.noot"].format(a_e=nl_getal(a_e)))}</span>'
+    cat_items = []
+    for c in "ABCDE":
+        w = {s: _waarde(s, v) for s, v in cfg["categorieen"][CATEGORIE_SLEUTEL[c]].items()}
+        if c == "E":
+            w["functiegroepen_min"] = nl_getal(SCORE_GRENZEN["functiegroepen_min"])
+        cat_items.append(f"<li><b>{escape(c)} · {escape(CATEGORIE_NAAM[c])}.</b> "
+                         f"{escape(_m2(T['cat.' + c].format(**w)))}</li>")
+    uit = [T["uit.status"].format(statussen=_of([f"‘{s}’" for s in cfg_u["status_uitsluiten"]])),
+           _m2(T["uit.opp"].format(opp_groter_dan=nl_getal(cfg_u["opp_groter_dan"]))),
+           T["uit.doel"].format(doelen=_of(cfg_u["enkel_gebruiksdoel_uitsluiten"])),
+           T["uit.complex"].format(modern_complex_vbo_min=nl_getal(cfg_u["modern_complex_vbo_min"]),
+                                   modern_complex_bouwjaar_vanaf=cfg_u["modern_complex_bouwjaar_vanaf"])]
+    regel = (p(T["regel.a_e"]) + f'<ul>{"".join(cat_items)}</ul>' + p(T["cat.noot"] + " " + T["grenzen"])
+             + f'<h3>{escape(T["uit.kop"])}</h3>' + p(T["uit.intro"])
+             + "<ul>" + "".join(f"<li>{escape(x)}</li>" for x in uit) + "</ul>"
+             + p(T["uit.leegstand"].format(buiten_gebruik_bag=nl_getal(cfg_s["buiten_gebruik_bag"]))))
+    if t.get("uitgesloten") is not None:
+        regel += p(T["uit.aantal"].format(uitgesloten=nl_getal(t["uitgesloten"])))
+    stappen.append(stap("a_e", T["a_e.naam"], nl_getal(a_e), sub, regel))
+
+    # 4 score ≥ drempel
+    el = (cfg.get("bronnen") or {}).get("energielabel") or {}
+    woorden = {**{s: nl_getal(v) for s, v in SCORE_GRENZEN.items()},
+               "bouwjaar_voor": str(SCORE_GRENZEN["bouwjaar_voor"]),
+               "labels": _of([str(x).upper() for x in el.get("slechte_labels") or []]) or LEEG,
+               "bouwjaar_vanaf": str(cfg_u["bouwjaar_vanaf"]),
+               "modern_complex_vbo_min": nl_getal(cfg_u["modern_complex_vbo_min"])}
+
+    def rij(sleutel: str, punten: str, noot: str = "", uit_: bool = False) -> str:
+        label = escape(_m2(T["score." + sleutel].format(**woorden)))
+        if noot:
+            label += f'<span class="klein">{escape(noot)}</span>'
+        klasse = ' class="uit"' if uit_ else ""
+        return f"<tr><td>{label}</td><td{klasse}>{escape(punten)}</td></tr>"
+
+    rijen = []
+    for sleutel in BREIN_SIGNALEN:
+        if sleutel == "slecht_of_ontbrekend_energielabel" and el.get("actief") is not True:
+            rijen.append(rij(sleutel, T["score.uit"], T["score.uit.noot"], uit_=True))   # Lumi: getoond als uit
+            continue
+        rijen.append(rij(sleutel, _punten(cfg_s[sleutel]), T.get(f"score.{sleutel}.noot", "").format(**woorden)))
+    aftrek = [rij(a, _punten(cfg_s[a])) for a in BREIN_AFTREK]
+    d_cfg = cfg["drempels"]["score_min_voor_werklijst"]
+    regel = (p(T["regel.score"]) + f'<table>{"".join(rijen)}</table>'
+             + f'<h3>{escape(T["score.aftrek"])}</h3><table>{"".join(aftrek)}</table>'
+             + p(T["score.drempel"].format(drempel=nl_getal(d_cfg)) + " " + T["grenzen"])
+             + p(T["score.index"].format(schaal_max=nl_getal(cfg_s["schaal_max"]), drempel=nl_getal(d_cfg),
+                                         drempel_index=nl_getal(naar_100(d_cfg, cfg)))))
+    stappen.append(stap("geschikt", T["geschikt.naam"].format(drempel=nl_getal(drempel)), nl_getal(geschikt),
+                        escape(T["geschikt.sub"]), regel))
+
+    # 5 nooit twee keer: een getal alleen als de run het telde (VA-103), nooit de omvang van het register (Nova Q3)
+    al = t.get("al_geleverd")
+    stappen.append(stap("register", T["register.naam"], nl_getal(al) if al is not None else "",
+                        escape(T["register.sub"]), p(T["regel.register"])))
+    # 6 rangorde en loting
+    stappen.append(stap("loting", T["loting.naam"], "", escape(T["loting.sub"].format(maand=maand_v)),
+                        p(T["regel.loting"].format(maand=maand_v))))
+    # 7 verdeling, alleen voor Nederland
+    split = None
+    if landelijk:
+        n_groot, n_rest = sel.get("werklijst_groot"), sel.get("werklijst_elders")
+        aantal = nl_getal(sel.get("aantal_groot"))
+        _, plaatsen_groot, plaatsen_rest = nederland.aantallen(cfg)
+        w = {"n_groot": nl_getal(n_groot), "n_rest": nl_getal(n_rest), "aantal": aantal}
+        sub = (f'<span class="letters" aria-hidden="true"><span><i style="background:var(--s1)"></i>'
+               f'{escape(T["verdeling.groot"].format(**w))}</span><span><i style="background:#fff"></i>'
+               f'{escape(T["verdeling.rest"])}</span></span>'
+               f'<span class="vh">{escape(T["verdeling.sr"].format(**w))}</span>')
+        stappen.append(stap("verdeling", T["verdeling.naam"], T["verdeling.getal"].format(**w), sub,
+                            p(T["regel.verdeling"].format(plaatsen_groot=nl_getal(plaatsen_groot),
+                                                          plaatsen_rest=nl_getal(plaatsen_rest), aantal=aantal)),
+                            getal_sr=True))
+        split = [n_groot or 0, n_rest or 0]
+    # 8 werklijst: alleen de naam (Ayman, Nova Q1); de schermlezer hoort het aantal, zoals in de band (0b1d010)
+    wl = sel.get("werklijst") if landelijk else None
+    stappen.append(stap("werklijst", T["werklijst.naam"], "", escape(T["werklijst.sub"].format(maand=maand_v)),
+                        p((T["regel.werklijst"] if landelijk else T["regel.werklijst.gebied"])
+                          .format(maand=maand_v, gebied=gebied)),
+                        sr=T["werklijst.sr"].format(werklijst=nl_getal(wl)) if wl is not None else ""))
+    for nr, st in enumerate(stappen, 1):
+        st["nr"] = str(nr)
+        st["tip"] = T["tip.ring"].format(naam=st["naam"], getal=st["getal"]) if st["getal"] else st["naam"]
+
+    if split:
+        kern = KAART_TEKST["kern.tip"].format(n_groot=nl_getal(split[0]), n_rest=nl_getal(split[1]),
+                                              aantal=nl_getal(sel.get("aantal_groot")))
+    else:
+        kern = T["werklijst.naam"]
+    cats = [{"k": c, "n": per_cat.get(c) or 0,
+             "tip": KAART_TEKST["cat.tip"].format(k=c, naam=CATEGORIE_NAAM[c], n=nl_getal(per_cat.get(c)))}
+            for c in "ABCDE"]
+    return {"stappen": stappen, "cats": cats, "split": split, "kern": {"label": T["werklijst.naam"], "tip": kern},
+            "bots": bool(al), "kop_zin": T["kop.zin"].format(datum=datum), "gebied": gebied}
+
+
+def _sjabloon_stuk(begin: str, eind: str) -> str:
+    """Een stuk van het dashboard-sjabloon (stijl of zijbalk), zodat de Brein-pagina er precies zo uitziet."""
+    i = TEMPLATE.index(begin)
+    return TEMPLATE[i:TEMPLATE.index(eind, i)]
+
+
+def brein_html(b: dict, lijst: str = "proefresultaat") -> str:
+    """De pagina design/brein.html uit brein_blok(); de stijl en de zijbalk komen uit het dashboard-sjabloon."""
+    T = BREIN_TEKST
+    stijl = (_sjabloon_stuk("  :root{\n    color-scheme: light;", "  /* ===================== einde MENU-blok")
+             + _sjabloon_stuk("  /* ---- MENU smal", "  /* ===================== PAND OPENEN"))
+    zijbalk = (_sjabloon_stuk('<a class="skip"', "  <main ")
+               .replace("__MENU__", menu_html(lijst, hier="brein")).replace("__LABEL__", escape(b["gebied"])))
+    items = []
+    for i, st in enumerate(b["stappen"]):
+        getal = escape(st["getal"])
+        if st["getal_sr"]:
+            getal = f'<span aria-hidden="true">{getal}</span>'
+        naam = escape(st["naam"]) + (f'<span class="vh">{escape(st["sr"])}</span>' if st["sr"] else "")
+        klasse = ' class="wl"' if st["id"] == "werklijst" else ""
+        items.append(
+            f'<li data-i="{i}"{klasse}><button class="stap" type="button" id="stap-{st["id"]}" aria-expanded="false" '
+            f'aria-controls="regel-{st["id"]}"><span class="nr">{st["nr"]}</span><span class="naam">{naam}</span>'
+            f'<span class="getal">{getal}</span><span class="pijl" aria-hidden="true">▶</span>'
+            f'<span class="sub">{st["sub"]}</span></button>'
+            f'<div class="regel" id="regel-{st["id"]}" hidden>{st["regel"]}</div></li>')
+    data = {"stappen": [{"id": s["id"], "tip": s["tip"]} for s in b["stappen"]], "cats": b["cats"],
+            "split": b["split"], "kern": b["kern"], "bots": b["bots"],
+            "knop": {k: T[k] for k in ("knop.stil", "knop.stil.aria", "knop.beweeg", "knop.beweeg.aria")}}
+    return (BREIN_TEMPLATE
+            .replace("__TITEL__", escape(T["pagina.titel"]))
+            .replace("__STIJL__", stijl)
+            .replace("__ZIJBALK__", zijbalk)
+            .replace("__KRUIMEL_GROEP__", escape(T["kruimel.groep"]))
+            .replace("__KOP_TITEL__", escape(T["kop.titel"]))
+            .replace("__KOP_ZIN__", escape(b["kop_zin"]))
+            .replace("__ROUTE_LABEL__", escape(T["route.label"]))
+            .replace("__KNOP_STIL__", escape(T["knop.stil"]))
+            .replace("__KNOP_STIL_ARIA__", escape(T["knop.stil.aria"]))
+            .replace("__NOOT_SCHAAL__", escape(T["noot.schaal"]))
+            .replace("__NOOT_OPEN__", escape(T["noot.open"]))
+            .replace("__ROUTE__", "".join(items))
+            .replace("__BREIN__", json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")))
+
+
+def bouw_brein(payload: dict, cfg: dict | None = None) -> str:
+    """brein.html voor dezelfde bouw als het dashboard (dezelfde payload, dus dezelfde cijfers)."""
+    cfg = cfg if cfg is not None else load_config()
+    maand, totalen = brein_maand(cfg, payload)
+    lijst = (payload.get("pagina") or {}).get("lijst", "proefresultaat")
+    return brein_html(brein_blok(payload, cfg, maand, totalen), lijst)
+
+
+# De Brein-pagina (VA-98, VA-99), naar Lumi's schets brein-mockup.html. Stijl en zijbalk komen uit TEMPLATE
+# (__STIJL__, __ZIJBALK__); elke tekst en elk getal vult brein_html() in. Geen externe bron, geen bibliotheek.
+BREIN_TEMPLATE = r"""<!doctype html>
+<html lang="nl" data-theme="light"><!-- VA-66: altijd licht openen (Ayman); Thema wisselt -->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITEL__</title>
+<style>
+__STIJL__
+  .vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  /* ===================== BREIN (VA-98, VA-99, Lumi): de navy van de band, glas, één hoge schaduw ===================== */
+  .brein{position:relative;isolation:isolate;overflow:hidden;background:var(--held);border-radius:18px;
+    box-shadow:var(--schaduw-hoog);color:#fff;display:grid;grid-template-columns:minmax(0,58fr) minmax(0,42fr);
+    gap:18px;padding:22px}
+  .brein::before{content:"";position:absolute;left:8%;top:6%;width:50%;aspect-ratio:1;border-radius:50%;z-index:-1;
+    background:radial-gradient(circle,var(--gloed),transparent 62%);pointer-events:none}
+  .doek-vak{position:relative;align-self:start;min-width:0}
+  @media (min-width:801px){ .doek-vak{position:sticky;top:16px} }   /* de ring van een open stap blijft in beeld */
+  .brein canvas{display:block;width:100%;aspect-ratio:1;max-width:620px;margin:0 auto}
+  .stil-knop{position:absolute;right:22px;top:16px;z-index:2;font:inherit;font-size:12px;font-weight:650;color:#fff;
+    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:5px 11px;
+    min-height:28px;cursor:pointer}
+  @media (hover:hover){ .stil-knop:hover{background:rgba(255,255,255,.16)} }
+  .stil-knop:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  @media (prefers-reduced-motion: reduce){ .stil-knop{display:none} }
+  .route{list-style:none;margin:30px 0 0;padding:0;display:flex;flex-direction:column;gap:7px;min-width:0}
+  .route>li{border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+  .brein.klaar .route>li{transition:background-color .2s,border-color .2s}
+  .route>li.actief{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.34)}
+  .route>li.wl{background:color-mix(in srgb,var(--s3) 20%,transparent);border-color:color-mix(in srgb,var(--s3) 58%,transparent)}
+  .stap{all:unset;box-sizing:border-box;display:grid;grid-template-columns:22px minmax(0,1fr) auto 14px;align-items:baseline;
+    column-gap:10px;width:100%;padding:9px 12px 10px;cursor:pointer;border-radius:12px}
+  .stap:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .stap .nr{font-size:11px;font-weight:800;color:var(--nav-label);font-variant-numeric:tabular-nums}
+  .stap .naam{font-weight:700;font-size:14px;min-width:0}
+  .stap .sub{grid-column:2 / 4;font-size:12px;color:var(--nav-tekst);min-width:0}
+  .stap .sub .noot{display:block;margin-top:3px}
+  .stap .getal{font-size:19px;font-weight:750;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+  .stap .pijl{font-size:11px;color:var(--nav-label)}
+  .brein.klaar .stap .pijl{transition:transform .2s}
+  .stap[aria-expanded="true"] .pijl{transform:rotate(90deg)}
+  .letters{display:inline-flex;flex-wrap:wrap;gap:4px 10px}
+  .letters i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
+  .regel{padding:2px 14px 12px 44px;font-size:13px;line-height:1.55;color:#e8eef6}
+  .regel p{margin:0 0 8px}
+  .regel h3{margin:10px 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--nav-label)}
+  .regel ul{margin:0 0 8px;padding-left:18px}
+  .regel table{width:100%;border-collapse:collapse;margin:2px 0 8px}
+  .regel td{padding:3px 0;vertical-align:top;border-top:1px solid rgba(255,255,255,.08)}
+  .regel td:last-child{text-align:right;font-weight:750;font-variant-numeric:tabular-nums;white-space:nowrap;padding-left:10px}
+  .regel .klein{display:block;font-size:11.5px;color:var(--nav-label)}
+  .regel .uit{color:var(--nav-label);font-weight:600}
+  .noten{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:4px 18px;font-size:11.5px;color:var(--nav-label);margin:0}
+  .noten p{margin:0}
+  .brein-tip{position:fixed;pointer-events:none;z-index:5;background:var(--brand);color:#fff;font-size:12px;font-weight:600;
+    padding:5px 9px;border-radius:8px;border:1px solid rgba(255,255,255,.18);white-space:nowrap}
+  .brein-tip[hidden]{display:none}
+  @media (max-width:800px){
+    .brein{grid-template-columns:minmax(0,1fr);padding:48px 12px 16px}
+    .brein canvas{max-width:420px}
+    .stil-knop{right:12px;top:12px}
+    .route{margin-top:4px}
+    .regel{padding-left:14px}
+  }
+  /* ===================== einde BREIN ===================== */
+</style>
+</head>
+<body>
+__ZIJBALK__  <main class="inhoud" id="inhoud" tabindex="-1">
+    <header class="kop">
+      <div class="kop-rij"><p class="kruimel">__KRUIMEL_GROEP__<span aria-hidden="true">·</span><b>__KOP_TITEL__</b></p></div>
+      <h1>__KOP_TITEL__</h1>
+      <p class="kop-zin">__KOP_ZIN__</p>
+    </header>
+    <section class="brein" id="brein" aria-labelledby="t-route">
+      <h2 class="vh" id="t-route">__ROUTE_LABEL__</h2>
+      <div class="doek-vak"><canvas id="doek" aria-hidden="true"></canvas></div>
+      <button class="stil-knop" id="stil" type="button" aria-label="__KNOP_STIL_ARIA__">__KNOP_STIL__</button>
+      <ol class="route" id="route" aria-label="__ROUTE_LABEL__">__ROUTE__</ol>
+      <div class="noten"><p>__NOOT_SCHAAL__</p><p>__NOOT_OPEN__</p></div>
+    </section>
+  </main>
+</div>
+<div class="brein-tip" id="tip" aria-hidden="true" hidden></div>
+<script>
+const BREIN = __BREIN__;
+/* ============================ MENU (VA-63, VA-64): alleen de lade; deze pagina heeft één deel ============================ */
+(() => {
+  const vg = document.getElementById("vg");
+  const side = vg.querySelector(".side"), knop = vg.querySelector(".menuknop"), main = vg.querySelector(".inhoud");
+  const mqSmal = matchMedia("(max-width: 800px)");
+  const isOpen = () => vg.classList.contains("open");
+  function openMenu() {
+    vg.classList.add("open"); knop.setAttribute("aria-expanded", "true");
+    main.inert = true; document.body.style.overflow = "hidden";
+    side.querySelector(".nav a[aria-current]").focus();
+  }
+  function sluitMenu(terug) {
+    if (!isOpen()) return;
+    vg.classList.remove("open"); knop.setAttribute("aria-expanded", "false");
+    main.inert = false; document.body.style.overflow = "";
+    if (terug) knop.focus();
+  }
+  mqSmal.addEventListener("change", () => { if (!mqSmal.matches) sluitMenu(false); });
+  requestAnimationFrame(() => requestAnimationFrame(() => vg.classList.add("klaar")));
+  knop.addEventListener("click", () => isOpen() ? sluitMenu(true) : openMenu());
+  vg.querySelector(".sluit-menu").addEventListener("click", () => sluitMenu(true));
+  vg.querySelector(".scrim").addEventListener("click", () => sluitMenu(true));
+  side.addEventListener("keydown", e => {
+    if (e.key !== "Tab" || !isOpen()) return;
+    const f = [...side.querySelectorAll("a[href], button")];
+    if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape" || !isOpen()) return;
+    e.preventDefault(); e.stopPropagation(); sluitMenu(true);
+  }, true);
+})();
+
+/* ============================ BREIN (VA-98, VA-99) ============================
+   Elke ring is één stap van de route, van buiten naar binnen in dezelfde volgorde als de lijst; het nummer staat
+   op twaalf uur. De ringen zijn niet op schaal; binnen een ring wel (A–E en de verdeling). Alle tekst staat al in
+   de HTML of in BREIN; het script tekent alleen. */
+(() => {
+  "use strict";
+  const M = Math, D = document, root = D.documentElement;
+  const vak = D.getElementById("brein"), cv = D.getElementById("doek"), x = cv.getContext("2d");
+  const rm = matchMedia("(prefers-reduced-motion: reduce)");
+  const STAPPEN = BREIN.stappen, N = STAPPEN.length, CATS = BREIN.cats, SPLIT = BREIN.split;
+  // Straal per stap (deel van de halve breedte), buiten naar binnen. Alleen beeld.
+  const STRAAL = {vbo: .93, panden: .80, a_e: .685, geschikt: .575, register: .49, loting: .415, verdeling: .33, werklijst: .17};
+  const R = STAPPEN.map(s => STRAAL[s.id]);
+  const idx = id => STAPPEN.findIndex(s => s.id === id);
+  const I = {vbo: idx("vbo"), panden: idx("panden"), a_e: idx("a_e"), geschikt: idx("geschikt"), register: idx("register"),
+             loting: idx("loting"), verdeling: idx("verdeling"), werklijst: idx("werklijst")};
+  // Hoeveel stippen een ring doorlaat: alleen beeld, geen cijfer.
+  const DOOR = {vbo: .9, panden: .5, a_e: .62, geschikt: .97, register: 1, loting: .9, verdeling: 1, werklijst: 1};
+  const KERN = R[I.werklijst];
+  let W = 0, c = 0, act = -1, hover = -1, klok = 0, raf = 0, last = 0, zicht = true, stil = false, kl = {};
+  const css = n => getComputedStyle(root).getPropertyValue(n).trim();
+  const catTot = CATS.reduce((s, k) => s + k.n, 0) || 1;
+  const catHoek = [];
+  { let a = -M.PI / 2 + .06; for (const k of CATS) { const w = (k.n / catTot) * (2 * M.PI - .3); catHoek.push([a, a + M.max(w - .06, 0)]); a += w; } }
+  const inBoog = (h, [p, q]) => { let t = h; while (t < p) t += 2 * M.PI; while (t > p + 2 * M.PI) t -= 2 * M.PI; return t <= q; };
+
+  function maat() {
+    const b = cv.getBoundingClientRect(), dpr = M.min(2, devicePixelRatio || 1);
+    if (!b.width) return;
+    W = b.width; c = W / 2; cv.width = M.round(W * dpr); cv.height = M.round(W * dpr); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    kl = Object.fromEntries(["--s1", "--s2", "--s3", "--s4", "--s5", "--nav-tekst", "--nav-label", "--brand", "--muted"].map(k => [k, css(k)]));
+    teken();
+  }
+  const alfa = i => act < 0 ? (hover === i ? 1 : .8) : (act === i ? 1 : .3);
+  function boog(r, a0, a1, kleur, a, dik, streep) {
+    x.beginPath(); x.arc(c, c, r, a0, a1); x.globalAlpha = a; x.strokeStyle = kleur; x.lineWidth = dik;
+    x.setLineDash(streep || []); x.stroke(); x.setLineDash([]); x.globalAlpha = 1;
+  }
+  // Stippen lopen van buiten naar de kern; vallen grijs weg of gaan door; krijgen hun kleur bij A–E.
+  const S = [];
+  function nieuw(s) { s.h = M.random() * 2 * M.PI; s.r = .97 + M.random() * .03; s.v = .05 + M.random() * .05; s.k = null; s.weg = 0; s.ring = 0; s.bots = 0; return s; }
+  for (let i = 0; i < 260; i++) {
+    const s = nieuw({}); s.r = KERN + M.random() * (1 - KERN); s.ring = R.findIndex(q => q < s.r); if (s.ring < 0) s.ring = N - 1;
+    if (s.ring > I.a_e) { const j = CATS.findIndex((k, n) => inBoog(s.h, catHoek[n])); s.k = "--s" + ((j < 0 ? 2 : j) + 1); }
+    S.push(s);
+  }
+  function stap(dt) {
+    klok += dt;
+    for (const s of S) {
+      if (s.weg) { s.weg -= dt; if (s.weg <= 0) nieuw(s); continue; }
+      if (s.bots) { s.bots -= dt; s.r += s.v * dt * 1.5; continue; }
+      s.r -= s.v * dt * (1 - s.r * .3);
+      if (s.ring < N - 1 && s.r <= R[s.ring]) {
+        const id = STAPPEN[s.ring].id;
+        if (id === "register" && BREIN.bots && M.random() < .04) { s.bots = .5; continue; }   // een geleverd pand kaatst terug
+        if (M.random() > DOOR[id]) { s.weg = .9; continue; }
+        if (s.ring === I.a_e) { const j = CATS.findIndex((k, n) => inBoog(s.h, catHoek[n])); s.k = "--s" + ((j < 0 ? 2 : j) + 1); }
+        s.ring++;
+      }
+      if (s.r < KERN * .9) nieuw(s);
+    }
+  }
+  function teken() {
+    if (!W) return;
+    x.clearRect(0, 0, W, W);
+    const h = c * .96, licht = kl["--nav-tekst"];
+    STAPPEN.forEach((st, i) => {
+      const r = h * R[i], a = alfa(i);
+      if (st.id === "vbo") {          // een wijd veld van vage stippen
+        x.fillStyle = licht;
+        for (let j = 0; j < 340; j++) { const hk = j * 2.39996 + klok * .02, rr = h * (.86 + (j * 37 % 13) / 100);
+          x.globalAlpha = .18 * a / .8; x.fillRect(c + M.cos(hk) * rr, c + M.sin(hk) * rr, 1.3, 1.3); }
+        x.globalAlpha = 1;
+      } else if (st.id === "panden") boog(r, 0, 2 * M.PI, licht, .55 * a, 1.4, [1.5, 4]);
+      else if (st.id === "a_e") CATS.forEach((k, j) => { if (catHoek[j][1] > catHoek[j][0]) boog(r, catHoek[j][0], catHoek[j][1], kl["--s" + (j + 1)], a, M.max(6, h * .04)); });
+      else if (st.id === "geschikt") { x.lineDashOffset = -klok * 9; boog(r, 0, 2 * M.PI, kl["--s3"], .75 * a, 1.3, [3, 5]); x.lineDashOffset = 0; }
+      else if (st.id === "register") boog(r, -M.PI / 2 + .12, 1.5 * M.PI - .12, "#fff", .5 * a, 1.2);
+      else if (st.id === "loting") {  // korte streepjes, schudden één keer per ronde en liggen dan stil
+        const schud = (klok % 8) < 1.2 ? M.sin(klok * 40) * .03 : 0;
+        x.strokeStyle = "#fff"; x.lineWidth = 1.2; x.globalAlpha = .55 * a;
+        for (let j = 0; j < 60; j++) { const hk = j / 60 * 2 * M.PI + schud * ((j * 7) % 3 - 1);
+          x.beginPath(); x.moveTo(c + M.cos(hk) * (r - 3), c + M.sin(hk) * (r - 3)); x.lineTo(c + M.cos(hk) * (r + 3), c + M.sin(hk) * (r + 3)); x.stroke(); }
+        x.globalAlpha = 1;
+      } else if (st.id === "verdeling" && SPLIT) {   // twee bogen in de verhouding van de werklijst
+        const tot = (SPLIT[0] + SPLIT[1]) || 1, g = SPLIT[0] / tot * (2 * M.PI - .2), a0 = -M.PI / 2 + .05, dik = M.max(4, h * .025);
+        if (SPLIT[0]) boog(r, a0, a0 + g, kl["--s1"], a, dik);
+        if (SPLIT[1]) boog(r, a0 + g + .1, a0 + 2 * M.PI - .05, "#fff", .8 * a, dik);
+      }
+    });
+    for (const s of S) {
+      const r = h * s.r;
+      x.globalAlpha = s.weg ? M.max(0, s.weg) * .35 : .85;
+      x.fillStyle = s.weg ? kl["--muted"] : (s.k ? kl[s.k] : "#fff");
+      x.beginPath(); x.arc(c + M.cos(s.h) * r, c + M.sin(s.h) * r, s.k ? 1.8 : 1.2, 0, 2 * M.PI); x.fill();
+    }
+    x.globalAlpha = 1;
+    // de kern: de werklijst
+    const kr = h * KERN, gl = x.createRadialGradient(c, c, kr * .2, c, c, kr * 1.9);
+    gl.addColorStop(0, "rgba(27,175,122,.55)"); gl.addColorStop(1, "rgba(27,175,122,0)");
+    x.fillStyle = gl; x.beginPath(); x.arc(c, c, kr * 1.9, 0, 2 * M.PI); x.fill();
+    x.fillStyle = kl["--s3"]; x.globalAlpha = act >= 0 && act !== I.werklijst ? .6 : 1;
+    x.beginPath(); x.arc(c, c, kr * (1 + .03 * M.sin(klok * 2.2)), 0, 2 * M.PI); x.fill();
+    x.globalAlpha = 1; x.fillStyle = "#fff"; x.font = `750 ${M.max(11, M.round(kr * .3))}px system-ui,sans-serif`;
+    x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(BREIN.kern.label, c, c);
+    // de stapnummers op twaalf uur
+    x.font = "800 10px system-ui,sans-serif";
+    STAPPEN.forEach((st, i) => { if (i === I.werklijst) return; const y = c - h * R[i];
+      x.globalAlpha = act === i ? 1 : (act < 0 ? .85 : .35);
+      x.fillStyle = kl["--brand"]; x.beginPath(); x.arc(c, y, 8, 0, 2 * M.PI); x.fill();
+      x.fillStyle = act === i ? "#fff" : kl["--nav-label"]; x.fillText(String(i + 1), c, y + .5); });
+    x.globalAlpha = 1;
+  }
+  const loopt = () => !rm.matches && zicht && !D.hidden && !stil;
+  function beeld(ts) { raf = 0; if (!loopt()) return; const dt = last ? M.min(.05, (ts - last) / 1000) : 1 / 60; last = ts; stap(dt); teken(); raf = requestAnimationFrame(beeld); }
+  function start() { if (!raf && loopt()) { last = 0; raf = requestAnimationFrame(beeld); } else teken(); }
+
+  // De route: één stap tegelijk open; zijn ring licht op.
+  const items = [...D.querySelectorAll("#route > li")];
+  function zet(i) {
+    items.forEach((li, j) => { const open = j === i;
+      li.querySelector(".stap").setAttribute("aria-expanded", String(open));
+      li.querySelector(".regel").hidden = !open; li.classList.toggle("actief", open); });
+    act = i; teken();
+  }
+  items.forEach((li, i) => {
+    li.querySelector(".stap").addEventListener("click", () => zet(act === i ? -1 : i));
+    li.addEventListener("pointerenter", () => { hover = i; if (act < 0) teken(); });
+    li.addEventListener("pointerleave", () => { hover = -1; if (act < 0) teken(); });
+    li.addEventListener("focusin", () => { hover = i; if (act < 0) teken(); });
+    li.addEventListener("focusout", () => { hover = -1; if (act < 0) teken(); });
+  });
+  D.addEventListener("keydown", e => {
+    if (e.key !== "Escape" || act < 0) return;
+    const b = items[act].querySelector(".stap"); zet(-1); b.focus();
+  });
+
+  // Wijs een ring aan: de tip noemt de stap en het getal.
+  const tip = D.getElementById("tip");
+  cv.addEventListener("pointermove", e => {
+    const b = cv.getBoundingClientRect(), dx = e.clientX - b.left - c, dy = e.clientY - b.top - c, d = M.hypot(dx, dy) / (c * .96);
+    let i = -1, best = .05;
+    R.forEach((q, j) => { if (j !== I.vbo && M.abs(q - d) < best) { best = M.abs(q - d); i = j; } });
+    if (d < KERN) i = I.werklijst; else if (d > .86 && d < 1.02) i = I.vbo;
+    if (i < 0) { tip.hidden = true; return; }
+    let t = STAPPEN[i].tip;
+    if (i === I.a_e) { const j = CATS.findIndex((k, n) => inBoog(M.atan2(dy, dx), catHoek[n])); if (j >= 0) t = CATS[j].tip; }
+    if (i === I.werklijst) t = BREIN.kern.tip;
+    tip.textContent = t; tip.hidden = false; tip.style.left = e.clientX + 12 + "px"; tip.style.top = e.clientY + 12 + "px";
+  });
+  cv.addEventListener("pointerleave", () => { tip.hidden = true; });
+
+  const knop = D.getElementById("stil"), K = BREIN.knop;
+  knop.addEventListener("click", () => {
+    stil = !stil;
+    knop.textContent = stil ? K["knop.beweeg"] : K["knop.stil"];
+    knop.setAttribute("aria-label", stil ? K["knop.beweeg.aria"] : K["knop.stil.aria"]);
+    start();
+  });
+  D.getElementById("themeBtn").addEventListener("click", () => {
+    const cur = root.getAttribute("data-theme");
+    const dark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.setAttribute("data-theme", dark ? "light" : "dark");
+    maat();
+  });
+  new IntersectionObserver(es => { zicht = es[0].isIntersecting; start(); }).observe(cv);
+  D.addEventListener("visibilitychange", start);
+  rm.addEventListener("change", start);
+  new ResizeObserver(maat).observe(cv);
+  requestAnimationFrame(() => requestAnimationFrame(() => vak.classList.add("klaar")));
+  maat(); start();
+})();
+</script>
+</body>
+</html>
+"""
+
+
 def render(payload: dict) -> str:
     """Vul het sjabloon. De payload als laatste, zodat zijn inhoud niet wordt vervangen."""
     payload = {**payload, "kaartfoto": payload.get("kaartfoto") or kaartfoto_tekst(),  # elke kaart (VA-71)
@@ -4773,6 +5458,8 @@ def main() -> int:
     payload = bouw_payload()
     OUT.write_text(render(payload), encoding="utf-8")
     print(f"dashboard geschreven -> {OUT.relative_to(BASE)} ({OUT.stat().st_size/1024:.1f} KB)")
+    BREIN_OUT.write_text(bouw_brein(payload), encoding="utf-8")   # VA-98: dezelfde bouw, dezelfde cijfers
+    print(f"brein geschreven -> {BREIN_OUT.relative_to(BASE)} ({BREIN_OUT.stat().st_size/1024:.1f} KB)")
     for regel in payload.get("planning_waarschuwingen") or []:
         print(f"LET OP: {regel}")
     if payload["bron"] is None:
