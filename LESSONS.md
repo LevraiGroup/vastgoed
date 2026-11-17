@@ -176,6 +176,9 @@ struck through with the reason, never deleted.
   must pass `behavior: "instant"`, or it glides and a second redraw measures mid-glide.** And Playwright's
   `click()` scrolls its target into view first: measure a layout shift from a click done in `page.evaluate`, or
   per element, not from the section's position. *(2026-11-16, Ada, VA-91)*
+- **Testing "no uncaught error" with a script blocked: check `pageerror` is empty, not that the
+  console is empty.** Chrome always logs `Failed to load resource` for the blocked request.
+  *(2026-11-08, Vera, VA-48; landed on `main` with VA-106)*
 - **A CDP `Input.dispatchKeyEvent` Enter does not press a focused `<button>` unless the keyDown carries
   `text: "\r"` (Space needs `text: " "`).** Without it the key test reads "Enter does nothing" on a
   page that works. *(2026-11-17, Ada, VA-99)*

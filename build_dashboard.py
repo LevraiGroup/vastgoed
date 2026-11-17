@@ -1061,8 +1061,11 @@ def met_planning(payload: dict, cfg: dict, vandaag: date | None = None) -> dict:
 # dit verhaal. Geen cijfer verandert: de kerncijfers, de band en zijn 500 stippen blijven hetzelfde.
 # Kopij: Ada, wacht op Lumi.
 SLOT_TEKST = {
-    "titel": "{n} panden staan achter het slot",
-    "titel.een": "1 pand staat achter het slot",
+    # Ayman: geen aantal naast de werklijst in beeld. De kop noemt het aantal niet; de schermlezer hoort het
+    # echte aantal wel (een visueel verborgen tekst), net als bij de band.
+    "titel": "De rest van je werklijst staat achter het slot",
+    "sr": "{n} panden staan achter het slot",
+    "sr.een": "1 pand staat achter het slot",
     "regel": "Zet de datakoppeling aan om alle panden van de werklijst te zien.",
     "telling.alle": "De {n} zichtbare panden",
     "telling": "{n} van de {totaal} zichtbare panden",
@@ -1092,7 +1095,8 @@ def met_slot(payload: dict, cfg: dict) -> dict:
     if n is None or totaal <= n:
         return payload
     op_slot = totaal - n
-    tekst = {"titel": (SLOT_TEKST["titel.een"] if op_slot == 1 else SLOT_TEKST["titel"].format(n=nl_getal(op_slot))),
+    tekst = {"titel": SLOT_TEKST["titel"],
+             "sr": (SLOT_TEKST["sr.een"] if op_slot == 1 else SLOT_TEKST["sr"].format(n=nl_getal(op_slot))),
              "regel": SLOT_TEKST["regel"]}
     filt = payload.get("filter")
     if filt and filt.get("tekst"):
@@ -1115,7 +1119,8 @@ def slot_html(s: dict | None) -> str:
     return ('\n        <!-- SLOT (VA-96) -->\n'
             f'        <div class="slot-blok" id="slotBlok"><div class="grid slot-schim" aria-hidden="true">{schim}</div>'
             f'<div class="slot-paneel"><span class="slot-icoon">{slot}</span>'
-            f'<p class="slot-tekst"><b>{escape(s["tekst"]["titel"])}.</b> {escape(s["tekst"]["regel"])}</p></div></div>'
+            f'<p class="slot-tekst"><b><span aria-hidden="true">{escape(s["tekst"]["titel"])}.</span>'
+            f'<span class="vh">{escape(s["tekst"]["sr"])}.</span></b> {escape(s["tekst"]["regel"])}</p></div></div>'
             '\n        <!-- einde SLOT -->')
 # --------------------------------------------------------------- einde slot op de werklijst (VA-96)
 
@@ -1935,6 +1940,7 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     color:#fff;font:inherit;font-size:12px;padding:7px 12px;border-radius:999px;min-height:32px}
   @media (hover:hover){ .toggle:hover{background:rgba(255,255,255,.18)} }
   .toggle:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .uitlog{margin:0}   /* VA-106: het formulier om de knop neemt geen eigen ruimte */
 
   .sluit-menu{display:none;align-items:center;gap:6px;cursor:pointer;flex:none;
     background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#fff;
@@ -2590,6 +2596,8 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     <nav class="nav" aria-label="Onderdelen van het dashboard">__MENU__</nav>
     <div class="side-voet">
       <button class="toggle" id="themeBtn" type="button">◐ Thema</button>
+      <!-- VA-106: uitloggen via serve.py (VA-50), alleen met POST; een gewoon formulier, werkt zonder JavaScript -->
+      <form class="uitlog" method="post" action="/uitloggen"><button class="toggle" type="submit">Uitloggen</button></form>
     </div>
   </aside>
 
