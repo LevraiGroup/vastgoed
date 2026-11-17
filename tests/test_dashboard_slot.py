@@ -98,7 +98,9 @@ class Gebouwd(unittest.TestCase):
         # ALLE_LEADS komt alleen voor op de twee regels die LEADS maken; niets anders leest de panden achter het slot.
         regels = [r.strip() for r in t.splitlines() if "ALLE_LEADS" in r]
         self.assertEqual(regels, ["const {kpi:KPI, cats:CATS, facts:FACTS, leads:ALLE_LEADS, budget:BUDGET} = PAYLOAD;",
-                                  "const LEADS = PAYLOAD.slot ? ALLE_LEADS.slice(0, PAYLOAD.slot.n) : ALLE_LEADS;"])
+                                  "const LEADS = PAYLOAD.slot ? ALLE_LEADS.slice(0, PAYLOAD.slot.n) : ALLE_LEADS;",
+                                  # Ayman 11-17: een pand dat al bewaard is, opent op Bewaarde panden, ook achter het slot.
+                                  "const PER = new Map(ALLE_LEADS.map(d => [String(d.id), d]));"])
         self.assertIn("if (DELEN.includes(start)) ga(start, false);", t)   # een adres opent een deel, nooit een pand
 
     def test_filters_tellen_de_vijf(self):

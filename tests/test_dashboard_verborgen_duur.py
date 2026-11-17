@@ -61,8 +61,8 @@ class Script(unittest.TestCase):
         js = blok()
         self.assertIn("const D = PAYLOAD.bewaar.duur, DAG = 864e5, DAGEN = PAYLOAD.bewaar.dagen || 30;", js)
         self.assertIn("return verlopen();", js)   # elke keer dat de opslag gelezen wordt
-        self.assertIn('document.addEventListener("visibilitychange", () => { if (!document.hidden && werkt && verlopen()) overal(true); });', js)
-        self.assertIn("else if (tot(r) <= nu) { delete stand[id]; anders = true; } }", js)
+        self.assertIn("else if (werkt && verlopen()) overal(true); });", js)   # zonder server; met server: opnieuw ophalen
+        self.assertIn("else if (tot(r) <= nu) { delete stand[id]; gewijzigd.push(id); } }", js)
         self.assertIn('if (r.stand !== "verborgen") continue;', js.replace("!r || ", ""))   # bewaard verloopt nooit
         self.assertIn('SLEUTEL = "levrai-vastgoed-panden", VORM = 1', js)   # dezelfde sleutel en vorm als VA-90
 
