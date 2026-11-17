@@ -229,8 +229,9 @@ class Toegankelijk(unittest.TestCase):
 
     def test_tekens_niet_voorgelezen(self):
         js = blok()
-        self.assertIn('const i = maak("span", null, s === "bewaard" ? "★" : "◌"); i.setAttribute("aria-hidden", "true");'
-                      ' l.append(i, T["label." + s]);', js)
+        self.assertIn('const i = maak("span", null, s === "bewaard" ? "★" : "◌"); i.setAttribute("aria-hidden", "true");\n'
+                      '        l.append(i, s === "verborgen" ? D["label.verborgen"].replace("{datum}", () => datum(stand[d.id]))'
+                      ' : T["label." + s]);', js)
         self.assertNotIn('"★ "', js)
         self.assertIn('const ico = maak("span", "bw-ico"); ico.setAttribute("aria-hidden", "true");', js)
 

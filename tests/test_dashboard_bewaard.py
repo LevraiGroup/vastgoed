@@ -224,7 +224,8 @@ class OpenOfNietMeerInDeData(unittest.TestCase):
 
     def test_weghalen_werkt_op_het_opgeslagen_object(self):
         js, bw = pagina_js(), blok()
-        self.assertIn("function weg(id) {", bw)
+        self.assertIn("function nietMeerBewaard(id) {", bw)
+        self.assertIn("weg: nietMeerBewaard,", bw)
         self.assertIn("if (!schrijf()) { stand[id] = oud; werkt = false; overal(false); return null; }", bw)
         self.assertIn("herstelId: (id, oud) => herstel({id}, oud)", bw)
         self.assertIn('const b = BW.status(regel, vul(T["status.niet_bewaard"], {adres: naam}), terug, id);', js)

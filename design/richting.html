@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="nl" data-theme="light"><!-- Opent altijd licht (VA-66); Thema wisselt. Ontwerp Lumi, VA-80, 13 nov 2026. Niet gebouwd, niet gecommit. -->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Levrai · VASTGOED — Visuele richting: kies A, B of C</title>
+<style>
+  :root{
+    color-scheme: light;
+    --plane:#f9f9f7; --surface:#fcfcfb; --surface-2:#ffffff;
+    --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --baseline:#c3c2b7; --ring:rgba(11,11,11,.10);
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4;
+    --good:#0ca30c; --crit:#d03b3b;
+    --shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -12px rgba(11,11,11,.12);
+    --brand:#12233b;
+    --nav-tekst:#c6d3e4; --nav-label:#9fb3cc;
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --plane:#0d0d0d; --surface:#1a1a19; --surface-2:#201f1e;
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,.10);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+    --good:#0ca30c; --crit:#e06666;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);
+    --brand:#0a1524;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--plane);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.5}
+  .kopband{background:var(--brand);color:#fff}
+  .kopband .in{max-width:1360px;margin:0 auto;padding:24px 20px 22px}
+  .mark{font-weight:800;letter-spacing:.16em;font-size:14px}
+  .mark small{display:block;letter-spacing:.28em;font-weight:600;font-size:10px;color:var(--nav-label);margin-top:3px}
+  .kopband h1{margin:16px 0 6px;font-size:28px;font-weight:750;letter-spacing:-.02em;line-height:1.15}
+  .kopband p{margin:0;max-width:80ch;color:var(--nav-tekst);font-size:14.5px}
+  .bediening{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  .bediening button{cursor:pointer;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#fff;
+    font:inherit;font-size:13px;font-weight:650;padding:8px 14px;border-radius:999px;min-height:36px}
+  .bediening button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  @media (hover:hover){ .bediening button:hover{background:rgba(255,255,255,.18)} }
+  .wrap{max-width:1360px;margin:0 auto;padding:8px 20px 64px}
+  .snel{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 0}
+  .snel a{font-size:13px;font-weight:650;color:var(--ink);text-decoration:none;background:var(--surface);border:1px solid var(--ring);
+    border-radius:10px;padding:8px 12px;box-shadow:var(--shadow)}
+  .snel a b{color:var(--s1)}
+  .concept,.blok{background:var(--surface);border:1px solid var(--ring);border-radius:16px;box-shadow:var(--shadow);padding:20px 22px;margin-top:24px}
+  .c-kop{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px}
+  .c-lab{font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#fff;background:var(--brand);
+    padding:4px 10px;border-radius:8px}
+  :root[data-theme="dark"] .c-lab{background:#1d3c66}
+  .c-kop h2{margin:0;font-size:22px;font-weight:750;letter-spacing:-.01em}
+  .advies-tag{font-size:12px;font-weight:700;color:var(--good);border:1px solid color-mix(in srgb,var(--good) 40%,transparent);
+    background:color-mix(in srgb,var(--good) 10%,transparent);border-radius:999px;padding:2px 10px}
+  .pitch{margin:8px 0 16px;font-size:16px;font-weight:600;max-width:90ch}
+  .frames{display:flex;gap:20px;align-items:flex-start}
+  .fr{margin:0;min-width:0}
+  .fr.breed{flex:1 1 auto}
+  .fr.smal{flex:0 0 300px}
+  .fr figcaption{font-size:12px;font-weight:650;color:var(--ink-2);margin:0 0 6px}
+  .frame{position:relative;overflow:hidden;border-radius:12px;border:1px solid var(--ring);background:var(--plane);width:100%}
+  .frame iframe{position:absolute;top:0;left:0;border:0;transform-origin:0 0;background:var(--plane)}
+  .feiten{display:grid;grid-template-columns:minmax(90px,130px) minmax(0,1fr);gap:6px 14px;margin:16px 0 0;font-size:13.5px}
+  .feiten dt{font-weight:700;color:var(--ink)}
+  .feiten dd{margin:0;color:var(--ink-2)}
+  .blok h2{margin:0 0 8px;font-size:19px;font-weight:750}
+  .blok p,.blok li{font-size:14px;color:var(--ink-2);max-width:90ch}
+  .blok p b,.blok li b{color:var(--ink)}
+  .blok ul{margin:8px 0 0;padding-left:20px}
+  .blok li+li{margin-top:6px}
+  .advies{border-color:color-mix(in srgb,var(--good) 45%,transparent);box-shadow:inset 3px 0 0 var(--good),var(--shadow)}
+  .tabel{width:100%;overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-size:13px;min-width:0}
+  th,td{text-align:left;vertical-align:top;padding:8px 10px 8px 0;border-bottom:1px solid var(--grid)}
+  th{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+  td code{font-size:12px;overflow-wrap:anywhere}
+  td:first-child code{white-space:nowrap}
+  .staal{display:inline-block;width:28px;height:18px;border-radius:5px;border:1px solid var(--ring);vertical-align:middle}
+  @media (max-width:900px){
+    .frames{flex-direction:column}
+    .fr.breed,.fr.smal{flex:none;width:100%}
+    .fr.smal{max-width:375px}
+  }
+  @media (max-width:600px){
+    .kopband .in,.wrap{padding-left:14px;padding-right:14px}
+    .kopband h1{font-size:23px}
+    .concept,.blok{padding:16px 14px}
+    .feiten{grid-template-columns:minmax(0,1fr)}
+    .feiten dd{margin-bottom:6px}
+    table,thead,tbody,tr,th,td{display:block}
+    thead{display:none}
+    tr{border-bottom:1px solid var(--grid);padding:8px 0}
+    td{border:0;padding:2px 0}
+  }
+</style>
+</head>
+<body>
+<header class="kopband">
+  <div class="in">
+    <div class="mark">LEVRAI GROUP<small>VASTGOED</small></div>
+    <h1>Visuele richting: kies A, B of C</h1>
+    <p>Ayman, je vroeg om schermen die echt cool ogen en toch professioneel blijven, met een bewegend digitaal brein.
+      Hieronder staan drie richtingen voor de bovenkant van het dashboard, elk op 1280 en 375 pixels breed en elk echt werkend.
+      Het brein vertelt overal hetzelfde verhaal: de selectie op de BAG van 1 november 2026, van 6.568.913 panden naar de 500 op je werklijst.
+      Er is nog niets gebouwd. Kies er één, en de squad maakt er een story van.</p>
+    <div class="bediening">
+      <button type="button" id="pThema" aria-pressed="false">◐ Toon donker thema</button>
+      <button type="button" id="pStil" aria-pressed="false">❚❚ Toon stil beeld</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <nav class="snel" aria-label="Naar een concept">
+    <a href="#concept-a"><b>A</b> Selectiestroom</a>
+    <a href="#concept-b"><b>B</b> Selectiebrein</a>
+    <a href="#concept-c"><b>C</b> Landkaart · advies</a>
+    <a href="#advies">Mijn advies</a>
+    <a href="#tokens">Nieuwe tokens</a>
+  </nav>
+
+  <section class="concept" id="concept-a" aria-labelledby="h-a">
+    <div class="c-kop"><span class="c-lab">Concept A</span><h2 id="h-a">Selectiestroom</h2></div>
+    <p class="pitch">De pandenselectie als één rustige stroom van links naar rechts: je ziet 6.568.913 panden uitdunnen tot de 500 op je werklijst.</p>
+    <div class="frames">
+      <figure class="fr breed"><figcaption>Computer · 1280 × 800</figcaption><div class="frame" data-w="1280" data-h="800"><iframe data-k="A" title="Concept A op een computerscherm van 1280 pixels breed" loading="lazy"></iframe></div></figure>
+      <figure class="fr smal"><figcaption>Telefoon · 375 × 760</figcaption><div class="frame" data-w="375" data-h="760"><iframe data-k="A" title="Concept A op een telefoon van 375 pixels breed" loading="lazy"></iframe></div></figure>
+    </div>
+    <dl class="feiten">
+      <dt>Het brein</dt><dd>Zes stations: verblijfsobjecten, panden, categorie A–E, score ≥ 8, werklijst, en de verdeling 450 + 50. Wie afvalt, zakt grijs weg; wie blijft, krijgt de kleur van zijn categorie. Wijs een knoop aan voor het getal.</dd>
+      <dt>Het kantoor</dt><dd>Direct onder de stroom, over de volle breedte, zoals nu. Op 1280 × 800 begint het kantoor halverwege het scherm en zie je de bovenste helft; op 375 staat de stroom rechtop en zie je alleen de bovenrand van het kantoor.</dd>
+      <dt>Diepte</dt><dd>Een glazen kaart op een vaag plattegrondraster, één hoge schaduw. De pagina blijft licht; in donker gaan de stippen gloeien.</dd>
+      <dt>Kost</dt><dd>Eén 2D-canvas, geen three.js, geen bibliotheek. Ongeveer 5 KB script; de lijnen worden één keer getekend, per beeld beweegt alleen de stroom.</dd>
+    </dl>
+  </section>
+
+  <section class="concept" id="concept-b" aria-labelledby="h-b">
+    <div class="c-kop"><span class="c-lab">Concept B</span><h2 id="h-b">Selectiebrein</h2></div>
+    <p class="pitch">Het brein van Fortuna HQ in Levrai-navy: één kern met je 500 panden, met de vijf categorieën en de 25 grootste gemeenten eromheen, naast het kantoor.</p>
+    <div class="frames">
+      <figure class="fr breed"><figcaption>Computer · 1280 × 800</figcaption><div class="frame" data-w="1280" data-h="800"><iframe data-k="B" title="Concept B op een computerscherm van 1280 pixels breed" loading="lazy"></iframe></div></figure>
+      <figure class="fr smal"><figcaption>Telefoon · 375 × 760</figcaption><div class="frame" data-w="375" data-h="760"><iframe data-k="B" title="Concept B op een telefoon van 375 pixels breed" loading="lazy"></iframe></div></figure>
+    </div>
+    <dl class="feiten">
+      <dt>Het brein</dt><dd>Buitenring: panden. Binnenring: categorie A–E. Stippelring: score ≥ 8. Kern: je werklijst, die uitvuurt naar de gemeente waar elk pand ligt, in verhouding (Amsterdam 111, 's-Gravenhage 104, Utrecht 96, Elders 50, Rotterdam 29). Wijs een knoop aan voor het getal.</dd>
+      <dt>Het kantoor</dt><dd>Links naast het brein, even hoog, en helemaal in beeld op 1280 × 800. Op 375 komt het kantoor eerst en staat het brein eronder.</dd>
+      <dt>Diepte</dt><dd>Een navy kaart met een zachte blauwe gloed in de kern, ook in het lichte thema: het brein is de enige donkere plek op de pagina.</dd>
+      <dt>Kost</dt><dd>Eén 2D-canvas, geen three.js. Ongeveer 5 KB script.</dd>
+    </dl>
+  </section>
+
+  <section class="concept" id="concept-c" aria-labelledby="h-c">
+    <div class="c-kop"><span class="c-lab">Concept C</span><h2 id="h-c">Landkaart</h2><span class="advies-tag">Mijn advies</span></div>
+    <p class="pitch">Nederland als zenuwstelsel: de 500 panden op je werklijst lichten op waar ze echt liggen en vuren naar één kern in de Noordzee.</p>
+    <div class="frames">
+      <figure class="fr breed"><figcaption>Computer · 1280 × 800</figcaption><div class="frame" data-w="1280" data-h="800"><iframe data-k="C" title="Concept C op een computerscherm van 1280 pixels breed" loading="lazy"></iframe></div></figure>
+      <figure class="fr smal"><figcaption>Telefoon · 375 × 760</figcaption><div class="frame" data-w="375" data-h="760"><iframe data-k="C" title="Concept C op een telefoon van 375 pixels breed" loading="lazy"></iframe></div></figure>
+    </div>
+    <dl class="feiten">
+      <dt>Het brein</dt><dd>De groene stippen zijn de 500 echte panden van de werklijst (afgerond op ongeveer 1 km). Een pand dat in A–E valt, kleurt op in zijn categorie; een ring betekent score ≥ 8. Elke puls loopt van een werklijstpand via zijn gemeente naar de kern; panden van elders lopen er rechtstreeks heen.</dd>
+      <dt>Het kantoor</dt><dd>Als kaart die over de navy band heen schuift, direct eronder. Op 1280 × 800 zie je het bovenste derde; op 375 alleen de bovenrand. Wil je meer kantoor in beeld, dan wordt de band lager.</dd>
+      <dt>Diepte</dt><dd>De navy van de zijbalk loopt door in een band boven de pagina, met glazen cijfers en één hoge schaduw onder het kantoor. Daaronder blijft alles licht.</dd>
+      <dt>Kost</dt><dd>Eén 2D-canvas, geen three.js. Ongeveer 6 KB script; de coördinaten van de 500 panden staan al in de gegevens van het dashboard.</dd>
+    </dl>
+  </section>
+
+  <section class="blok advies" id="advies" aria-labelledby="h-advies">
+    <h2 id="h-advies">Mijn advies: C, Landkaart</h2>
+    <p><b>De kaart toont iets wat het dashboard nog niet zegt: waar je werklijst ligt.</b> Iedereen leest de vorm van Nederland zonder uitleg,
+      de trechter staat er in vijf cijfers naast, en locatie is de taal van een vastgoedklant. Het is het meest professionele van de drie en beweegt toch het meest.</p>
+    <p><b>B</b> is het meest "brein" en lijkt het meest op Fortuna HQ, maar de ringen moet je eerst uitgelegd krijgen.
+      <b>A</b> is het helderst, maar herhaalt de kerncijfers die al lager op de pagina staan.
+      Wil je de kern uit B: de gloeiende kern in de Noordzee van C ís dat brein.</p>
+    <p>Kies door A, B of C te zeggen, eventueel met een wijziging ("C, maar met …"). Nova maakt er een story van; Ada bouwt hem in <code>build_dashboard.py</code>.</p>
+  </section>
+
+  <section class="blok" id="tokens" aria-labelledby="h-tokens">
+    <h2 id="h-tokens">Nieuwe tokens (voorstel)</h2>
+    <p>Alle zes zijn mengsels van tokens die er al zijn; er komt geen nieuwe kleur bij. Ze werken in beide thema's omdat ze meebewegen met <code>--brand</code>, <code>--s1</code> en <code>--surface-2</code>.</p>
+    <div class="tabel">
+      <table>
+        <thead><tr><th>Token</th><th>Waarde</th><th>Waarvoor</th><th>Concept</th></tr></thead>
+        <tbody>
+          <tr><td><code>--brand-2</code></td><td><code>color-mix(in srgb, var(--brand) 78%, var(--s1))</code></td><td>Lichtere navy, het eind van het verloop</td><td>B, C</td></tr>
+          <tr><td><code>--held</code></td><td><code>linear-gradient(155deg, var(--brand) 0%, var(--brand) 35%, var(--brand-2) 100%)</code></td><td>Navy vlak van het brein en de band</td><td>B, C</td></tr>
+          <tr><td><code>--glas</code></td><td><code>color-mix(in srgb, var(--surface-2) 72%, transparent)</code> + <code>backdrop-filter: blur(14px)</code></td><td>Glazen kaart op het licht</td><td>A</td></tr>
+          <tr><td><code>--glas-rand</code></td><td><code>color-mix(in srgb, var(--ink) 9%, transparent)</code></td><td>Rand van de glazen kaart</td><td>A</td></tr>
+          <tr><td><code>--gloed</code></td><td><code>color-mix(in srgb, var(--s1) 40%, transparent)</code></td><td>Zachte gloed achter de kern</td><td>A, B, C</td></tr>
+          <tr><td><code>--schaduw-hoog</code></td><td><code>0 1px 2px rgba(11,11,11,.05), 0 28px 56px -28px color-mix(in srgb, var(--brand) 60%, transparent)</code>; donker: <code>0 1px 2px rgba(0,0,0,.5), 0 30px 60px -30px rgba(0,0,0,.9)</code></td><td>Eén hoge schaduw onder wat boven de pagina zweeft</td><td>A, B, C</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="blok" aria-labelledby="h-niet">
+    <h2 id="h-niet">Wat deze schets niet is</h2>
+    <ul>
+      <li><b>Niets is gebouwd.</b> Het kantoor is hier een vlak met een getekende plattegrond. In het dashboard staat op die plek het echte 3D-kantoor (VA-48, VA-60), ongewijzigd en altijd zichtbaar.</li>
+      <li><b>Geen three.js voor het brein.</b> Alle drie draaien op één 2D-canvas, zonder bibliotheek, zonder lettertype en zonder afbeelding. three.js blijft alleen voor het kantoor.</li>
+      <li><b>De grijze pandenwolk in C is benaderd</b> uit de inwonertallen van ongeveer honderd plaatsen. Gebouwd moet hij uit de BAG komen, als een klein raster dat de pijplijn schrijft. De 500 groene stippen zijn wel de echte werklijst van 1 november 2026.</li>
+      <li><b>De beweging is niet op schaal.</b> Van de 6.568.913 panden haalt 0,008 % de werklijst; op schaal zou je niets zien bewegen. De getallen zijn wel exact.</li>
+      <li><b>Geen live verwerking.</b> De beweging toont de selectie van 1 november 2026; de pijplijn draait maandelijks. Daarom staat er nergens "live" of "online".</li>
+      <li><b>De getallen staan hier vast in de schets.</b> In het dashboard levert Python ze kant-en-klaar aan, zoals elke regel op de pagina (les van VA-31: geen tweede getalnotatie in JavaScript).</li>
+      <li><b>Stil beeld:</b> met "Beweging verminderen" aan op je computer, of met de knop bovenaan, toont elk concept één stilstaand beeld. Het brein pauzeert buiten beeld en in een verborgen tabblad.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+/* =====================================================================
+   SELECTIEBREIN — één 2D-canvas, geen bibliotheek. A = stroom, B = kern, C = kaart.
+   Draait in elk voorbeeldscherm (iframe). Gebouwd wordt alleen het gekozen concept.
+   ===================================================================== */
+function ENGINE(){
+"use strict";
+const D=document,R=D.documentElement,K=D.body.dataset.c,cv=D.getElementById("brein");
+if(!cv)return;
+const box=cv.parentNode,ctx=cv.getContext("2d"),tip=D.getElementById("tip"),bg=D.createElement("canvas"),bx=bg.getContext("2d");
+const mq=matchMedia("(prefers-reduced-motion: reduce)"),TAU=Math.PI*2,M=Math;
+let W=0,H=0,dpr=1,vis=true,raf=0,last=0,forced=false,clock=0,acc=0,acc2=0,col={},spr={},N=[],P=[],T=[],L={},seed=11,rt=0;
+const sr=()=>(seed=seed*16807%2147483647)/2147483647;
+const rgba=(h,a)=>{const n=parseInt(h.slice(1),16);return"rgba("+(n>>16)+","+(n>>8&255)+","+(n&255)+","+a+")"};
+const F=(w,s)=>w+" "+s+"px system-ui,-apple-system,'Segoe UI',sans-serif";
+const pickI=w=>{let s=0;for(const x of w)s+=x;let r=M.random()*s;for(let i=0;i<w.length;i++){r-=w[i];if(r<=0)return i}return w.length-1};
+
+/* Cijfers van de eerste landelijke run (BAG 1 nov 2026). Gebouwd: uit de payload, opgemaakt door Python. */
+const CAT=[["A","Winkel + wonen",45359,"45.359"],["B","Bedrijf/kantoor + wonen",54325,"54.325"],["C","Klein wooncomplex",175135,"175.135"],["D","Groot oud pand",151174,"151.174"],["E","Afwijkende combinatie",135662,"135.662"]];
+const CW=CAT.map(c=>c[2]);
+/* De 25 grootste gemeenten (CBS 2026, VA-65): naam, lat, lon, op de werklijst, inwoners/10.000 */
+const GM=[["Amsterdam",52.37,4.90,111,94],["Rotterdam",51.92,4.48,29,67],["'s-Gravenhage",52.08,4.30,104,57],["Utrecht",52.09,5.12,96,38],["Eindhoven",51.44,5.48,1,25],["Groningen",53.22,6.57,5,24],["Almere",52.37,5.22,0,23],["Tilburg",51.56,5.09,6,23],["Breda",51.59,4.78,9,19],["Nijmegen",51.84,5.86,7,19],["Arnhem",51.98,5.91,5,17],["Apeldoorn",52.21,5.97,2,17],["Haarlem",52.38,4.64,7,17],["Haarlemmermeer",52.30,4.69,0,17],["Zaanstad",52.44,4.82,8,17],["Amersfoort",52.16,5.39,7,16],["Enschede",52.22,6.89,4,16],["'s-Hertogenbosch",51.69,5.30,12,16],["Zwolle",52.52,6.08,4,13],["Zoetermeer",52.06,4.49,2,13],["Leiden",52.16,4.49,9,13],["Leeuwarden",53.20,5.80,8,13],["Maastricht",50.85,5.69,8,13],["Ede",52.04,5.67,3,13],["Dordrecht",51.81,4.67,3,12]];
+
+const S=(p,q,c1,c2,v,o)=>Object.assign({p,q,c1,c2,d:M.max(.22,M.hypot(q[0]-p[0],q[1]-p[1])/v)},o);
+const line=(p,q,v,o)=>S(p,q,p,q,v,o);
+const quad=(p,q,m,v,o)=>S(p,q,[p[0]+(m[0]-p[0])*2/3,p[1]+(m[1]-p[1])*2/3],[q[0]+(m[0]-q[0])*2/3,q[1]+(m[1]-q[1])*2/3],v,o);
+const flow=(p,q,v,o)=>L.hz?S(p,q,[(p[0]+q[0])/2,p[1]],[(p[0]+q[0])/2,q[1]],v,o):S(p,q,[p[0],(p[1]+q[1])/2],[q[0],(p[1]+q[1])/2],v,o);
+const cb=(a,b,c,d,t)=>{const u=1-t;return u*u*u*a+3*u*u*t*b+3*u*t*t*c+t*t*t*d};
+const at=(s,t)=>[cb(s.p[0],s.c1[0],s.c2[0],s.q[0],t),cb(s.p[1],s.c1[1],s.c2[1],s.q[1],t)];
+const path=(x,s)=>{x.moveTo(s.p[0],s.p[1]);x.bezierCurveTo(s.c1[0],s.c1[1],s.c2[0],s.c2[1],s.q[0],s.q[1])};
+const xy=n=>[n.x,n.y];
+
+function glow(c){if(spr[c])return spr[c];const s=D.createElement("canvas");s.width=s.height=64;const x=s.getContext("2d"),g=x.createRadialGradient(32,32,0,32,32,32);
+  g.addColorStop(0,rgba(c,1));g.addColorStop(.22,rgba(c,.5));g.addColorStop(1,rgba(c,0));x.fillStyle=g;x.fillRect(0,0,64,64);return spr[c]=s}
+const blob=(c,x,y,r,a)=>{if(a<=0)return;ctx.globalAlpha=M.min(1,a);ctx.drawImage(glow(c),x-r,y-r,2*r,2*r)};
+const dot=(x2,c,x,y,r,a)=>{x2.globalAlpha=a;x2.fillStyle=c;x2.beginPath();x2.arc(x,y,r,0,TAU);x2.fill()};
+const txt=(x,s,x0,y0,f,c,al,a)=>{x.globalAlpha=a==null?1:a;x.font=f;x.fillStyle=c;x.textAlign=al||"left";x.textBaseline="alphabetic";x.fillText(s,x0,y0)};
+const st=(x,s,c,a,w)=>{x.globalAlpha=a;x.strokeStyle=c;x.lineWidth=w;x.lineCap="round";x.beginPath();path(x,s);x.stroke()};
+function lab(x,n,v,px,py,al){x.font=F(700,11);const w1=x.measureText(n).width;x.font=F(500,11);const w=w1+3+x.measureText(v).width;
+  let sx=al==="left"?px:al==="right"?px-w:px-w/2;sx=M.max(3,M.min(W-3-w,sx));txt(x,n,sx,py,F(700,11),col.txt);txt(x,v,sx+w1+3,py,F(500,11),col.txt2)}
+
+function readCol(){const cs=getComputedStyle(R),g=n=>cs.getPropertyValue(n).trim(),dark=R.dataset.theme==="dark",navy=K!=="A";
+  col={dark,navy,s:["--s1","--s2","--s3","--s4","--s5"].map(g),txt:navy?"#ffffff":g("--ink"),txt2:navy?"#c6d3e4":g("--ink-2"),
+    mut:navy?"#9fb3cc":g("--muted"),ln:navy?"#ffffff":g("--ink"),add:navy||dark,kern:dark?"#142e4f":"#17365d"};spr={}}
+const letterKleur=i=>i===3?"#3a2a00":i===4?"#3a1220":"#ffffff";
+
+/* ---------- A: stroom ---------- */
+const A={rate:[22,0],
+build(){
+  const hz=L.hz=W>=560,pad=hz?20:14,top=hz?50:0,x=bx;
+  const Pt=(u,v)=>hz?[pad+u*(W-2*pad),top+10+v*(H-top-24)]:[W*.46+v*(W*.54-pad-4),pad+18+u*(H-2*pad-30)];
+  const U=[.015,.2,.42,.62,.8,.975];L.Pt=Pt;L.U=U;
+  L.s0=[];for(let i=0;i<24;i++)L.s0.push(Pt(U[0]+sr()*.02,.03+.94*i/23));
+  L.s1=[];for(let i=0;i<12;i++)L.s1.push(Pt(U[1]+(sr()-.5)*.02,.16+.68*i/11));
+  L.cats=CAT.map((c,i)=>{const p=Pt(U[2],.06+.22*i);return{x:p[0],y:p[1],r:3.5+M.sqrt(c[2]/175135)*6.5,c:col.s[i],k:c[0],tip:"Categorie "+c[0]+" · "+c[1]+" · "+c[3]+" panden"}});
+  const g=Pt(U[3],.5),k=Pt(U[4],.5),o1=Pt(U[5],.3),o2=Pt(U[5],.74);
+  L.gate={x:g[0],y:g[1],r:8,c:col.s[0],tip:"263.319 panden met score 8 of hoger"};
+  L.core={x:k[0],y:k[1],r:12,c:col.s[0],tip:"500 panden op je werklijst"};
+  L.out=[{x:o1[0],y:o1[1],r:8,c:col.s[2],tip:"450 uit de 25 grootste gemeenten"},{x:o2[0],y:o2[1],r:4,c:col.s[2],tip:"50 elders in Nederland"}];
+  N=[...L.cats,L.gate,L.core,...L.out];
+  L.s0.forEach((p,i)=>st(x,flow(p,L.s1[M.round(i/23*11)],1),col.ln,.08,1));
+  L.s1.forEach(p=>L.cats.forEach(c=>st(x,flow(p,xy(c),1),col.ln,.05,1)));
+  L.cats.forEach((c,i)=>st(x,flow(xy(c),xy(L.gate),1),c.c,.3,1+CAT[i][2]/175135*3));
+  st(x,flow(xy(L.gate),xy(L.core),1),col.s[0],.35,3.5);
+  L.out.forEach((o,i)=>st(x,flow(xy(L.core),xy(o),1),col.s[2],.4,i?1.2:3));
+  L.s0.forEach(p=>dot(x,col.mut,p[0],p[1],1.6,.75));
+  L.s1.forEach(p=>dot(x,col.mut,p[0],p[1],2.2,.9));
+  L.cats.forEach((c,i)=>{dot(x,c.c,c.x,c.y,c.r,1);hz?txt(x,c.k,c.x-c.r-6,c.y+4,F(700,11),col.txt2,"right"):txt(x,c.k,c.x,c.y-c.r-5,F(700,11),col.txt2,"center")});
+  x.globalAlpha=.45;x.strokeStyle=col.txt2;x.lineWidth=1;x.setLineDash([3,4]);x.beginPath();
+  if(hz){x.moveTo(g[0],top+4);x.lineTo(g[0],H-8)}else{x.moveTo(W*.46-6,g[1]);x.lineTo(W-pad,g[1])}x.stroke();x.setLineDash([]);
+  dot(x,col.s[0],g[0],g[1],5,1);
+  L.out.forEach(o=>dot(x,o.c,o.x,o.y,o.r,1));
+  const LB=[["9.998.456","verblijfsobjecten"],["6.568.913","panden"],["441.997","in categorie A–E"],["263.319","score ≥ 8"],["500","op je werklijst"],["450 + 50","25 grootste · elders"]];
+  LB.forEach((l,i)=>{const p=Pt(U[i],0);if(hz){const al=i===0?"left":i===5?"right":"center";txt(x,l[0],p[0],20,F(750,15),col.txt,al);txt(x,l[1],p[0],37,F(400,11.5),col.txt2,al)}
+    else{txt(x,l[0],pad,p[1]+2,F(750,14),col.txt);txt(x,l[1],pad,p[1]+17,F(400,11),col.txt2)}});
+},
+spawn(){
+  const a=L.s0[M.random()*24|0],b=L.s1[M.random()*12|0],s=[flow(a,b,95,{c:col.mut})];P.push({s,i:0,t:0,r:1.5});
+  const drop=p=>{const q=L.hz?[p[0]+26,p[1]+(M.random()-.5)*36+14]:[p[0]+(M.random()-.5)*36,p[1]+26];s.push(quad(p,q,[(p[0]+q[0])/2,(p[1]+q[1])/2],40,{c:col.mut,fade:1}))};
+  if(M.random()<.45)return drop(b);
+  const cn=L.cats[pickI(CW)],cp=xy(cn);s.push(flow(b,cp,110,{c:cn.c,end:cn}));
+  if(M.random()<.5)return drop(cp);
+  const gp=xy(L.gate);s.push(flow(cp,gp,110,{c:cn.c,end:L.gate}));
+  if(M.random()<.45)return drop(gp);
+  const kp=xy(L.core);s.push(flow(gp,kp,110,{c:cn.c,end:L.core}));
+  const o=L.out[M.random()<.9?0:1];s.push(flow(kp,xy(o),90,{c:col.s[2],end:o}));
+},
+under(){const k=L.core,b=.5+.5*M.sin(clock*1.8);ctx.globalCompositeOperation=col.add?"lighter":"source-over";
+  blob(col.s[0],k.x,k.y,k.r*3+b*5,(col.add?.45:.3)+k.f*.4);
+  for(const n of N)if(n.f&&n!==k)blob(n.c,n.x,n.y,n.r*3.2,n.f*.55);
+  ctx.globalCompositeOperation="source-over";dot(ctx,col.s[0],k.x,k.y,k.r,1);txt(ctx,"500",k.x,k.y+3.5,F(800,9.5),"#ffffff","center");
+  const g=L.gate;ctx.globalAlpha=.85;ctx.strokeStyle=col.s[0];ctx.lineWidth=1.2;ctx.setLineDash([3,3]);ctx.lineDashOffset=-clock*10;
+  ctx.beginPath();ctx.arc(g.x,g.y,g.r+2,0,TAU);ctx.stroke();ctx.setLineDash([]);ctx.lineDashOffset=0}
+};
+
+/* ---------- B: kern ---------- */
+const B={rate:[15,0],
+build(){
+  const cx=W/2,cy=H/2,Rr=M.min(W,H)/2-6,k=M.max(.75,Rr/190),x=bx;
+  L.c=[cx,cy];L.gr=Rr*.29;
+  L.core={x:cx,y:cy,r:M.max(17,Rr*.13),c:col.s[0],tip:"Je werklijst · 500 panden: 450 uit de 25 grootste gemeenten, 50 elders"};
+  L.cats=CAT.map((c,i)=>{const a=-M.PI/2+i*TAU/5;return{x:cx+M.cos(a)*Rr*.48,y:cy+M.sin(a)*Rr*.48,a,r:(4.5+M.sqrt(c[2]/175135)*6)*k,c:col.s[i],k:c[0],i,tip:"Categorie "+c[0]+" · "+c[1]+" · "+c[3]+" panden"}});
+  const gl=GM.map(g=>({n:g[0],v:g[3]})).concat({n:"Elders",v:50}).sort((a,b)=>b.v-a.v);
+  L.gms=gl.map((g,i)=>{const a=-M.PI/2+((i*7)%26+.5)*TAU/26,el=g.n==="Elders";return{x:cx+M.cos(a)*Rr*.76,y:cy+M.sin(a)*Rr*.76,a,v:g.v,n:g.n,
+    r:g.v?(2+M.sqrt(g.v)*.8)*k:2.2*k,c:el?"#c6d3e4":col.s[2],
+    tip:el?"Elders in Nederland · 50 panden op je werklijst":g.n+" · "+g.v+(g.v===1?" pand":" panden")+" op je werklijst"}});
+  L.halo=[];for(let i=0;i<150;i++)L.halo.push({a:sr()*TAU,r:Rr*(.87+sr()*.12),s:.8+sr()*1.1});
+  N=[L.core,...L.cats,...L.gms];
+  const ring=(r,a,dash)=>{x.globalAlpha=a;x.strokeStyle="#ffffff";x.lineWidth=1;x.setLineDash(dash||[]);x.beginPath();x.arc(cx,cy,r,0,TAU);x.stroke();x.setLineDash([])};
+  ring(Rr*.76,.08);ring(Rr*.48,.08);ring(L.gr,.45,[3,4]);
+  L.gms.forEach(g=>{x.globalAlpha=g.v?.05+.25*M.sqrt(g.v/111):.04;x.strokeStyle=g.c;x.lineWidth=1;x.beginPath();x.moveTo(cx,cy);x.lineTo(g.x,g.y);x.stroke()});
+  L.cats.forEach(c=>{x.globalAlpha=.3;x.strokeStyle=c.c;x.lineWidth=1.5;x.beginPath();x.moveTo(c.x,c.y);x.lineTo(cx,cy);x.stroke()});
+  L.cats.forEach(c=>{dot(x,c.c,c.x,c.y,c.r,1);txt(x,c.k,c.x,c.y+M.max(3,c.r*.38),F(800,M.max(9,c.r*1.05)),letterKleur(c.i),"center")});
+  L.gms.forEach(g=>{if(g.v)dot(x,g.c,g.x,g.y,g.r,.95);else{x.globalAlpha=.6;x.strokeStyle="#ffffff";x.lineWidth=1;x.setLineDash([2,2]);x.beginPath();x.arc(g.x,g.y,g.r,0,TAU);x.stroke();x.setLineDash([])}});
+  L.gms.slice(0,5).forEach(g=>{const ca=M.cos(g.a),sa=M.sin(g.a),d=g.r+7,lx=g.x+ca*d,ly=g.y+sa*d;const al=ca>.3?"left":ca<-.3?"right":"center";
+    lab(x,g.n,String(g.v),lx,al==="center"?(sa<0?ly-4:ly+11):ly+4,al)});
+  txt(x,"score ≥ 8",cx,cy+L.gr+13,F(600,10),"#9fb3cc","center");
+},
+spawn(){
+  const[cx,cy]=L.c,h=L.halo[M.random()*150|0],a=h.a+clock*.03,p0=[cx+M.cos(a)*h.r,cy+M.sin(a)*h.r];
+  const cn=L.cats[pickI(CW)],cp=xy(cn),m=[(p0[0]+cp[0])/2*.9+cx*.1,(p0[1]+cp[1])/2*.9+cy*.1];
+  const s=[quad(p0,cp,m,80,{c:cn.c,end:cn})];P.push({s,i:0,t:0,r:1.3});
+  if(M.random()>.42)return;
+  const gp=[cx+M.cos(cn.a)*L.gr,cy+M.sin(cn.a)*L.gr];s.push(line(cp,gp,70,{c:cn.c}));
+  s.push(line(gp,[cx,cy],60,{c:cn.c,end:L.core,then:()=>{const g=L.gms[pickI(L.gms.map(g=>g.v))];P.push({s:[line([cx,cy],xy(g),90,{c:g.c,end:g})],i:0,t:0,r:1.9})}}));
+},
+under(){const[cx,cy]=L.c,k=L.core,b=.5+.5*M.sin(clock*1.6);
+  ctx.fillStyle="#ffffff";for(const h of L.halo){const a=h.a+clock*.03;ctx.globalAlpha=.24;ctx.fillRect(cx+M.cos(a)*h.r-h.s/2,cy+M.sin(a)*h.r-h.s/2,h.s,h.s)}
+  ctx.globalCompositeOperation="lighter";blob(col.s[0],cx,cy,k.r*3.6+b*6,.5+k.f*.35);
+  for(const n of N)if(n.f&&n!==k)blob(n.c,n.x,n.y,n.r*3.4,n.f*.6);ctx.globalCompositeOperation="source-over"},
+over(){const k=L.core;dot(ctx,col.kern,k.x,k.y,k.r,1);ctx.globalAlpha=.55;ctx.strokeStyle="#ffffff";ctx.lineWidth=1;ctx.beginPath();ctx.arc(k.x,k.y,k.r,0,TAU);ctx.stroke();
+  txt(ctx,"500",k.x,k.y+k.r*.22,F(800,M.round(k.r*.8)),"#ffffff","center");txt(ctx,"werklijst",k.x,k.y+k.r*.62,F(500,M.max(8.5,M.round(k.r*.34))),"#c6d3e4","center")}
+};
+
+/* ---------- C: kaart ---------- */
+/* De 500 panden van de werklijst: (lat-50)*100, (lon-3)*100, index in GM of -1 = elders. Gebouwd: uit de payload (loc.ll). */
+const LEADS="201,136,-1;169,230,17;88,293,-1;194,163,-1;189,261,-1;263,175,-1;236,189,0;211,332,-1;235,193,0;206,131,2;209,212,3;237,190,0;239,193,0;303,266,-1;208,128,2;164,175,-1;201,138,-1;210,210,3;190,135,-1;216,149,20;209,212,3;216,239,15;128,105,-1;176,274,-1;215,239,15;319,264,-1;177,252,-1;217,200,-1;236,193,0;169,232,17;134,83,-1;237,185,0;251,195,-1;226,379,-1;204,166,-1;227,224,-1;208,130,2;193,147,1;251,310,18;207,126,2;209,212,3;159,178,8;235,189,0;231,393,-1;237,189,0;214,259,-1;209,213,3;165,92,-1;110,287,-1;207,129,2;238,163,12;209,209,3;207,128,2;210,127,2;320,280,21;158,178,8;208,126,2;221,228,-1;165,247,-1;260,170,-1;216,149,20;209,212,3;209,212,3;185,286,9;237,187,0;192,125,-1;85,270,22;208,127,2;183,198,-1;237,192,0;208,131,2;237,189,0;208,128,2;244,182,14;134,83,-1;239,189,0;193,335,-1;208,132,2;206,133,2;239,164,12;297,280,-1;206,132,2;205,228,-1;209,212,3;239,193,0;216,149,20;209,212,3;201,136,-1;235,192,0;255,166,-1;133,69,-1;236,190,0;263,174,-1;208,131,2;207,125,2;173,288,-1;244,182,14;201,171,-1;192,148,1;192,147,1;237,189,0;211,129,2;237,188,0;297,280,-1;208,126,2;156,209,7;204,267,23;189,243,-1;198,291,10;277,211,-1;168,261,-1;182,167,24;311,259,-1;236,186,0;191,140,-1;304,182,-1;235,186,0;238,164,12;303,266,-1;210,127,2;190,148,1;147,166,-1;211,209,3;247,306,-1;206,149,19;209,131,2;237,186,0;211,210,3;137,318,-1;209,209,3;210,128,2;210,213,3;211,208,3;236,192,0;236,187,0;209,213,3;236,191,0;210,213,3;207,131,2;209,212,3;209,212,3;238,189,0;85,268,22;237,189,0;207,127,2;244,183,14;209,212,3;209,213,3;236,188,0;239,187,0;208,134,2;208,212,3;237,189,0;239,191,0;210,212,3;222,387,16;208,127,2;185,286,9;185,286,9;210,212,3;237,190,0;216,149,20;205,132,2;235,193,0;169,227,17;160,172,8;155,207,7;209,210,3;216,239,15;216,149,20;237,189,0;206,127,2;207,129,2;208,132,2;236,187,0;206,128,2;236,188,0;216,148,20;209,212,3;210,213,3;238,189,0;210,211,3;209,213,3;238,162,12;208,130,2;209,131,2;236,186,0;169,230,17;208,130,2;210,212,3;209,210,3;222,390,16;237,187,0;209,209,3;238,186,0;221,296,11;208,134,2;184,287,9;208,132,2;237,189,0;207,133,2;216,149,20;236,188,0;158,178,8;156,208,7;208,214,3;320,279,21;207,129,2;209,210,3;209,212,3;237,189,0;85,270,22;237,187,0;206,127,2;250,310,18;210,212,3;238,163,12;191,146,1;208,130,2;235,190,0;209,212,3;245,182,14;235,189,0;209,209,3;193,148,1;208,131,2;236,188,0;170,230,17;210,211,3;206,127,2;210,211,3;237,187,0;181,167,24;205,132,2;322,356,5;231,204,0;236,188,0;236,186,0;236,187,0;194,142,1;238,186,0;235,186,0;198,292,10;206,133,2;237,185,0;210,210,3;207,126,2;236,188,0;160,177,8;210,210,3;208,212,3;238,189,0;209,213,3;235,194,0;209,212,3;237,188,0;206,130,2;209,213,3;208,127,2;209,213,3;236,188,0;192,146,1;236,188,0;209,212,3;192,151,1;208,211,3;236,192,0;208,128,2;209,131,2;198,291,10;189,149,1;206,132,2;207,130,2;235,186,0;210,210,3;159,178,8;208,134,2;209,213,3;206,128,2;209,213,3;206,131,2;320,279,21;193,147,1;238,189,0;320,279,21;209,212,3;209,212,3;252,310,18;249,179,14;211,209,3;185,286,9;207,132,2;209,212,3;181,167,24;320,279,21;207,126,2;198,292,10;244,182,14;193,149,1;193,146,1;239,187,0;189,149,1;239,191,0;236,187,0;156,209,7;207,129,2;209,212,3;238,188,0;205,132,2;210,210,3;206,130,2;169,231,17;206,130,2;184,288,9;191,145,1;206,133,2;209,209,3;235,186,0;209,126,2;206,133,2;208,211,3;209,212,3;208,132,2;238,187,0;209,213,3;209,210,3;237,189,0;216,149,20;209,130,2;206,131,2;204,267,23;189,148,1;155,209,7;236,193,0;237,189,0;206,133,2;209,209,3;172,236,17;238,189,0;189,149,1;238,189,0;238,188,0;208,214,3;209,209,3;85,270,22;209,130,2;207,128,2;235,190,0;211,209,3;215,239,15;220,296,11;238,190,0;236,187,0;237,189,0;209,212,3;209,212,3;192,151,1;237,189,0;207,128,2;207,128,2;209,212,3;215,149,20;207,212,3;236,187,0;235,190,0;237,190,0;208,211,3;235,186,0;209,210,3;189,149,1;208,128,2;210,213,3;320,280,21;194,148,1;206,129,2;209,212,3;207,128,2;208,127,2;252,310,18;235,185,0;206,129,2;221,390,16;207,129,2;238,189,0;169,231,17;208,133,2;209,212,3;208,128,2;169,231,17;237,189,0;211,209,3;209,212,3;169,230,17;237,189,0;209,127,2;206,133,2;206,129,2;192,144,1;208,214,3;208,131,2;235,186,0;237,190,0;207,128,2;206,127,2;191,144,1;189,151,1;208,127,2;215,239,15;238,188,0;85,269,22;191,144,1;207,126,2;159,178,8;207,131,2;208,211,3;236,193,0;237,189,0;169,231,17;199,292,10;208,212,3;209,209,3;322,357,5;209,131,2;237,190,0;185,287,9;211,129,2;206,128,2;159,178,8;208,128,2;237,189,0;207,132,2;209,209,3;157,178,8;206,131,2;235,187,0;216,239,15;206,212,3;206,128,2;206,150,19;235,188,0;209,212,3;87,273,22;238,189,0;322,357,5;215,239,15;193,151,1;208,130,2;320,280,21;237,187,0;238,189,0;207,125,2;320,280,21;237,190,0;238,187,0;192,145,1;207,128,2;237,188,0;323,357,5;209,212,3;236,190,0;238,188,0;208,212,3;244,182,14;213,275,23;192,145,1;237,185,0;208,130,2;209,212,3;206,133,2;192,151,1;85,269,22;209,212,3;193,152,1;155,209,7;85,269,22;169,230,17;238,187,0;210,210,3;207,132,2;142,249,4;209,212,3;209,212,3;209,212,3;208,131,2;222,389,16;206,133,2;208,212,3;231,204,0;208,127,2;236,188,0;209,209,3;250,177,14;235,185,0;235,189,0;207,128,2;322,357,5;239,163,12;209,212,3;241,165,12;235,188,0".split(";").map(s=>s.split(",").map(Number));
+/* Plaatsen voor de pandenwolk (lat, lon, inwoners/10.000) — in deze schets benaderd; gebouwd: een raster uit de BAG. */
+const TOWNS=[[52.96,4.76,5],[52.63,4.75,11],[52.64,5.06,7],[52.70,5.29,2],[53.05,4.80,1.5],[53.30,5.07,.3],[53.37,5.30,.6],[53.44,5.77,.5],[53.48,6.16,.2],[53.17,5.42,1.5],[53.03,5.66,9],[52.96,5.92,5],[53.10,6.10,5],[53.33,6.00,3],[52.99,6.56,7],[52.78,6.90,11],[52.72,6.48,6],[52.70,6.19,3.5],[53.33,6.92,2.5],[53.14,7.03,3],[52.99,6.95,3],[53.20,6.30,6],[53.10,6.88,3],[52.66,6.74,3],[52.52,5.47,8],[52.71,5.75,5],[52.56,5.91,5],[52.25,6.16,10],[52.27,6.79,8],[52.36,6.66,7],[52.58,6.62,6],[51.97,6.29,6],[51.97,6.72,3],[52.14,6.20,5],[52.34,5.62,5],[52.22,5.18,9],[52.01,4.71,7],[52.01,4.36,11],[51.92,4.40,8],[51.85,4.33,7],[51.83,4.13,4],[51.50,3.61,5],[51.44,3.57,4.5],[51.50,3.89,4],[51.33,3.83,5],[51.28,4.05,2.5],[51.65,3.92,3],[51.49,4.29,7],[51.53,4.46,8],[51.64,4.86,5.5],[51.83,4.97,4],[51.89,5.43,4],[51.76,5.52,9],[51.66,5.62,4],[51.48,5.66,9],[51.25,5.71,5],[51.37,6.17,10],[51.53,5.97,4.5],[51.19,5.99,6],[51.00,5.87,9],[50.89,5.98,9],[52.50,4.95,8],[52.46,4.62,7],[52.20,4.41,7],[52.13,4.66,12],[51.99,4.21,11],[52.09,4.88,5],[52.03,5.56,7],[52.14,5.59,6],[51.97,5.67,4],[52.09,5.23,6.5],[52.03,5.09,6.5],[52.79,6.12,4.5],[52.97,5.79,5],[52.77,5.10,4.5],[52.79,4.80,5],[51.68,5.07,5],[51.59,5.33,3],[51.35,5.46,3],[51.73,5.88,9],[51.81,5.25,3],[51.95,5.23,3],[52.29,4.86,9],[51.75,4.45,9],[52.08,4.39,8],[51.90,6.06,4.5],[52.01,6.03,4.5],[52.22,5.49,4.5],[52.47,6.45,2],[52.38,6.80,2],[51.60,4.20,2],[52.30,5.04,4],[52.60,4.70,3]];
+const C={rate:[26,5],
+build(){
+  const X0=3.3,Y0=53.62,cl=.613,ew=2.45,eh=2.92,pad=8,x=bx;
+  const sc=M.min((W-2*pad)/ew,(H-2*pad)/eh),ox=(W-ew*sc)/2,oy=(H-eh*sc)/2,pr=(la,lo)=>[ox+(lo-X0)*cl*sc,oy+(Y0-la)*sc];
+  const kc=pr(53.02,3.74);
+  L.core={x:kc[0],y:kc[1],r:M.max(14,sc*.12),c:col.s[0],tip:"Je werklijst · 500 panden: 450 uit de 25 grootste gemeenten, 50 elders"};
+  const q=xy(L.core),kr=M.min(1.2,sc/110);
+  L.gms=GM.map(g=>{const p=pr(g[1],g[2]);return{x:p[0],y:p[1],v:g[3],n:g[0],r:g[3]?2+M.sqrt(g[3])*.85*kr:2.5,c:col.s[2],
+    tip:g[0]+" · "+g[3]+(g[3]===1?" pand":" panden")+" op je werklijst"}});
+  const arc=(p,v,o)=>quad(p,q,[(p[0]+q[0])/2,(p[1]+q[1])/2-M.abs(q[0]-p[0])*.28],v,o);
+  L.syn=L.gms.map(g=>g.v?arc(xy(g),85,{c:col.s[2],end:L.core}):null);L.arc=arc;
+  const tot=W>380?1700:1100,TW=GM.map(g=>[g[1],g[2],g[4]]).concat(TOWNS),sw=TW.reduce((s,t)=>s+M.pow(t[2],.85),0);
+  L.cloud=[];for(const t of TW){const n=M.max(2,M.round(tot*M.pow(t[2],.85)/sw)),sg=.02+.008*M.sqrt(t[2]);
+    for(let i=0;i<n;i++){const u=M.max(1e-6,sr()),v=sr(),rr=M.sqrt(-2*M.log(u))*sg,an=TAU*v;L.cloud.push(pr(t[0]+rr*M.sin(an),t[1]+rr*M.cos(an)/cl))}}
+  L.leads=LEADS.map(l=>{const p=pr(50+l[0]/100,3+l[1]/100);return{x:p[0],y:p[1],g:l[2]}});
+  N=[L.core,...L.gms];
+  x.fillStyle="#c6d3e4";x.globalAlpha=.34;for(const p of L.cloud)x.fillRect(p[0]-.8,p[1]-.8,1.6,1.6);
+  L.gms.forEach((g,i)=>{if(L.syn[i])st(x,L.syn[i],col.s[2],.07+.28*M.sqrt(g.v/111),1)});
+  for(const l of L.leads)dot(x,col.s[2],l.x,l.y,1.3,.85);
+  L.gms.forEach(g=>{x.globalAlpha=g.v?.45:.35;x.strokeStyle="#ffffff";x.lineWidth=1;x.setLineDash(g.v?[]:[2,2]);x.beginPath();x.arc(g.x,g.y,g.r+1.5,0,TAU);x.stroke();x.setLineDash([])});
+  const P4={"Amsterdam":[1,4,"left"],"'s-Gravenhage":[-1,4,"right"],"Utrecht":[1,13,"left"],"Rotterdam":[-1,13,"right"]};
+  L.gms.forEach(g=>{const o=P4[g.n];if(o)lab(x,g.n,String(g.v),g.x+o[0]*(g.r+6),g.y+o[1],o[2])});
+},
+spawn(){const p=L.cloud[M.random()*L.cloud.length|0];T.push({x:p[0],y:p[1],c:col.s[pickI(CW)],t:0,d:1.8,ring:M.random()<.6})},
+spawn2(){const l=L.leads[M.random()*L.leads.length|0],p=xy(l);T.push({x:l.x,y:l.y,c:col.s[2],t:0,d:1,ring:1,wl:1});
+  if(l.g>=0&&L.syn[l.g]){const g=L.gms[l.g];P.push({s:[line(p,xy(g),40,{c:col.s[2],end:g}),L.syn[l.g]],i:0,t:0,r:1.7})}
+  else P.push({s:[L.arc(p,85,{c:"#c6d3e4",end:L.core})],i:0,t:0,r:1.3})},
+tw(w){const a=M.sin(M.PI*M.min(1,w.t));blob(w.c,w.x,w.y,w.wl?9:6,a*.75);dot(ctx,w.c,w.x,w.y,w.wl?1.8:1.3,a);
+  if(w.ring&&w.t>.35){ctx.globalAlpha=a*.8;ctx.strokeStyle=w.wl?w.c:"#ffffff";ctx.lineWidth=1;ctx.beginPath();ctx.arc(w.x,w.y,3+(w.t-.35)*(w.wl?10:5),0,TAU);ctx.stroke()}},
+under(){const k=L.core,b=.5+.5*M.sin(clock*1.6);ctx.globalCompositeOperation="lighter";blob(col.s[0],k.x,k.y,k.r*2.5+b*4,.42+k.f*.3);
+  for(const n of N)if(n.f&&n!==k)blob(n.c,n.x,n.y,n.r*3.6,n.f*.6);ctx.globalCompositeOperation="source-over"},
+over:B.over
+};
+
+const X={A,B,C}[K];
+function step(dt){
+  clock+=dt;acc+=dt*X.rate[0];acc2+=dt*X.rate[1];
+  while(acc>=1){acc--;if(P.length<170&&T.length<90)X.spawn()}
+  while(acc2>=1){acc2--;if(P.length<170)X.spawn2()}
+  for(let i=P.length-1;i>=0;i--){const p=P[i],s=p.s[p.i];p.t+=dt/s.d;if(p.t>=1){if(s.end)s.end.f=1;if(s.then)s.then();p.i++;p.t=0;if(p.i>=p.s.length)P.splice(i,1)}}
+  for(let i=T.length-1;i>=0;i--){const w=T[i];w.t+=dt/w.d;if(w.t>=1)T.splice(i,1)}
+  for(const n of N)if(n.f)n.f=M.max(0,n.f-dt*1.6);
+}
+function draw(){
+  ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation="source-over";ctx.clearRect(0,0,cv.width,cv.height);ctx.drawImage(bg,0,0);
+  ctx.setTransform(dpr,0,0,dpr,0,0);X.under();
+  ctx.globalCompositeOperation=col.add?"lighter":"source-over";
+  if(X.tw)for(const w of T)X.tw(w);
+  ctx.lineCap="round";
+  for(const p of P){const s=p.s[p.i],a=s.fade?(1-p.t)*.7:1,h=at(s,p.t),b=at(s,M.max(0,p.t-.16));
+    ctx.globalAlpha=.4*a;ctx.strokeStyle=s.c;ctx.lineWidth=p.r*1.3;ctx.beginPath();ctx.moveTo(b[0],b[1]);ctx.lineTo(h[0],h[1]);ctx.stroke();
+    blob(s.c,h[0],h[1],p.r*4,.55*a);dot(ctx,s.c,h[0],h[1],p.r,a)}
+  ctx.globalCompositeOperation="source-over";ctx.globalAlpha=1;if(X.over)X.over();
+}
+const isStill=()=>mq.matches||forced;
+function still(){P=[];T=[];clock=0;for(let i=0;i<220;i++)step(1/30);for(const n of N)n.f=0;draw()}
+function frame(ts){raf=0;if(isStill()||!vis||D.hidden)return;const dt=last?M.min(.05,(ts-last)/1000):1/60;last=ts;step(dt);draw();raf=requestAnimationFrame(frame)}
+function play(){if(!isStill()&&vis&&!D.hidden&&!raf){last=0;raf=requestAnimationFrame(frame)}}
+function rebuild(){
+  const r=box.getBoundingClientRect();W=M.max(1,M.round(r.width));H=M.max(1,M.round(r.height));dpr=M.min(window.devicePixelRatio||1,2);
+  cv.width=bg.width=M.round(W*dpr);cv.height=bg.height=M.round(H*dpr);
+  readCol();seed=11;N=[];P=[];T=[];L={};acc=acc2=0;bx.setTransform(dpr,0,0,dpr,0,0);bx.clearRect(0,0,W,H);X.build();bx.globalAlpha=1;
+  if(isStill())still();else{draw();play()}
+}
+cv.addEventListener("pointermove",e=>{const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let best=null,bd=1e9;
+  for(const n of N){if(!n.tip)continue;const d=M.hypot(n.x-x,n.y-y)-n.r;if(d<10&&d<bd){bd=d;best=n}}
+  if(!best){tip.hidden=true;return}tip.textContent=best.tip;tip.hidden=false;const w=tip.offsetWidth;
+  tip.style.left=M.max(w/2+4,M.min(W-w/2-4,best.x))+"px";tip.style.top=M.max(30,best.y-best.r)+"px"});
+cv.addEventListener("pointerleave",()=>{tip.hidden=true});
+new ResizeObserver(()=>{clearTimeout(rt);rt=setTimeout(rebuild,60)}).observe(box);
+new IntersectionObserver(e=>{vis=e[e.length-1].isIntersecting;play()}).observe(cv);
+D.addEventListener("visibilitychange",play);
+mq.addEventListener("change",rebuild);
+new MutationObserver(rebuild).observe(R,{attributes:true,attributeFilter:["data-theme"]});
+addEventListener("message",e=>{const d=e.data||{};if("stil" in d){forced=!!d.stil;if(forced){cancelAnimationFrame(raf);raf=0;still()}else play()}});
+rebuild();
+}
+
+/* Menu, Thema en berichten van deze pagina, in elk voorbeeldscherm. */
+function UI(){
+  const D=document,R=D.documentElement,vg=D.getElementById("vg"),mk=D.querySelector(".menuknop");
+  D.getElementById("themeBtn").onclick=()=>R.setAttribute("data-theme",R.getAttribute("data-theme")==="dark"?"light":"dark");
+  const open=o=>{vg.classList.toggle("open",o);mk.setAttribute("aria-expanded",String(o))};
+  mk.onclick=()=>open(true);D.querySelector(".sluit-menu").onclick=()=>open(false);D.querySelector(".scrim").onclick=()=>open(false);
+  D.querySelectorAll(".nav a,.skip").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();open(false);D.getElementById("inhoud").focus()}));
+  addEventListener("message",e=>{const d=e.data||{};if(d.thema)R.setAttribute("data-theme",d.thema)});
+  requestAnimationFrame(()=>requestAnimationFrame(()=>vg.classList.add("klaar")));
+}
+
+const MOCK_CSS=`
+:root{color-scheme:light;--plane:#f9f9f7;--surface:#fcfcfb;--surface-2:#ffffff;--ink:#0b0b0b;--ink-2:#52514e;--muted:#898781;
+  --grid:#e1e0d9;--baseline:#c3c2b7;--ring:rgba(11,11,11,.10);--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;
+  --good:#0ca30c;--crit:#d03b3b;--shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -12px rgba(11,11,11,.12);--brand:#12233b;
+  --nav-tekst:#c6d3e4;--nav-label:#9fb3cc;--nav-hover:rgba(255,255,255,.08);--nav-actief:rgba(255,255,255,.14);--nav-lijn:rgba(255,255,255,.10);
+  /* nieuw (voorstel, VA-80) */
+  --brand-2:color-mix(in srgb,var(--brand) 78%,var(--s1));
+  --held:linear-gradient(155deg,var(--brand) 0%,var(--brand) 35%,var(--brand-2) 100%);
+  --glas:color-mix(in srgb,var(--surface-2) 72%,transparent);
+  --glas-rand:color-mix(in srgb,var(--ink) 9%,transparent);
+  --gloed:color-mix(in srgb,var(--s1) 40%,transparent);
+  --schaduw-hoog:0 1px 2px rgba(11,11,11,.05),0 28px 56px -28px color-mix(in srgb,var(--brand) 60%,transparent);
+}
+:root[data-theme="dark"]{color-scheme:dark;--plane:#0d0d0d;--surface:#1a1a19;--surface-2:#201f1e;--ink:#ffffff;--ink-2:#c3c2b7;--muted:#898781;
+  --grid:#2c2c2a;--baseline:#383835;--ring:rgba(255,255,255,.10);--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;
+  --good:#0ca30c;--crit:#e06666;--shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);--brand:#0a1524;
+  --schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9)}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--plane);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;line-height:1.45;overflow-x:hidden}
+.skip{position:absolute;left:12px;top:-60px;z-index:100;background:var(--brand);color:#fff;padding:10px 14px;border-radius:10px;font-size:14px;font-weight:650;text-decoration:none}
+.skip:focus{top:12px;outline:2px solid #fff;outline-offset:2px}
+.vg{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh}
+.side{grid-column:1;grid-row:1 / span 2;position:sticky;top:0;align-self:start;height:100vh;overflow:auto;background:var(--brand);color:#fff;
+  border-right:1px solid var(--nav-lijn);display:flex;flex-direction:column;padding:22px 12px 16px}
+.side-kop{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.side .merk{padding:2px 10px 18px}
+.mark{font-weight:800;letter-spacing:.16em;font-size:15px;color:#fff;white-space:nowrap}
+.mark small{display:block;letter-spacing:.28em;font-weight:600;font-size:10px;color:var(--nav-label);margin-top:3px}
+.merk-sub{margin:12px 0 0;font-size:12.5px;color:var(--nav-tekst)}
+.nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.nav .groep{margin:0;padding:16px 12px 6px;font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--nav-label)}
+.nav .groep:first-child{padding-top:4px}
+.nav a{position:relative;display:flex;align-items:center;min-height:40px;padding:8px 12px 8px 14px;border-radius:10px;color:var(--nav-tekst);font-size:14px;font-weight:500;text-decoration:none}
+@media (hover:hover){.nav a:hover{background:var(--nav-hover);color:#fff}}
+.nav a:focus-visible{outline:2px solid #fff;outline-offset:-2px}
+.nav a[aria-current]{background:var(--nav-actief);color:#fff;font-weight:700}
+.nav a[aria-current]::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;background:#fff}
+.side-voet{margin-top:auto;padding:16px 10px 0;border-top:1px solid var(--nav-lijn);display:flex;flex-wrap:wrap;gap:8px}
+.toggle{cursor:pointer;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#fff;font:inherit;font-size:12px;padding:7px 12px;border-radius:999px;min-height:32px}
+.toggle:focus-visible,.menuknop:focus-visible,.sluit-menu:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.sluit-menu{display:none;align-items:center;gap:6px;cursor:pointer;flex:none;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#fff;font:inherit;font-size:13px;font-weight:650;min-height:40px;padding:0 12px;border-radius:10px}
+.sluit-menu span{font-size:18px;line-height:1}
+.topbalk{display:none}
+.menuknop{display:inline-flex;align-items:center;gap:10px;cursor:pointer;min-height:44px;padding:0 14px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#fff;font:inherit;font-size:14px;font-weight:650;border-radius:10px}
+.menuknop .streep{width:18px;height:12px;flex:none;background:linear-gradient(#fff 0 0) top/100% 2px no-repeat,linear-gradient(#fff 0 0) center/100% 2px no-repeat,linear-gradient(#fff 0 0) bottom/100% 2px no-repeat}
+.scrim{display:none}
+.inhoud{grid-column:2;min-width:0;padding:26px 28px 48px}
+.inhoud:focus{outline:none}
+.kop{display:flex;flex-direction:column;gap:6px;margin:0 2px 16px}
+.kop-rij{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 14px;min-height:28px}
+.kruimel{margin:0;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+.kruimel b{color:var(--ink);font-weight:800}
+.kruimel span{margin:0 .35em}
+.kop h1{margin:0;font-size:30px;font-weight:750;letter-spacing:-.02em;line-height:1.15}
+.kop-zin{margin:0;font-size:14.5px;color:var(--ink-2);max-width:78ch}
+.spills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{font-size:12px;color:var(--ink-2);background:var(--surface);border:1px solid var(--ring);padding:4px 11px;border-radius:999px;white-space:nowrap}
+
+/* ---- het brein (gedeeld) ---- */
+.held{position:relative;margin:0 0 14px;border-radius:18px;overflow:hidden}
+.brein{position:relative}
+.brein canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tip{position:absolute;z-index:3;pointer-events:none;transform:translate(-50%,calc(-100% - 10px));background:var(--brand);color:#fff;font-size:12px;font-weight:600;
+  padding:6px 9px;border-radius:8px;box-shadow:var(--shadow);white-space:nowrap;border:1px solid rgba(255,255,255,.18)}
+.tip[hidden]{display:none}
+.held figcaption{position:relative;font-size:11.5px;color:var(--ink-2);padding:2px 18px 14px}
+.vh{position:absolute!important;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.trap{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.trap li{font-size:12px;color:var(--nav-tekst);background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:5px 10px;white-space:nowrap}
+.trap b{color:#fff;font-weight:750;font-variant-numeric:tabular-nums;margin-right:3px}
+.trap li.wl{background:color-mix(in srgb,var(--s3) 22%,transparent);border-color:color-mix(in srgb,var(--s3) 60%,transparent)}
+
+/* ---- A: glas op plattegrond ---- */
+.c-A .deel{position:relative}
+.c-A .deel::before{content:"";position:absolute;inset:-26px -28px auto;height:460px;z-index:0;pointer-events:none;
+  background:linear-gradient(var(--grid) 1px,transparent 1px) 0 0/32px 32px,linear-gradient(90deg,var(--grid) 1px,transparent 1px) 0 0/32px 32px,
+    radial-gradient(60% 80% at 70% 30%,color-mix(in srgb,var(--s1) 14%,transparent),transparent 70%);
+  -webkit-mask-image:linear-gradient(#000 30%,transparent);mask-image:linear-gradient(#000 30%,transparent);opacity:.7}
+.c-A .deel>*{position:relative;z-index:1}
+.glas{background:linear-gradient(180deg,var(--glas),color-mix(in srgb,var(--surface) 55%,transparent)),
+  radial-gradient(120% 140% at 85% 0%,color-mix(in srgb,var(--s1) 10%,transparent),transparent 60%);
+  border:1px solid var(--glas-rand);box-shadow:var(--schaduw-hoog);-webkit-backdrop-filter:blur(14px) saturate(140%);backdrop-filter:blur(14px) saturate(140%)}
+.brein-a .brein{height:250px;margin:8px 4px 0}
+
+/* ---- B: navy kern naast het kantoor ---- */
+.duo{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:14px;align-items:stretch}
+.navy{background:var(--held);color:#fff;border:1px solid var(--nav-lijn);box-shadow:var(--schaduw-hoog)}
+.brein-b{margin:0;display:flex;flex-direction:column}
+.brein-b::before{content:"";position:absolute;inset:0;background:radial-gradient(55% 45% at 50% 56%,var(--gloed),transparent 70%);opacity:.6;pointer-events:none}
+.b-kop{position:relative;padding:14px 16px 0}
+.b-lab{margin:0 0 8px;font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--nav-label)}
+.brein-b .brein{flex:1;min-height:300px}
+.brein-b figcaption,.band figcaption{color:var(--nav-tekst)}
+
+/* ---- C: navy band met de kaart ---- */
+.c-C .inhoud{padding-top:0}
+.band{position:relative;margin:0 -28px;padding:30px 28px 92px;background:var(--held);color:#fff;display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,440px);gap:24px;align-items:center;overflow:hidden}
+.band::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(40% 70% at 78% 45%,var(--gloed),transparent 70%);opacity:.45}
+.band>*{position:relative}
+.band .kop{margin:0}
+.band .kruimel{color:var(--nav-label)}.band .kruimel b{color:#fff}
+.band h1{color:#fff;font-size:34px}
+.band .kop-zin{color:var(--nav-tekst);margin-bottom:10px}
+.band .pill{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.14);color:var(--nav-tekst)}
+.brein-c{margin:0;border-radius:0;overflow:visible}
+.brein-c .brein{height:460px}
+.legenda{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px;padding:6px 0 0!important}
+.legenda span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.legenda i{display:inline-block;width:8px;height:8px;border-radius:50%}
+.lg-pand{background:rgba(255,255,255,.45);width:4px!important;height:4px!important}
+.lg-cat{background:conic-gradient(var(--s1) 0 20%,var(--s2) 0 40%,var(--s3) 0 60%,var(--s4) 0 80%,var(--s5) 0)}
+.lg-ring{border:1.5px solid #fff;width:10px!important;height:10px!important}
+.lg-wl{background:var(--s3);box-shadow:0 0 6px 2px color-mix(in srgb,var(--s3) 60%,transparent)}
+.over{position:relative;z-index:2;margin-top:-64px;box-shadow:var(--schaduw-hoog)}
+
+/* ---- het kantoor (plek van het 3D-kantoor, VA-48/VA-60) ---- */
+.pk{background:var(--surface);border:1px solid var(--ring);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column}
+.pk-kop{display:flex;gap:4px 10px;align-items:baseline;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--grid);font-size:12.5px;color:var(--ink-2)}
+.pk-kop b{color:var(--ink);font-size:13.5px}
+.pk-scene{position:relative;width:100%;aspect-ratio:1.45/1;background:linear-gradient(180deg,var(--surface-2),var(--surface))}
+@media (min-width:801px){.pk-scene{max-height:calc(100vh - 270px)}}
+.iso{position:absolute;inset:6% 5% 12%;width:90%;height:82%}
+.iso polygon{stroke:var(--ring);stroke-width:.8}
+.iso .vloer{fill:color-mix(in srgb,var(--grid) 60%,var(--surface-2))}
+.iso .muur-l{fill:var(--grid)}
+.iso .muur-r{fill:color-mix(in srgb,var(--grid) 65%,var(--surface-2))}
+.iso .bord{fill:var(--brand)}
+.iso .lijn{stroke:var(--baseline);stroke-width:.6;opacity:.7}
+.iso .bureau-t{fill:var(--surface-2)}.iso .bureau-l{fill:var(--baseline)}.iso .bureau-r{fill:color-mix(in srgb,var(--baseline) 60%,var(--grid))}
+.iso .huid{fill:#e8b48f}
+.pk-plek{position:absolute;left:12px;bottom:10px;font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--ink-2);background:var(--surface);border:1px dashed var(--baseline);border-radius:999px;padding:3px 10px}
+.pk-balk{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border-top:1px solid var(--grid);background:var(--surface)}
+.pk-knop{display:inline-flex;align-items:center;gap:9px;min-height:42px;padding:6px 14px 6px 6px;border-radius:10px;border:1px solid var(--ring);background:var(--surface-2);color:var(--ink);font:inherit;font-size:13px;font-weight:650;text-align:left}
+.pk-knop .nr{flex:none;width:28px;height:28px;border-radius:7px;background:var(--brand);color:#fff;font-size:13px;font-weight:800;display:grid;place-items:center}
+.pk-knop.chef .nr{background:transparent;border:1.5px dashed var(--baseline)}
+.pk-knop .tk{display:flex;flex-direction:column;min-width:0}
+.pk-knop .nm{display:flex;align-items:center;gap:6px}
+.pk-knop .nm::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.pk-knop.werkt .nm::before{background:var(--s1)}.pk-knop.aandacht .nm::before{background:var(--s4)}.pk-knop.slaapt .nm::before{background:var(--baseline)}
+.pk-knop.chef .nm::before{background:var(--brand);box-shadow:0 0 0 1px var(--baseline)}
+.pk-knop .bel{display:none;font-size:12px;font-weight:500;color:var(--ink-2);margin-top:1px}
+.pk-knop.aandacht .bel::before{content:"! ";color:var(--s2);font-weight:800}
+.pk-balk .tussen{flex:1}
+
+@media (max-width:900px){.duo{grid-template-columns:minmax(0,1fr)}.brein-b .brein{flex:none;aspect-ratio:1/1;min-height:0}}
+@media (max-width:800px){
+  .vg{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr}
+  .topbalk{grid-column:1;grid-row:1;display:flex;position:sticky;top:0;z-index:20;align-items:center;justify-content:space-between;gap:12px;height:56px;padding:0 10px 0 16px;background:var(--brand);color:#fff;box-shadow:0 1px 0 var(--nav-lijn)}
+  .topbalk .mark{font-size:13px}.topbalk .mark small{font-size:9px;margin-top:2px}
+  .inhoud{grid-column:1;grid-row:2;padding:18px 14px 40px}
+  .kop h1{font-size:24px}.kop-zin{font-size:14px}
+  .side{position:fixed;top:0;bottom:0;left:0;width:min(304px,86%);height:auto;z-index:40;transform:translateX(-100%);visibility:hidden;box-shadow:0 0 40px rgba(0,0,0,.35);padding-top:14px}
+  .vg.open .side{transform:none;visibility:visible}
+  .vg.klaar .side{transition:transform .22s ease,visibility 0s linear .22s}.vg.klaar.open .side{transition:transform .22s ease}
+  .sluit-menu{display:inline-flex}
+  .scrim{display:block;position:fixed;inset:0;z-index:30;background:rgba(11,11,11,.55);opacity:0;visibility:hidden}
+  .vg.open .scrim{opacity:1;visibility:visible}
+  .pk-balk{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;padding:8px}
+  .pk-balk .tussen{display:none}
+  .pk-knop{width:100%;align-items:flex-start;padding:8px 10px 8px 8px}
+  .pk-knop .bel{display:block}
+  .c-C .inhoud{padding-top:0}
+  .band{margin:0 -14px;padding:20px 14px 76px;grid-template-columns:minmax(0,1fr);gap:12px}
+  .band h1{font-size:25px}
+  .brein-c .brein{height:330px}
+  .trap li{font-size:11.5px;padding:4px 8px}
+}
+@media (max-width:600px){.brein-a .brein{height:340px;margin:6px 0 0}.held figcaption{padding:2px 14px 12px}.c-A .deel::before{inset:-18px -14px auto}}
+@media (prefers-reduced-motion: reduce){.vg.klaar .side,.vg.klaar.open .side{transition:none}}
+`;
+
+/* ---------- markup van het voorbeeldscherm ---------- */
+const ARIA="Selectie op de BAG van 1 november 2026: 9.998.456 verblijfsobjecten, 6.568.913 panden, 441.997 in categorie A tot en met E, 263.319 met score 8 of hoger, 500 op je werklijst: 450 uit de 25 grootste gemeenten en 50 elders. Amsterdam 111, 's-Gravenhage 104, Utrecht 96, Rotterdam 29.";
+const KRUIMEL='<p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Kantoor</b></p>';
+const PILLS='<div class="spills"><div class="pill">Bron: PDOK BAG GeoPackage</div><div class="pill">Peildatum 1 nov 2026</div></div>';
+const TRAP='<ol class="trap" aria-label="Van BAG naar werklijst"><li><b>9.998.456</b>verblijfsobjecten</li><li><b>6.568.913</b>panden</li><li><b>441.997</b>in A–E</li><li><b>263.319</b>score ≥ 8</li><li class="wl"><b>500</b>op je werklijst</li></ol>';
+const CANVAS='<div class="brein"><canvas id="brein" role="img" aria-label="'+ARIA.replace(/'/g,"&#39;")+'"></canvas><div class="tip" id="tip" hidden></div></div>';
+
+function iso(){
+  const cube=(x,y,s,h)=>`<polygon class="bureau-t" points="${x},${y-h-s/2} ${x+s},${y-h} ${x},${y-h+s/2} ${x-s},${y-h}"/><polygon class="bureau-l" points="${x-s},${y-h} ${x},${y-h+s/2} ${x},${y+s/2} ${x-s},${y}"/><polygon class="bureau-r" points="${x+s},${y-h} ${x},${y-h+s/2} ${x},${y+s/2} ${x+s},${y}"/>`;
+  const mens=(x,y,c)=>`<rect x="${x-5}" y="${y-30}" width="10" height="15" rx="4" fill="${c}"/><circle cx="${x}" cy="${y-35}" r="5" class="huid"/>`;
+  let l="";for(const f of [.25,.5,.75]){l+=`<line class="lijn" x1="${30+170*f}" y1="${150+85*f}" x2="${200+170*f}" y2="${65+85*f}"/><line class="lijn" x1="${30+170*f}" y1="${150-85*f}" x2="${200+170*f}" y2="${235-85*f}"/>`}
+  const WK=[[130,135,"var(--s1)"],[200,100,"var(--s1)"],[270,135,"var(--baseline)"],[200,170,"var(--s4)"]];
+  return `<svg class="iso" viewBox="0 0 400 250" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><polygon class="muur-l" points="30,150 200,65 200,10 30,95"/><polygon class="muur-r" points="200,65 370,150 370,95 200,10"/><polygon class="bord" points="240,58 320,98 320,80 240,40"/><polygon class="vloer" points="200,65 370,150 200,235 30,150"/>${l}${WK.map(([x,y,c])=>mens(x,y-6,c)+cube(x,y+4,22,14)).join("")}${mens(140,186,"var(--brand)")}</svg>`;
+}
+function kantoor(extra){
+  const k=(c,nr,nm,bel)=>`<button class="pk-knop ${c}" type="button" aria-expanded="false"><span class="nr"${nr?"":' aria-hidden="true"'}>${nr}</span><span class="tk"><span class="nm">${nm}</span><span class="bel">${bel}</span></span></button>`;
+  return `<div class="pk ${extra||""}" id="kantoor"><div class="pk-kop"><b>Kantoor</b><span>Elke medewerker is een stap van de pandenselectie.</span></div>
+  <div class="pk-scene">${iso()}<span class="pk-plek">Hier staat het 3D-kantoor, zoals nu</span></div>
+  <div class="pk-balk" role="group" aria-label="Uitleg per medewerker">${k("werkt",1,"Ingest","BAG opgehaald 1 nov 2026")}${k("werkt",2,"Selectie","500 panden op de werklijst")}${k("slaapt",3,"Verrijking","Geen extra bron actief")}${k("aandacht",4,"Controle","500 panden wachten op visuele controle")}<span class="tussen"></span>${k("chef","","Kantoormanager","Loopt naar Controle, die je aandacht vraagt.")}</div></div>`;
+}
+const HERO={
+  A:()=>`<section class="deel" aria-labelledby="t-kop"><header class="kop"><div class="kop-rij">${KRUIMEL}${PILLS}</div>
+    <h1 id="t-kop">Van 6.568.913 panden naar 500 op je werklijst</h1>
+    <p class="kop-zin">Zo liep de selectie op de BAG van 1 november 2026. Wie afvalt, zakt grijs weg; wie blijft, krijgt de kleur van zijn categorie.</p></header>
+    <figure class="held glas brein-a">${CANVAS}<figcaption>De stroom is niet op schaal, de cijfers wel. Wijs een knoop aan voor het getal.</figcaption></figure>
+    ${kantoor()}</section>`,
+  B:()=>`<section class="deel" aria-labelledby="t-kop"><header class="kop"><div class="kop-rij">${KRUIMEL}${PILLS}</div>
+    <h1 id="t-kop">Het brein achter je werklijst</h1>
+    <p class="kop-zin">Rond één kern liggen de vijf categorieën en de 25 grootste gemeenten. De pulsen volgen de route van een pand door de selectie op de BAG van 1 november 2026.</p></header>
+    <div class="duo">${kantoor()}<figure class="held navy brein-b"><div class="b-kop"><p class="b-lab">Selectiebrein</p>${TRAP}</div>${CANVAS}
+    <figcaption>Buiten: panden. Binnen: categorie A–E. Stippelring: score ≥ 8. Kern: je werklijst. Wijs een knoop aan voor het getal.</figcaption></figure></div></section>`,
+  C:()=>`<section class="deel" aria-labelledby="t-kop"><div class="band"><header class="kop"><div class="kop-rij">${KRUIMEL}${PILLS}</div>
+    <h1 id="t-kop">Waar je 500 panden liggen</h1>
+    <p class="kop-zin">De hoogst scorende panden van Nederland op de BAG van 1 november 2026: 450 uit de 25 grootste gemeenten, 50 elders. Ze lichten op waar ze liggen en lopen naar je werklijst.</p>${TRAP}</header>
+    <figure class="held brein-c">${CANVAS}<figcaption class="legenda"><span><i class="lg-pand"></i>pand</span><span><i class="lg-cat"></i>in A–E</span><span><i class="lg-ring"></i>score ≥ 8</span><span><i class="lg-wl"></i>op je werklijst</span></figcaption></figure></div>
+    ${kantoor("over")}</section>`
+};
+function shell(k){
+  const nav='<nav class="nav" aria-label="Onderdelen van het dashboard"><p class="groep">Overzicht</p><ul><li><a href="#kantoor" aria-current="location">Kantoor</a></li><li><a href="#kerncijfers">Kerncijfers</a></li></ul><p class="groep">Panden</p><ul><li><a href="#voorraad">Voorraad</a></li><li><a href="#werklijst">Werklijst</a></li></ul></nav>';
+  return `<a class="skip" href="#inhoud">Sla het menu over</a><div class="vg" id="vg"><header class="topbalk"><div class="mark">LEVRAI GROUP<small>VASTGOED</small></div><button class="menuknop" type="button" aria-expanded="false" aria-controls="menu"><span class="streep" aria-hidden="true"></span>Menu</button></header><div class="scrim" aria-hidden="true"></div><aside class="side" id="menu" aria-label="Menu"><div class="side-kop"><div class="merk"><div class="mark">LEVRAI GROUP<small>VASTGOED</small></div><p class="merk-sub">Pandenselectie&nbsp;·&nbsp;Nederland</p></div><button class="sluit-menu" type="button"><span aria-hidden="true">×</span>Sluit menu</button></div>${nav}<div class="side-voet"><button class="toggle" id="themeBtn" type="button">◐ Thema</button></div></aside><main class="inhoud" id="inhoud" tabindex="-1">${HERO[k]()}</main></div>`;
+}
+
+/* ---------- deze pagina ---------- */
+(function(){
+  const R=document.documentElement;
+  const state={thema:"light",stil:false};
+  const doc=k=>`<!doctype html><html lang="nl" data-theme="${state.thema}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Concept ${k}</title><style>${MOCK_CSS}</style></head><body data-c="${k}" class="c-${k}">${shell(k)}<script>(${UI})();(${ENGINE})();<\/script></body></html>`;
+  const frames=[...document.querySelectorAll(".frame")];
+  const fit=f=>{const w=+f.dataset.w,h=+f.dataset.h,s=f.clientWidth/w,i=f.querySelector("iframe");
+    i.style.width=w+"px";i.style.height=h+"px";i.style.transform="scale("+s+")";f.style.height=(h*s)+"px"};
+  const ro=new ResizeObserver(es=>es.forEach(e=>fit(e.target)));
+  const send=i=>{try{i.contentWindow.postMessage({thema:state.thema,stil:state.stil},"*")}catch(e){}};
+  frames.forEach(f=>{const i=f.querySelector("iframe");i.addEventListener("load",()=>send(i));i.srcdoc=doc(i.dataset.k);fit(f);ro.observe(f)});
+  const tb=document.getElementById("pThema"),sb=document.getElementById("pStil");
+  tb.onclick=()=>{state.thema=state.thema==="dark"?"light":"dark";R.setAttribute("data-theme",state.thema);
+    tb.setAttribute("aria-pressed",String(state.thema==="dark"));tb.textContent=state.thema==="dark"?"◐ Toon licht thema":"◐ Toon donker thema";
+    frames.forEach(f=>send(f.querySelector("iframe")))};
+  sb.onclick=()=>{state.stil=!state.stil;sb.setAttribute("aria-pressed",String(state.stil));sb.textContent=state.stil?"▶ Zet beweging aan":"❚❚ Toon stil beeld";
+    frames.forEach(f=>send(f.querySelector("iframe")))};
+})();
+</script>
+</body>
+</html>

@@ -831,12 +831,45 @@ def gangbare_peildatum(top: list[dict]) -> str | None:
     return max(tellen, key=tellen.get) if tellen else None
 
 
-def bewaar_blok(top: list[dict]) -> dict:
-    """
-    PAYLOAD.bewaar: de teksten, de peildatum die een lead zonder eigen 'dp' heeft, en de maandnamen van
-    nl_datum(), zodat de pagina Bewaarde panden (VA-91) een datum schrijft zoals de rest van het dashboard.
-    """
-    return {"tekst": BEWAAR_TEKST, "dp": gangbare_peildatum(top), "maanden": list(MAANDEN)}
+# VA-97, Ayman: "verborgen betekent alleen verborgen voor een maand". Een verborgen pand komt na
+# werklijst.verberg_dagen dagen (config.yaml; 30 als het er niet staat) vanzelf terug op de werklijst,
+# gerekend vanaf het moment van verbergen ('sinds'). Kopij: Lumi, copy-va97.md. Het script vult
+# alleen {adres} en {datum} in. {datum} is de korte datum van _nl() (dag, korte maand, jaar; harde spaties): Python geeft
+# MAANDEN en NBSP mee in PAYLOAD.bewaar, het script zet alleen dag, maand en jaar achter elkaar (VA-31).
+VERBERG_DAGEN = 30
+VERBERG_DUUR_TEKST = {
+    # VA-6: een nieuwe maandrun kan de werklijst vervangen, dus geen belofte dat het terugkomt (Lumi).
+    "status.verborgen": "{adres} is verborgen tot {datum}. Staat het dan nog op je werklijst, dan zie je het weer.",
+    "label.verborgen": "Verborgen tot {datum}",
+}
+
+
+def lees_verberg_dagen(cfg: dict) -> tuple[int, list[str]]:
+    """Hoeveel dagen een verborgen pand verborgen blijft, en een waarschuwing bij een onleesbare waarde."""
+    w = cfg.get("werklijst") if isinstance(cfg.get("werklijst"), dict) else {}
+    n = w.get("verberg_dagen")
+    if n is None:
+        return VERBERG_DAGEN, []
+    if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+        return VERBERG_DAGEN, [f"werklijst.verberg_dagen: {n!r} is geen positief geheel getal; "
+                               f"het dashboard neemt {VERBERG_DAGEN} dagen"]
+    return n, []
+
+
+def bewaar_blok(top: list[dict], dagen: int = VERBERG_DAGEN) -> dict:
+    """PAYLOAD.bewaar: de teksten, de peildatum die een lead zonder eigen 'dp' heeft, en de verbergduur (VA-97)."""
+    return {"tekst": BEWAAR_TEKST, "dp": gangbare_peildatum(top), "dagen": dagen, "duur": VERBERG_DUUR_TEKST,
+            "maanden": list(MAANDEN), "nbsp": NBSP}
+
+
+def met_duur_verborgen(payload: dict, cfg: dict) -> dict:
+    """De verbergduur uit config.yaml in PAYLOAD.bewaar (VA-97); een onleesbare waarde wordt een waarschuwing."""
+    dagen, let = lees_verberg_dagen(cfg)
+    if let:   # de build drukt het af, net als de waarschuwingen van de planning
+        payload = {**payload, "planning_waarschuwingen": (payload.get("planning_waarschuwingen") or []) + let}
+    bw = payload.get("bewaar") or bewaar_blok([])
+    return {**payload, "bewaar": {**bw, "dagen": dagen, "duur": VERBERG_DUUR_TEKST,
+                                  "maanden": list(MAANDEN), "nbsp": NBSP}}
 
 
 # De pagina Bewaarde panden (VA-91). Alleen in de landelijke bouw: Lumi's 'Niet in deze werklijst' is voor
@@ -1354,8 +1387,8 @@ def pagina(lijst: str, titel: str, feiten_titel: str, feiten_cap: str, bronpil: 
 def bouw_payload() -> dict:
     cfg = load_config()
     if nederland.is_nederland(cfg):
-        return met_slot(met_planning(bouw_payload_landelijk(cfg), cfg), cfg)
-    return met_slot(met_planning(bouw_payload_gebied(cfg), cfg), cfg)
+        return met_duur_verborgen(met_slot(met_planning(bouw_payload_landelijk(cfg), cfg), cfg), cfg)
+    return met_duur_verborgen(met_slot(met_planning(bouw_payload_gebied(cfg), cfg), cfg), cfg)
 
 
 def bouw_payload_gebied(cfg: dict) -> dict:
@@ -3053,15 +3086,35 @@ function maakOpenbaar(card, d) {
    werklijst. Een pand is bewaard, verborgen of geen van beide; dezelfde knop nog eens zet het terug.
    Per pand bewaart de browser ook wat VA-91 nodig heeft om het later te tonen, ook als het niet meer
    in de data staat. Weigert de browser opslag (privévenster), dan zeggen de knoppen dat; de rest werkt.
-   Alle tekst komt uit PAYLOAD.bewaar.tekst (Python). */
+   Alle tekst komt uit PAYLOAD.bewaar.tekst (Python).
+   VA-97: verborgen geldt PAYLOAD.bewaar.dagen dagen (30) vanaf 'sinds'; daarna valt het pand bij het lezen uit
+   de opslag en staat het weer op de werklijst. Een verborgen pand zonder geldige 'sinds' (of met een datum in de
+   toekomst) begint vanaf nu te tellen, zodat niets wat VA-90 verborg verloren gaat of voor altijd blijft. */
 const BW = (() => {
   const T = PAYLOAD.bewaar.tekst, DP = PAYLOAD.bewaar.dp, SLEUTEL = "levrai-vastgoed-panden", VORM = 1;
   const PER_ID = new Map(LEADS.map(d => [d.id, d]));
+  const D = PAYLOAD.bewaar.duur, DAG = 864e5, DAGEN = PAYLOAD.bewaar.dagen || 30;   // VA-97
+  const MND = PAYLOAD.bewaar.maanden, SP = PAYLOAD.bewaar.nbsp;   // het datumformaat van _nl() in Python
   let stand = {}, werkt = false, tonen = false, dlg = null;
   const luisteraars = [], alleLuisteraars = [], rijen = new Map();   // per pand-ID de knoppenrij van zijn kaart
   function lees() {
     try { const r = JSON.parse(localStorage.getItem(SLEUTEL) || "null");
       stand = r && r.v === VORM && r.panden && typeof r.panden === "object" ? r.panden : {}; } catch (e) { stand = {}; }
+    return verlopen();
+  }
+  // VA-97: tot wanneer een verborgen pand verborgen blijft, en wat daarna weer op de werklijst komt.
+  const tot = r => Date.parse(r.sinds) + DAGEN * DAG;
+  // De korte datum van _nl(): dag, maand en jaar met harde spaties, in de eigen tijdzone. Geen tweede notatie (VA-31).
+  const datum = r => { const t = new Date(tot(r)); return t.getDate() + SP + MND[t.getMonth()] + SP + t.getFullYear(); };
+  function verlopen() {   // true als er iets veranderde (dan is het ook opgeslagen)
+    const nu = Date.now(); let anders = false;
+    for (const id of Object.keys(stand)) { const r = stand[id];
+      if (!r || r.stand !== "verborgen") continue;
+      const t = Date.parse(r.sinds);
+      if (!Number.isFinite(t) || t > nu) { r.sinds = new Date(nu).toISOString(); anders = true; }   // van vóór VA-97 of scheef
+      else if (tot(r) <= nu) { delete stand[id]; anders = true; } }
+    if (anders) schrijf();
+    return anders;
   }
   function schrijf() {
     try { localStorage.setItem(SLEUTEL, JSON.stringify({v: VORM, panden: stand})); return true; } catch (e) { return false; }
@@ -3084,7 +3137,7 @@ const BW = (() => {
     if (oud) stand[d.id] = oud; else delete stand[d.id];
     if (!schrijf()) { werkt = false; } overal(true);
   }
-  function weg(id) {   // VA-91: niet meer bewaren vanaf Bewaarde panden, ook voor een pand dat niet meer in de data staat
+  function nietMeerBewaard(id) {   // VA-91: niet meer bewaren vanaf Bewaarde panden, ook voor een pand dat niet meer in de data staat
     const oud = stand[id] || null;
     if (!oud) return null;
     delete stand[id];
@@ -3123,7 +3176,8 @@ const BW = (() => {
     if (card) { card.classList.toggle("bw-is-weg", s === "verborgen");
       const l = card.querySelector(".bw-label"); l.hidden = !s; l.className = "bw-label" + (s === "verborgen" ? " weg" : "");
       l.textContent = "";
-      if (s) { const i = maak("span", null, s === "bewaard" ? "★" : "◌"); i.setAttribute("aria-hidden", "true"); l.append(i, T["label." + s]); } }
+      if (s) { const i = maak("span", null, s === "bewaard" ? "★" : "◌"); i.setAttribute("aria-hidden", "true");
+        l.append(i, s === "verborgen" ? D["label.verborgen"].replace("{datum}", () => datum(stand[d.id])) : T["label." + s]); } }
   }
   // De statusregel boven de werklijst (en in 'Open pand'): role=status, dus voorgelezen zonder te onderbreken.
   const balk = document.getElementById("bwBalk");
@@ -3136,17 +3190,18 @@ const BW = (() => {
     const b = maak("button", "bw-ongedaan", T.ongedaan); b.type = "button"; b.setAttribute("aria-describedby", zin.id);
     b.dataset.pand = id; b.addEventListener("click", terug); doel.append(b); return b;
   }
+  const weg = r => D["status.verborgen"].replace("{datum}", () => datum(r));   // "… is verborgen tot <datum>" (VA-97)
   function druk(d, soort, b) {
     const inPand = !!b.closest("#pand"), hier = inPand ? dlg.s : el("bwStatus");
     const vanB = inPand && pandVanBewaard;   // VA-91: 'Open pand' vanaf Bewaarde panden; de regel daar zegt het ook
     if (!werkt) { status(hier, T.geen_opslag); return; }
     const uit = zet(d, soort);
     if (!uit) { status(hier, T.geen_opslag); return; }
-    const zin = uit.nu === "verborgen" ? T["status.verborgen"] : uit.nu === "bewaard" ? T["status.bewaard"]
+    const zin = uit.nu === "verborgen" ? weg(stand[d.id]) : uit.nu === "bewaard" ? T["status.bewaard"]
       : soort === "verborgen" ? T["status.terug"] : T["status.niet_bewaard"];
     const tekst = zin.replace("{adres}", () => adres(d));
     const terug = () => { herstel(d, uit.oud);
-      const t = (uit.oud ? (uit.oud.stand === "verborgen" ? T["status.verborgen"] : vanB ? T["pagina.status.terug"] : T["status.bewaard"])
+      const t = (uit.oud ? (uit.oud.stand === "verborgen" ? weg(uit.oud) : vanB ? T["pagina.status.terug"] : T["status.bewaard"])
         : T["status.terug"]).replace("{adres}", () => adres(d));
       [el("bwStatus"), vanB ? el("bwBewaardStatus") : null, dlg && dlg.d.id === d.id ? dlg.s : null].forEach(s => s && status(s, t));
       // Focus naar de knop die je nu ziet: in 'Open pand' zolang het open is, anders op de kaart (een gesloten
@@ -3203,11 +3258,13 @@ const BW = (() => {
     alleLuisteraars.forEach(f => f()); }   // VA-91: Bewaarde panden en de telling in het menu volgen elke verandering
   if (balk) el("bwToon").addEventListener("click", () => { tonen = !tonen; overal(true); });
   addEventListener("storage", e => { if (e.key === SLEUTEL) { lees(); overal(true); } });   // een ander tabblad van dit dashboard
+  // VA-97: een tabblad dat dagen openstaat, laat een verlopen pand terugkomen zodra je er weer naar kijkt.
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && werkt && verlopen()) overal(true); });
   werkBalk();
   // VA-91: wat de pagina Bewaarde panden nodig heeft. bewaarde(): [id, opgeslagen object] van elk bewaard pand.
   const bewaarde = () => Object.keys(stand).filter(id => stand[id] && stand[id].stand === "bewaard").map(id => [id, stand[id]]);
   return {rij, ververs: werkRij, zichtbaar, aantalWeg, op: f => luisteraars.push(f), van, leeg, ongedaanVoor, lijstDeel,
-    naSluiten, bewaarde, weg, herstelId: (id, oud) => herstel({id}, oud), status, werkt: () => werkt, opAlles: f => alleLuisteraars.push(f)};
+    naSluiten, bewaarde, weg: nietMeerBewaard, herstelId: (id, oud) => herstel({id}, oud), status, werkt: () => werkt, opAlles: f => alleLuisteraars.push(f)};
 })();
 /* ============================ einde BEWAREN EN VERBERGEN ============================ */
 
