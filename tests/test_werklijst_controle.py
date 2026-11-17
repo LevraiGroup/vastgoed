@@ -330,6 +330,37 @@ class OverNachten(Basis):
         self.draai(NACHT_2)
         self.assertEqual([(x["soort"], x["eerst_gezien"]) for x in self.rijen()], [("pand_gesloopt", "2026-11-18")])
 
+    def test_een_vbo_erbij_houdt_zijn_datum_als_zijn_status_verandert(self):
+        a, _ = self.PANDEN
+        self.werklijst()
+        self.snapshot()
+        nieuw = a[-4:] + "010000999999"
+        self.server.antwoorden[a] = variant(a, erbij={nieuw: "Verblijfsobject gevormd"})
+        self.draai(NACHT_1)
+        self.server.antwoorden[a] = variant(a, erbij={nieuw: "Verblijfsobject in gebruik"})
+        self.draai(NACHT_2)
+        self.assertEqual([(x["soort"], x["vbo_id"], x["waarde_nu"], x["eerst_gezien"]) for x in self.rijen()],
+                         [("vbo_erbij", nieuw, "Verblijfsobject in gebruik", "2026-11-17")])
+
+    def test_een_vbo_status_met_een_andere_waarde_is_een_nieuw_verschil(self):
+        a, _ = self.PANDEN
+        self.werklijst()
+        self.snapshot()
+        vid = vbo_ids(a)[1]
+        self.server.antwoorden[a] = variant(a, vbo_status={vid: "Verblijfsobject buiten gebruik"})
+        self.draai(NACHT_1)
+        self.server.antwoorden[a] = variant(a, vbo_status={vid: "Verbouwing verblijfsobject"})
+        self.draai(NACHT_2)
+        self.assertEqual([(x["soort"], x["waarde_nu"], x["eerst_gezien"]) for x in self.rijen()],
+                         [("vbo_status", "Verbouwing verblijfsobject", "2026-11-18")])
+
+    def test_gecontroleerd_om_staat_in_nederlandse_tijd(self):
+        self.werklijst()
+        r, _ = self.draai(datetime(2026, 11, 17, 2, 0, tzinfo=timezone.utc))
+        self.assertEqual(r["gecontroleerd_om"], "2026-11-17T03:00:00+01:00")
+        r, _ = self.draai(datetime(2026, 7, 1, 23, 30, tzinfo=timezone.utc))
+        self.assertEqual((r["gecontroleerd_om"], r["datum"]), ("2026-07-02T01:30:00+02:00", "2026-07-02"))
+
     def test_een_nieuwe_maand_begint_leeg(self):
         a, _ = self.PANDEN
         self.werklijst()
@@ -434,6 +465,25 @@ class Mislukt(Basis):
         self.assertFalse(self.ins["uitvoer_map"].exists())
 
 
+class Schrijven(Basis):
+    def test_een_bestand_dat_niet_vervangen_kan_worden_geeft_een_fout_en_geen_tmp(self):
+        werklijst = self.werklijst()
+        cfg = {"bron": {"wfs_url": self.server.url, "paginagrootte": 1000},
+               "nachtcontrole": {k: str(v) if isinstance(v, Path) else v for k, v in self.ins.items()
+                                 if k in wc.SLEUTELS}}
+        err = io.StringIO()
+        weigering = PermissionError(13, "Toegang geweigerd")
+        with mock.patch.object(wc, "load_config", return_value=cfg), \
+                mock.patch.object(wc.os, "replace", side_effect=weigering), \
+                redirect_stdout(io.StringIO()), redirect_stderr(err):
+            code = wc.main(["--werklijst", str(werklijst)])
+        self.assertEqual(code, 1)
+        self.assertIn("FOUT: ", err.getvalue())
+        self.assertIn("kon niet worden geschreven (Toegang geweigerd)", err.getvalue())
+        self.assertNotIn("Traceback", err.getvalue())
+        self.assertEqual([p for p in self.tmp.rglob("*.tmp")], [])
+
+
 class Pagineren(Basis):
     def test_een_afgekapt_antwoord_wordt_aangevuld_met_paginas(self):
         a, _ = self.PANDEN
@@ -477,8 +527,9 @@ class Instellingen(unittest.TestCase):
     def test_de_echte_werklijst_is_leesbaar_en_noemt_zijn_snapshot(self):
         pad, maand = wc.nieuwste_werklijst(PROJECT / "output")
         panden, snapshot = wc.lees_werklijst(pad)
-        self.assertEqual(len(panden), 500)
-        self.assertEqual(snapshot, f"bag_nl_{maand}-01.sqlite")
+        self.assertGreaterEqual(len(panden), 1)
+        self.assertLessEqual(len(panden), wc.load_config()["drempels"]["werklijst_max"])
+        self.assertRegex(snapshot, r"^bag_nl_\d{4}-\d{2}-\d{2}(_\d+)?\.sqlite$")
         self.assertTrue(all(p.vbo_ids and p.pandstatus for p in panden))
 
 

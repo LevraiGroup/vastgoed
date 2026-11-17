@@ -104,6 +104,10 @@ class ControleFout(RuntimeError):
     """De controle kan niet beginnen of leverde niets op; er is niets geschreven."""
 
 
+class SchrijfFout(ControleFout):
+    """Een uitvoerbestand kon niet worden vervangen (bijvoorbeeld open in Excel)."""
+
+
 class PandFout(RuntimeError):
     """Eén pand kon niet worden gecontroleerd."""
 
@@ -134,9 +138,19 @@ class Rij:
     eerst_gezien: str
 
     @property
-    def sleutel(self) -> tuple[str, str, str, str]:
-        """Hetzelfde verschil = zelfde pand, soort, verblijfsobject en waarde nu."""
-        return (self.bag_pand_id, self.soort, self.vbo_id, self.waarde_nu)
+    def sleutel(self) -> tuple[str, ...]:
+        return sleutel(self.bag_pand_id, self.soort, self.vbo_id, self.waarde_nu)
+
+
+# Bij een verblijfsobject erbij of weg is de gebeurtenis zelf het verschil: een nieuwe status van dat
+# verblijfsobject (eerst gevormd, dan in gebruik) is hetzelfde verschil met een bijgewerkte waarde_nu.
+# Bij pandstatus en vbo_status is een andere waarde nu een nieuw verschil, met een nieuwe datum.
+GEBEURTENIS = (VBO_ERBIJ, VBO_WEG)
+
+
+def sleutel(pid: str, soort: str, vbo_id: str, waarde_nu: str) -> tuple[str, ...]:
+    """Hetzelfde verschil over nachten heen: pand, soort, verblijfsobject, en (behalve bij erbij/weg) waarde nu."""
+    return (pid, soort, vbo_id) if soort in GEBEURTENIS else (pid, soort, vbo_id, waarde_nu)
 
 
 # ------------------------------------------------------------------------------ instellingen
@@ -378,7 +392,7 @@ def voeg_samen(vorige: list[Rij], gezien: dict[str, list[tuple]], mislukt: dict[
     uit: list[Rij] = []
     for pid, lijst in gezien.items():
         for soort, wijziging, vid, was, nu in lijst:
-            uit.append(Rij(pid, soort, wijziging, vid, was, nu, eerder.get((pid, soort, vid, nu), vandaag)))
+            uit.append(Rij(pid, soort, wijziging, vid, was, nu, eerder.get(sleutel(pid, soort, vid, nu), vandaag)))
     for pid, reden in mislukt.items():
         uit += [r for r in vorige if r.bag_pand_id == pid and r.soort != NIET_GECONTROLEERD]
         uit.append(Rij(pid, NIET_GECONTROLEERD, f"Niet gecontroleerd: {reden}", "", "", "", vandaag))
@@ -389,9 +403,14 @@ def voeg_samen(vorige: list[Rij], gezien: dict[str, list[tuple]], mislukt: dict[
 def _schrijf_atomair(pad: Path, tekst: str, bom: bool = False) -> None:
     pad.parent.mkdir(parents=True, exist_ok=True)
     tijdelijk = pad.with_name(pad.name + ".tmp")
-    with open(tijdelijk, "w", encoding="utf-8-sig" if bom else "utf-8", newline="") as fh:
-        fh.write(tekst)
-    os.replace(tijdelijk, pad)
+    try:
+        with open(tijdelijk, "w", encoding="utf-8-sig" if bom else "utf-8", newline="") as fh:
+            fh.write(tekst)
+        os.replace(tijdelijk, pad)
+    except OSError as fout:
+        tijdelijk.unlink(missing_ok=True)
+        raise SchrijfFout(f"{pad} kon niet worden geschreven ({fout.strerror or fout}); staat het open in "
+                          "een ander programma?") from None
 
 
 def csv_tekst(rijen: list[Rij]) -> str:
@@ -414,7 +433,7 @@ def controleer(ins: dict, werklijst: Path | None = None, session: TelSessie | No
     De hele controle. Geeft (resultaat, exitcode) nadat het bestand en de uitkomst geschreven zijn.
     ControleFout als er niets te controleren viel of geen pand lukte: dan is er niets geschreven.
     """
-    moment = (nu or datetime.now(timezone.utc)).astimezone()
+    moment = ingest_gpkg.naar_amsterdam(nu or datetime.now(timezone.utc))
     vandaag = vandaag_nl(moment)
     werklijst, maand = (werklijst, maand_van(werklijst)) if werklijst else nieuwste_werklijst(ins["werklijst_map"])
     panden, snapshot_naam = lees_werklijst(werklijst)
@@ -502,6 +521,9 @@ def main(argv: list[str] | None = None) -> int:
     ins.update(uitvoer_map=args.uitvoer, resultaat=args.resultaat, basis_map=args.basis, snapshot_map=args.snapshots)
     try:
         r, code = controleer(ins, args.werklijst)
+    except SchrijfFout as fout:
+        print(f"FOUT: {fout} Deze nacht is niet volledig geschreven.", file=sys.stderr)
+        return 1
     except ControleFout as fout:
         print(f"FOUT: {fout} Niets geschreven; het vorige bestand blijft staan.", file=sys.stderr)
         return 1

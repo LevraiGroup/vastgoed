@@ -200,8 +200,11 @@ geen panden met de status "Pand gesloopt" (0 op 2026-11-17); een gesloopt pand v
 WFS en verschijnt dus als `pand_niet_gevonden`.
 
 Een verschil dat een eerdere nacht al gezien is, houdt zijn `eerst_gezien`; is het pand weer zoals
-in de werklijst, dan verdwijnt de rij. Een andere waarde nu (bijvoorbeeld eerst buiten gebruik, dan
-weg) is een nieuw verschil met een nieuwe datum. Een pand waarvan het verzoek ook na de herhaling
+in de werklijst, dan verdwijnt de rij. Bij `pandstatus`, `pand_*` en `vbo_status` is een andere waarde nu
+(bijvoorbeeld eerst buiten gebruik, dan weg) een nieuw verschil met een nieuwe datum. Bij
+`vbo_erbij` en `vbo_weg` is het erbij komen of weggaan zelf het verschil: krijgt zo'n
+verblijfsobject later een andere status (eerst gevormd, dan in gebruik), dan wordt `waarde_nu`
+bijgewerkt en blijft `eerst_gezien` staan. Een pand waarvan het verzoek ook na de herhaling
 met wachttijd mislukt, krijgt die nacht een rij `niet_gecontroleerd` (datum = die nacht) en houdt
 zijn eerder geziene verschillen. Mislukken `nachtcontrole.stop_na_mislukt` panden achter elkaar,
 dan worden de overige niet meer gevraagd en ook `niet_gecontroleerd`. Lukt geen enkel pand (PDOK
