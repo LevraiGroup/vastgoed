@@ -104,6 +104,13 @@ class Kantoor(unittest.TestCase):
         self.assertEqual(k["verrijking"]["verrijkt"], 2)
         self.assertEqual(k["verrijking"]["panden"], 5)
 
+    def test_energielabel_uit_het_maandbestand_telt_mee(self):
+        # VA-58: een gekoppeld pand heeft energielabel (None = geen label), geen energielabel_status.
+        panden = self.panden + [pand(6, 9, energielabel="F", energielabel_registratiedatum="2021-03-04"),
+                                pand(7, 4, energielabel=None, energielabel_registratiedatum=None)]
+        k = bd.kantoor("Delft", None, panden, 2, cfg(energielabel=True))
+        self.assertEqual(k["verrijking"]["verrijkt"], 2)
+
     def test_actief_alleen_bij_true(self):
         c = cfg()
         c["bronnen"]["energielabel"]["actief"] = "false"

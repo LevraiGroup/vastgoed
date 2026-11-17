@@ -180,7 +180,8 @@ def werklijst_aantal(act: list[dict], drempel: int) -> int:
 
 
 # Per verrijkingsbron het veld dat verrijk.py aan een pand toevoegt (bronnen/*.py).
-VERRIJKT_VELD = {"energielabel": "energielabel"}  # VA-58: elk gekoppeld pand heeft dit veld (None = geen label)
+# energielabel_status: verrijk.py per adres; energielabel: de koppeling uit het maandbestand (VA-58, None = geen label).
+VERRIJKT_VELD = {"energielabel": ("energielabel_status", "energielabel")}
 
 
 def actieve_bronnen(cfg: dict) -> list[str]:
@@ -206,7 +207,7 @@ def kantoor(gebied: str, bron: list[dict] | None, panden: list[dict] | None,
     verrijkt = None
     velden = [VERRIJKT_VELD.get(n.lower()) for n in actief]
     if act is not None and actief and all(velden):
-        verrijkt = sum(1 for p in act if any(v in p for v in velden))
+        verrijkt = sum(1 for p in act if any(v in p for vs in velden for v in vs))
 
     blok = {
         "gebied": gebied,
