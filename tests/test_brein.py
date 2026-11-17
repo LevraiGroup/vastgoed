@@ -181,7 +181,7 @@ class Menu(unittest.TestCase):
         html, p = bouw(cfg_basis())
         self.assertEqual([a["href"] for a in p.menu],
                          ["index.html#kantoor", "index.html#kerncijfers", "brein.html", "index.html#voorraad",
-                          "index.html#bewaard", "index.html#werklijst"])
+                          "index.html#werklijst", "index.html#bewaard"])   # Bewaarde panden in Mijn selectie
         self.assertEqual([a.get("aria-current") for a in p.menu], [None, None, "page", None, None, None])
         # elk anker bestaat op het dashboard van dezelfde lijst
         from test_dashboard_menu import Pagina as DashPagina, gebouwd

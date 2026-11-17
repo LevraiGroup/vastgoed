@@ -99,7 +99,7 @@ class Gebouwd(unittest.TestCase):
         regels = [r.strip() for r in t.splitlines() if "ALLE_LEADS" in r]
         self.assertEqual(regels, ["const {kpi:KPI, cats:CATS, facts:FACTS, leads:ALLE_LEADS, budget:BUDGET} = PAYLOAD;",
                                   "const LEADS = PAYLOAD.slot ? ALLE_LEADS.slice(0, PAYLOAD.slot.n) : ALLE_LEADS;"])
-        self.assertIn("if (DELEN.includes(start)) {", t)   # een adres opent een deel, nooit een pand
+        self.assertIn("if (DELEN.includes(start)) ga(start, false);", t)   # een adres opent een deel, nooit een pand
 
     def test_filters_tellen_de_vijf(self):
         # Crit. 4: de telling zegt hoeveel van de 5 er staan, nooit 'van 8' of 'alle 8'.

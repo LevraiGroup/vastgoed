@@ -84,12 +84,12 @@ class Kopij(unittest.TestCase):
 
 
 class Menu(unittest.TestCase):
-    """Criterium 1: één nieuw item in de groep Panden, met zijn eigen deel; alleen in de landelijke bouw."""
+    """Criterium 1, sinds Ayman 11-17 een eigen pagina: een eigen groep 'Mijn selectie' onder Panden; alleen landelijk."""
 
     def test_volgorde_in_de_groep(self):
-        panden = bd.menu_voor("werklijst")[1]
-        self.assertEqual(panden["items"], [("voorraad", "Voorraad"), ("bewaard", "Bewaarde panden"),
-                                           ("werklijst", "Werklijst")])
+        menu = bd.menu_voor("werklijst")
+        self.assertEqual(menu[1]["items"], [("voorraad", "Voorraad"), ("werklijst", "Werklijst")])
+        self.assertEqual(menu[2], {"groep": "Mijn selectie", "id": "g-selectie", "items": [("bewaard", "Bewaarde panden")]})
         self.assertIs(bd.menu_voor("proefresultaat"), bd.MENU)   # de stadsbouw: geen woorden van Lumi voor dat deel
 
     def test_telling_in_het_menu(self):
@@ -106,15 +106,24 @@ class Menu(unittest.TestCase):
         self.assertIn("alleLuisteraars.forEach(f => f()); }", blok())   # na elke bewaar, verberg, ongedaan en storage
         self.assertIn(".nav a .nav-n{margin-left:auto;", bd.TEMPLATE)
 
-    def test_deel_tussen_voorraad_en_werklijst(self):
+    def test_eigen_pagina_na_de_werklijst(self):
         html = bd.bewaard_html("werklijst")
-        self.assertIn('<section class="deel" id="bewaard" aria-labelledby="t-bewaard" tabindex="-1">', html)
+        self.assertIn('<section class="deel pagina bwp-pagina" id="bewaard" aria-labelledby="t-bewaard" tabindex="-1">', html)
+        self.assertIn('<a class="bwp-terug" href="#werklijst">', html)
+        for tel in ("bwpTelN", "bwpTelIn", "bwpTelWeg", "bwpTelScore"):
+            self.assertIn(f'id="{tel}"', html)
         self.assertIn('<h2 class="titel" id="t-bewaard">Bewaarde panden</h2>', html)
         self.assertIn('<div class="bw-status" id="bwBewaardStatus" role="status"></div>', html)
         self.assertEqual(bd.bewaard_html("proefresultaat"), "")
         t = bd.TEMPLATE
-        self.assertLess(t.index('id="voorraad"'), t.index("__BEWAARD__"))
-        self.assertLess(t.index("__BEWAARD__"), t.index('id="__LIJST__"'))
+        self.assertLess(t.index('id="__LIJST__"'), t.index("__BEWAARD__"))
+        self.assertLess(t.index("__BEWAARD__"), t.index("</main>"))
+        # Alleen de pagina of alleen de lange scroll, nooit allebei (de CSS; het menu zet de klassen).
+        self.assertIn(".vg:not(.op-pagina) .inhoud > .deel.pagina{display:none}", t)
+        self.assertIn(".vg.op-pagina .inhoud > .deel:not(.nu){display:none}", t)
+        menu = t[t.index("/* ============================ MENU (VA-63, VA-64)"):t.index("/* ============================ einde MENU")]
+        self.assertIn('addEventListener("popstate"', menu)
+        self.assertIn('history.pushState(null, "", "#" + id)', menu)
 
 
 class Gebouwd(unittest.TestCase):
@@ -139,7 +148,7 @@ class Gebouwd(unittest.TestCase):
         p = Pagina(self.html)
         self.assertEqual(kapotte_links(self.html), [])
         self.assertEqual([a["href"][1:] for a in p.menu], [d["id"] for d in p.delen])
-        self.assertEqual([d["id"] for d in p.delen], ["kantoor", "kerncijfers", "voorraad", "bewaard", "werklijst"])
+        self.assertEqual([d["id"] for d in p.delen], ["kantoor", "kerncijfers", "voorraad", "werklijst", "bewaard"])
         self.assertEqual(len(set(p.ids)), len(p.ids), "dubbele ids")
         self.assertEqual(re.findall(r"__[A-Z][A-Z0-9_]*__", self.html), [])
 

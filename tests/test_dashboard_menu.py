@@ -313,8 +313,9 @@ class MenuLandelijk(unittest.TestCase):
         self.assertEqual([(g["groep"], g["items"]) for g in bd.menu_voor("werklijst")],
                          [("Overzicht", [("kantoor", "Kantoor"), ("kerncijfers", "Kerncijfers"),
                                          ("brein", "Brein")]),
-                          ("Panden", [("voorraad", "Voorraad"), ("bewaard", "Bewaarde panden"),
-                                      ("werklijst", "Werklijst")])])   # VA-91, Lumi copy-va91.md §1
+                          ("Panden", [("voorraad", "Voorraad"), ("werklijst", "Werklijst")]),
+                          # Bewaarde panden: een eigen pagina in een eigen groep (Ayman 11-17)
+                          ("Mijn selectie", [("bewaard", "Bewaarde panden")])])
         self.assertIs(bd.menu_voor("proefresultaat"), bd.MENU)
 
     def test_landelijke_koppen(self):
