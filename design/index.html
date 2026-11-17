@@ -1316,7 +1316,7 @@ const BW = (() => {
   }
   const adres = d => d.detail ? d.detail.titel : d.a;
   // Vier iconen, inline SVG (Lumi, knoppen-spec.md): geen lettertype, beeld of bestand erbij. Nooit voorgelezen.
-  const SVG = "http://www.w3.org/2000/svg", STER = "M12 3.2l2.6 5.5 6 .7-4.4 4.1 1.1 6L12 16.6l-5.3 2.9 1.1-6L3.4 9.4l6-.7z",
+  const STER = "M12 3.2l2.6 5.5 6 .7-4.4 4.1 1.1 6L12 16.6l-5.3 2.9 1.1-6L3.4 9.4l6-.7z",
     OOG = "M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z",
     LIJN = ' fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"',
     STREEP = '<path d="M4 20L20 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>';
@@ -1325,10 +1325,12 @@ const BW = (() => {
     ster_vol: '<path d="' + STER + '"' + LIJN.replace('fill="none"', 'fill="currentColor"') + '/>',
     oog: '<path d="' + OOG + '"' + LIJN + '/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.8"/>' + STREEP,
     oog_uit: '<path d="' + OOG + '"' + LIJN + ' stroke-dasharray="2.6 2.4"/>' + STREEP};
+  // Via de HTML-parser (template), die een <svg> zelf in de SVG-naamruimte zet.
+  const SJ = document.createElement("template");
   function icoon(naam, cls) {
-    const s = document.createElementNS(SVG, "svg");
-    s.setAttribute("class", cls); s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("aria-hidden", "true");
-    s.setAttribute("focusable", "false"); s.setAttribute("data-ico", naam); s.innerHTML = ICO[naam]; return s;
+    SJ.innerHTML = '<svg class="' + cls + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-ico="' + naam + '">'
+      + ICO[naam] + "</svg>";
+    return SJ.content.firstChild;
   }
   function knop(d, soort) {
     const b = maak("button", "bw-knop bw-" + (soort === "bewaard" ? "bewaar" : "weg")); b.type = "button";

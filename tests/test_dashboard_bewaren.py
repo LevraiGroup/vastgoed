@@ -237,8 +237,7 @@ class Toegankelijk(unittest.TestCase):
         self.assertNotIn('"★ "', js)
         self.assertIn('const ico = icoon(soort === "bewaard" ? "ster" : "oog", "bw-ico");', js)
         # Elk icoon is een SVG die de schermlezer overslaat en die geen focus krijgt.
-        self.assertIn('s.setAttribute("aria-hidden", "true");', js)
-        self.assertIn('s.setAttribute("focusable", "false");', js)
+        self.assertIn('viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-ico="', js)
         for teken in ("★", "☆", "◌", "⊘"):
             self.assertNotIn(teken, js)
         # VA-91's pagina Bewaarde panden gebruikt dezelfde volle ster (VA-105), geen teken.
@@ -342,10 +341,10 @@ class GlazenDuo(unittest.TestCase):
 
     def test_vier_iconen_en_niets_van_buiten(self):
         js = blok()
-        self.assertIn('const SVG = "http://www.w3.org/2000/svg"', js)
+        self.assertIn('const SJ = document.createElement("template");', js)
         for naam in ("ster:", "ster_vol:", "oog:", "oog_uit:"):
             self.assertIn(naam, js)
-        self.assertEqual(re.findall(r"https?://[^\s\"']+", js), ["http://www.w3.org/2000/svg"])   # alleen de naamruimte
+        self.assertEqual(re.findall(r"https?://", js), [])   # geen adres, ook geen naamruimte
         self.assertNotRegex(js, r"<use|xlink|url\(")
 
 
