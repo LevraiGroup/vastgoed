@@ -172,3 +172,7 @@ struck through with the reason, never deleted.
   errors included.** On Railway the client address is the last `X-Real-IP` line, never
   `X-Forwarded-For`, and only five wrong logins after the first deploy prove it. *(2026-11-13, Vera,
   VA-50)*
+- **The dashboard has `html{scroll-behavior:smooth}`, so a script that keeps the page in place with `scrollBy`
+  must pass `behavior: "instant"`, or it glides and a second redraw measures mid-glide.** And Playwright's
+  `click()` scrolls its target into view first: measure a layout shift from a click done in `page.evaluate`, or
+  per element, not from the section's position. *(2026-11-16, Ada, VA-91)*
