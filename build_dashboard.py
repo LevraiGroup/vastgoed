@@ -885,23 +885,53 @@ def met_duur_verborgen(payload: dict, cfg: dict) -> dict:
 # die bouw geschreven; de stadsbouw krijgt het deel pas met haar woorden ervoor (copy-va91.md §9).
 BEWAARD = ("bewaard", BEWAAR_TEKST["pagina.titel"])
 BEWAARD_EERST = 10   # zoveel nieuwste bewaarde panden staan er eerst; de rest achter 'Toon alle' (Lumi §6)
+# Ayman 11-17: "bewaarde panden op een aparte speciale, coole, hightech pagina". De kop van die pagina is een
+# navy paneel met de tellingen; de woorden hieronder zijn van de main session en wachten op Lumi.
+BEWAARD_HELD_TEKST = {
+    "sys": "Jouw selectie · alleen op dit apparaat",
+    "tel.n": "Bewaard",
+    "tel.in": "In de werklijst",
+    "tel.weg": "Niet meer in de werklijst",
+    "tel.score": "Gemiddelde score",
+    "cat": "Verdeling over categorie A–E",
+    "terug": "Terug naar de werklijst",
+}
+STER_SVG = ('<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2.6l2.9 '
+            '5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.4l-5.8 3.1 1.1-6.5L2.6 9.4l6.5-.9z"/></svg>')
 
 
 def bewaard_html(lijst: str) -> str:
-    """Het deel #bewaard, tussen Voorraad en de werklijst; leeg voor een bouw zonder dit deel."""
+    """De eigen pagina #bewaard (geen deel van de lange scroll); leeg voor een bouw zonder deze pagina."""
     if lijst != LIJST_LANDELIJK[0]:
         return ""
     t = {k: escape(v) for k, v in BEWAAR_TEKST.items()}
+    h = {k: escape(v) for k, v in BEWAARD_HELD_TEKST.items()}
+    tegels = "".join(f'<div class="bwp-tegel{" eerste" if i == 0 else ""}"><b id="bwpTel{k}">–</b><span>{h["tel." + s]}</span></div>'
+                     for i, (k, s) in enumerate((("N", "n"), ("In", "in"), ("Weg", "weg"), ("Score", "score"))))
     return f'''
     <!-- BEWAARDE PANDEN (VA-91) -->
-    <section class="deel" id="bewaard" aria-labelledby="t-bewaard" tabindex="-1">
-      <header class="kop">
+    <section class="deel pagina bwp-pagina" id="bewaard" aria-labelledby="t-bewaard" tabindex="-1">
+      <header class="kop bwp-held">
+        <span class="bwp-scan" aria-hidden="true"></span>
         <div class="kop-rij">
           <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>{t["pagina.titel"]}</b></p>
           <span class="kop-meta" id="bwpMeta"></span>
         </div>
-        <h2 class="titel" id="t-bewaard">{t["pagina.titel"]}</h2>
-        <p class="kop-zin">{t["pagina.zin"]}</p>
+        <p class="bwp-sys"><i class="bwp-puls" aria-hidden="true"></i>{h["sys"]}</p>
+        <div class="bwp-kopkern">
+          <div class="bwp-embleem" aria-hidden="true"><span class="bwp-ring"></span>{STER_SVG}</div>
+          <div>
+            <h2 class="titel" id="t-bewaard">{t["pagina.titel"]}</h2>
+            <p class="kop-zin">{t["pagina.zin"]}</p>
+          </div>
+        </div>
+        <div class="bwp-tel">{tegels}</div>
+        <div class="bwp-cat" id="bwpCat" hidden>
+          <p>{h["cat"]}</p>
+          <div class="bwp-staaf" id="bwpStaaf" aria-hidden="true"></div>
+          <ul class="bwp-leg" id="bwpLeg"></ul>
+        </div>
+        <a class="bwp-terug" href="#{LIJST_LANDELIJK[0]}"><span aria-hidden="true">←</span>{h["terug"]}</a>
       </header>
       <div class="bwp" data-eerst="{BEWAARD_EERST}">
         <div class="bw-balk">
@@ -1633,11 +1663,10 @@ def menu_voor(lijst: str) -> list[dict]:
     """MENU, met voor heel Nederland 'Werklijst' op de plek van 'Proefresultaat'."""
     if lijst != LIJST_LANDELIJK[0]:
         return MENU
-    # VA-91: Bewaarde panden tussen Voorraad en Werklijst, in dezelfde volgorde als de delen op de pagina.
-    return [dict(g, items=[x for doel, naam in g["items"]
-                           for x in ([LIJST_LANDELIJK] if doel == "proefresultaat" else
-                                     [(doel, naam), BEWAARD] if doel == "voorraad" else [(doel, naam)])])
-            for g in MENU]
+    # Bewaarde panden is een eigen pagina (Ayman 11-17), dus een eigen groep onder Panden, niet tussen de delen
+    # van de lange scroll. Op de pagina staat het deel ook als laatste, zodat menu en delen dezelfde volgorde houden.
+    return [dict(g, items=[LIJST_LANDELIJK if doel == "proefresultaat" else (doel, naam) for doel, naam in g["items"]])
+            for g in MENU] + [{"groep": "Mijn selectie", "id": "g-selectie", "items": [BEWAARD]}]
 
 
 def menu_html(lijst: str = "proefresultaat") -> str:
@@ -1887,11 +1916,13 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     --held:linear-gradient(155deg,var(--brand) 0%,var(--brand) 35%,var(--brand-2) 100%);
     --gloed:color-mix(in srgb,var(--s1) 40%,transparent);
     --schaduw-hoog:0 1px 2px rgba(11,11,11,.05),0 28px 56px -28px color-mix(in srgb,var(--brand) 60%,transparent);
+    --glans:rgba(255,255,255,.75);   /* het glimlicht bovenin een glazen strook (Bewaar en Verberg, Lumi) */
   }
   @media (prefers-color-scheme: dark){
-    :root:where(:not([data-theme="light"])){--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9)}
+    :root:where(:not([data-theme="light"])){--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9);
+      --glans:rgba(255,255,255,.06)}
   }
-  :root[data-theme="dark"]{--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9)}
+  :root[data-theme="dark"]{--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9);--glans:rgba(255,255,255,.06)}
 
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
@@ -2485,22 +2516,45 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   }
   /* ===================== BEWAREN EN VERBERGEN (VA-90) =====================
      Op elke kaart en in 'Open pand': Bewaar en Verberg. De stand staat in de knop met meer dan kleur:
-     een ster (☆/★) en het woord, een stippelrand bij Verborgen, en aria-pressed. */
-  .bw-rij{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
-  .bw-knop{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:5px 12px 5px 10px;border-radius:9px;
-    border:1px solid var(--ring);background:var(--surface-2);color:var(--ink);font:inherit;font-size:12.5px;
-    font-weight:650;text-align:left;cursor:pointer}
-  .bw-knop .bw-ico{flex:none;width:1.1em;text-align:center;font-size:14px;line-height:1}
-  .bw-knop .bw-tk{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+     het woord, een icoon (ster leeg/vol, oog/gestippeld oog), de tweede regel, en aria-pressed.
+     Vorm: Lumi's "Glazen duo" (knoppen-spec.md, variant A): één glazen strook met twee gelijke helften.
+     Bewaard wordt het navy glas van de band met een gouden ster; Verborgen is gearceerd en gestippeld. */
+  .bw-rij{display:flex;gap:0;margin-top:4px;padding:3px;border-radius:13px;
+    background:linear-gradient(180deg,var(--surface-2),color-mix(in srgb,var(--s1) 5%,var(--surface-2)));
+    border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);box-shadow:inset 0 1px 0 var(--glans)}
+  .bw-knop{flex:1 1 0;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    min-height:44px;padding:6px 12px;border-radius:10px;border:1px solid transparent;background:transparent;
+    color:var(--ink);font:inherit;font-size:13px;font-weight:650;cursor:pointer;position:relative;
+    transition:background-color .15s,border-color .15s,box-shadow .15s,transform .08s}
+  .bw-knop .bw-ico{flex:none;width:18px;height:18px;color:var(--ink-2)}
+  .bw-knop .bw-tk{display:flex;flex-direction:column;line-height:1.2;min-width:0;text-align:left}
   .bw-knop .bw-terug{font-size:11px;font-weight:500;color:var(--ink-2)}
   .bw-knop .bw-terug:empty{display:none}
-  .bw-knop.bw-bewaar[aria-pressed="true"]{background:color-mix(in srgb,var(--s1) 12%,var(--surface-2));
-    border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
-  .bw-knop.bw-bewaar[aria-pressed="true"] .bw-ico{color:var(--s1)}
-  .bw-knop.bw-weg[aria-pressed="true"]{background:var(--grid);border:1px dashed var(--ink-2)}
-  .bw-knop[aria-disabled="true"]{cursor:not-allowed;opacity:.65}
-  @media (hover:hover){ .bw-knop:not([aria-disabled="true"]):hover{background:var(--grid)} }
-  .bw-knop:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .bw-knop+.bw-knop::before{content:"";position:absolute;left:-1px;top:10px;bottom:10px;width:1px;
+    background:color-mix(in srgb,var(--ink) 12%,transparent)}
+  .bw-knop[aria-pressed="true"]::before,.bw-knop[aria-pressed="true"]+.bw-knop::before{display:none}
+  @media (hover:hover){
+    .bw-knop:not([aria-disabled="true"]):hover{background:color-mix(in srgb,var(--s1) 9%,transparent)}
+    .bw-knop:not([aria-disabled="true"]):hover .bw-ico{color:var(--s1)} }
+  .bw-knop:focus-visible{outline:2px solid var(--s1);outline-offset:2px;z-index:1}
+  .bw-knop:not([aria-disabled="true"]):active{transform:translateY(1px);
+    background:color-mix(in srgb,var(--s1) 14%,transparent);
+    box-shadow:inset 0 1px 3px color-mix(in srgb,var(--ink) 18%,transparent)}
+  .bw-knop.bw-bewaar[aria-pressed="true"]{background:var(--held);color:#fff;
+    border-color:color-mix(in srgb,var(--s1) 70%,transparent);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 6px 16px -8px var(--gloed)}
+  .bw-knop.bw-bewaar[aria-pressed="true"] .bw-ico{color:var(--s4);
+    filter:drop-shadow(0 0 5px color-mix(in srgb,var(--s4) 55%,transparent))}
+  .bw-knop.bw-bewaar[aria-pressed="true"] .bw-terug{color:var(--nav-tekst)}
+  @media (hover:hover){ .bw-knop.bw-bewaar[aria-pressed="true"]:hover{background:var(--held);filter:brightness(1.12)} }
+  .bw-knop.bw-weg[aria-pressed="true"]{border:1px dashed var(--ink-2);color:var(--ink);
+    background:repeating-linear-gradient(135deg,var(--grid) 0 6px,
+      color-mix(in srgb,var(--grid) 55%,var(--surface-2)) 6px 12px)}
+  .bw-knop.bw-weg[aria-pressed="true"] .bw-ico{color:var(--ink)}
+  .bw-knop[aria-disabled="true"]{cursor:not-allowed;opacity:.55}
+  @media (prefers-reduced-motion: reduce){ .bw-knop{transition:none} .bw-knop:active{transform:none} }
+  .pand-bw .bw-rij{max-width:420px}
+  .bw-label .bw-label-ico{flex:none;width:12px;height:12px}
   .bw-label{display:inline-flex;align-self:flex-start;width:max-content;max-width:100%;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;
     color:var(--ink);background:color-mix(in srgb,var(--s1) 12%,var(--surface-2));border:1px solid var(--s1)}
   .bw-label.weg{background:var(--grid);border:1px dashed var(--ink-2)}
@@ -2545,12 +2599,117 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   .bwp-kern .addr{max-width:100%}
   .bwp-kern .lid{max-width:62ch}
   .bwp-rij > .bw-rij{flex:0 1 auto;margin-top:0;align-items:center;gap:8px 12px}
+  /* VA-105: hier geen glazen strook (er staat een link naast één knop); de knop zelf is het glas van Bewaard. */
+  .bwp-rij > .bw-rij{padding:0;background:none;border:0;box-shadow:none;border-radius:0}
+  .bwp-rij > .bw-rij > .bw-knop{flex:0 1 auto}
   .bwp-rij .pand-open{display:inline-flex;align-items:center;min-height:38px}
   .bwp-rij .baglink{display:inline-block;padding:10px 0;line-height:18px}
   .bwp-rij .baglink:focus-visible{outline:2px solid var(--s1);outline-offset:2px;border-radius:4px}
   .bwp .wl-leeg{margin-bottom:0}
   .bwp .bw-toon{margin-top:12px}
   @container kaart (max-width:520px){ .bwp-rij > .bw-rij{flex-basis:100%} }
+
+  /* ---- Een eigen pagina (Ayman 11-17: "op een aparte speciale, coole, hightech pagina") ----
+     Een deel met .pagina staat niet in de lange scroll: het menu zet .op-pagina op .vg en .nu op dat deel,
+     en dan is alleen dat deel te zien. Zonder .op-pagina is het er niet. */
+  .vg:not(.op-pagina) .inhoud > .deel.pagina{display:none}
+  .vg.op-pagina .inhoud > .deel:not(.nu){display:none}
+  .vg.op-pagina .inhoud > .deel.nu{margin-top:0}
+  .bwp-pagina{--mono:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace}
+  .kop.bwp-held{position:relative;isolation:isolate;overflow:hidden;margin:0 0 22px;padding:26px 28px 24px;gap:8px;
+    border-radius:22px;background:var(--held);color:#fff;box-shadow:var(--schaduw-hoog);
+    border:1px solid color-mix(in srgb,var(--s1) 30%,transparent)}
+  .bwp-held::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+    background-image:linear-gradient(rgba(255,255,255,.07) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.07) 1px,transparent 1px);
+    background-size:30px 30px;background-position:-1px -1px;
+    -webkit-mask-image:radial-gradient(120% 90% at 85% 0%,#000 25%,transparent 80%);
+            mask-image:radial-gradient(120% 90% at 85% 0%,#000 25%,transparent 80%)}
+  .bwp-held::after{content:"";position:absolute;z-index:-1;pointer-events:none;width:520px;height:520px;right:-160px;top:-260px;
+    border-radius:50%;background:radial-gradient(closest-side,var(--gloed),transparent)}
+  .bwp-scan{position:absolute;left:0;right:0;top:0;height:90px;z-index:-1;pointer-events:none;opacity:0;
+    background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--s1) 22%,transparent) 85%,
+               color-mix(in srgb,#9fd0ff 70%,transparent) 99%,transparent)}
+  @media (prefers-reduced-motion: no-preference){
+    .bwp-scan{animation:bwp-scan 7s cubic-bezier(.45,0,.55,1) infinite}
+    .bwp-ring{animation:bwp-draai 14s linear infinite}
+    .bwp-puls{animation:bwp-puls 2.4s ease-in-out infinite}
+  }
+  @keyframes bwp-scan{0%{transform:translateY(-100%);opacity:0}12%{opacity:1}70%{opacity:.8}100%{transform:translateY(420%);opacity:0}}
+  @keyframes bwp-draai{to{transform:rotate(1turn)}}
+  @keyframes bwp-puls{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
+  .bwp-held .kop-rij{position:relative}
+  .bwp-held .kruimel{color:var(--nav-label)}
+  .bwp-held .kruimel b{color:#fff}
+  .bwp-held .kop-meta{color:var(--nav-tekst);font-family:var(--mono);font-size:11.5px;letter-spacing:.04em}
+  .bwp-sys{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;
+    text-transform:uppercase;color:#9fd0ff}
+  .bwp-sys i{width:7px;height:7px;border-radius:50%;background:#5fe3b0;box-shadow:0 0 0 3px rgba(95,227,176,.18),0 0 12px #5fe3b0}
+  .bwp-kopkern{display:flex;align-items:center;gap:20px;margin-top:6px}
+  .bwp-embleem{position:relative;flex:none;width:84px;height:84px;display:grid;place-items:center}
+  .bwp-ring{position:absolute;inset:0;border-radius:50%;
+    background:conic-gradient(from 0deg,transparent 0 55%,color-mix(in srgb,var(--s1) 80%,#fff) 80%,#fff 86%,transparent 87%);
+    -webkit-mask:radial-gradient(closest-side,transparent calc(100% - 3px),#000 calc(100% - 2px));
+            mask:radial-gradient(closest-side,transparent calc(100% - 3px),#000 calc(100% - 2px))}
+  .bwp-embleem::before{content:"";position:absolute;inset:9px;border-radius:50%;border:1px dashed rgba(255,255,255,.22)}
+  .bwp-embleem::after{content:"";position:absolute;inset:18px;border-radius:50%;
+    background:radial-gradient(closest-side,color-mix(in srgb,var(--s4) 45%,transparent),transparent)}
+  .bwp-embleem svg{position:relative;z-index:1;width:34px;height:34px;color:var(--s4);filter:drop-shadow(0 0 10px color-mix(in srgb,var(--s4) 70%,transparent))}
+  .bwp-held .titel{color:#fff;font-size:34px;letter-spacing:-.03em}
+  .bwp-held .kop-zin{color:var(--nav-tekst);max-width:70ch}
+  .bwp-tel{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:18px}
+  .bwp-tegel{position:relative;padding:13px 14px 12px;border-radius:14px;min-width:0;
+    background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.13);
+    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  .bwp-tegel::before{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(159,208,255,.8),transparent)}
+  .bwp-tegel b{display:block;font-family:var(--mono);font-size:28px;font-weight:700;line-height:1.05;letter-spacing:-.02em;
+    font-variant-numeric:tabular-nums;color:#fff}
+  .bwp-tegel b small{font-size:13px;font-weight:600;color:var(--nav-label);margin-left:2px}
+  .bwp-tegel span{display:block;margin-top:5px;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--nav-label);overflow-wrap:anywhere}
+  .bwp-tegel.eerste b{color:#ffd46b;text-shadow:0 0 18px color-mix(in srgb,var(--s4) 60%,transparent)}
+  .bwp-cat{position:relative;margin-top:14px}
+  .bwp-cat > p{margin:0 0 7px;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--nav-label)}
+  .bwp-staaf{display:flex;height:10px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.08);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  .bwp-staaf i{display:block;height:100%;transition:flex-grow .5s cubic-bezier(.2,.7,.2,1)}
+  .bwp-staaf i + i{box-shadow:-2px 0 0 #0b1a2e}
+  .bwp-leg{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 0;padding:0;list-style:none;font-family:var(--mono);
+    font-size:11.5px;color:var(--nav-tekst)}
+  .bwp-leg li{display:inline-flex;align-items:center;gap:6px}
+  .bwp-leg li i{width:9px;height:9px;border-radius:3px}
+  .bwp-terug{position:relative;align-self:flex-start;display:inline-flex;align-items:center;gap:8px;margin-top:16px;
+    padding:9px 14px;border-radius:999px;font-size:13px;font-weight:700;color:#fff;text-decoration:none;
+    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18)}
+  @media (hover:hover){ .bwp-terug:hover{background:rgba(255,255,255,.16)} }
+  .bwp-terug:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  /* de lijst op de pagina: kaarten in een raster, met een scorering en een lichtlijn */
+  .bwp-pagina .bwp-lijst{grid-template-columns:repeat(auto-fill,minmax(min(100%,400px),1fr));gap:12px}
+  .bwp-pagina .card.bwp-rij{position:relative;overflow:hidden;padding:16px;align-items:flex-start;
+    transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+  .bwp-pagina .card.bwp-rij::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;
+    background:linear-gradient(90deg,var(--s1),var(--s3) 60%,transparent)}
+  .bwp-pagina .card.bwp-rij.weg::before{background:repeating-linear-gradient(90deg,var(--baseline) 0 8px,transparent 8px 14px)}
+  @media (hover:hover){ .bwp-pagina .card.bwp-rij:hover{transform:translateY(-2px);box-shadow:var(--schaduw-hoog);
+    border-color:color-mix(in srgb,var(--s1) 35%,var(--ring))} }
+  .bwp-pagina .bwp-rij .score{width:54px;height:54px;border-radius:50%;position:relative;
+    background:conic-gradient(var(--s1) calc(var(--p,0) * 1%),color-mix(in srgb,var(--brand) 18%,var(--grid)) 0)}
+  .bwp-pagina .bwp-rij .score::before{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--brand)}
+  .bwp-pagina .bwp-rij .score > *{position:relative}
+  .bwp-pagina .bwp-rij .score b{font-family:var(--mono);font-size:17px}
+  .bwp-pagina .bwp-rij .score small{font-size:7.5px}
+  .bwp-pagina .bwp-rij > .bw-rij{flex-basis:100%;padding-top:12px;border-top:1px solid var(--ring)}
+  .bwp-pagina .bwp-rij .lid{font-family:var(--mono);font-size:11px}
+  @media (max-width:800px){
+    .kop.bwp-held{padding:20px 18px 18px;border-radius:18px}
+    .bwp-held .titel{font-size:27px}
+    .bwp-embleem{width:62px;height:62px}
+    .bwp-embleem svg{width:26px;height:26px}
+    .bwp-kopkern{gap:14px}
+    .bwp-tel{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .bwp-tegel b{font-size:24px}
+  }
   /* ===================== einde BEWAARDE PANDEN ===================== */
   /* ===================== SLOT (VA-96): de panden na de eerste n, achter één blok ===================== */
   .slot-blok{position:relative;margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid var(--ring);
@@ -2661,7 +2820,6 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
         </div>
       </div>
     </section>
-__BEWAARD__
     <section class="deel" id="__LIJST__" aria-labelledby="t-__LIJST__" tabindex="-1">
       <header class="kop">
         <div class="kop-rij">
@@ -2690,6 +2848,7 @@ __BEWAARD__
         grijze criteria wachten op een extra databron (energielabel, verkoophistorie, leegstand).
       </p>
     </section>
+__BEWAARD__
   </main>
 </div>
 <div id="tt"></div>
@@ -3162,9 +3321,26 @@ const BW = (() => {
     overal(false); return oud;
   }
   const adres = d => d.detail ? d.detail.titel : d.a;
+  // Vier iconen, inline SVG (Lumi, knoppen-spec.md): geen lettertype, beeld of bestand erbij. Nooit voorgelezen.
+  const STER = "M12 3.2l2.6 5.5 6 .7-4.4 4.1 1.1 6L12 16.6l-5.3 2.9 1.1-6L3.4 9.4l6-.7z",
+    OOG = "M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z",
+    LIJN = ' fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"',
+    STREEP = '<path d="M4 20L20 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>';
+  const ICO = {
+    ster: '<path d="' + STER + '"' + LIJN + '/>',
+    ster_vol: '<path d="' + STER + '"' + LIJN.replace('fill="none"', 'fill="currentColor"') + '/>',
+    oog: '<path d="' + OOG + '"' + LIJN + '/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.8"/>' + STREEP,
+    oog_uit: '<path d="' + OOG + '"' + LIJN + ' stroke-dasharray="2.6 2.4"/>' + STREEP};
+  // Via de HTML-parser (template), die een <svg> zelf in de SVG-naamruimte zet.
+  const SJ = document.createElement("template");
+  function icoon(naam, cls) {
+    SJ.innerHTML = '<svg class="' + cls + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-ico="' + naam + '">'
+      + ICO[naam] + "</svg>";
+    return SJ.content.firstChild;
+  }
   function knop(d, soort) {
     const b = maak("button", "bw-knop bw-" + (soort === "bewaard" ? "bewaar" : "weg")); b.type = "button";
-    const ico = maak("span", "bw-ico"); ico.setAttribute("aria-hidden", "true");
+    const ico = icoon(soort === "bewaard" ? "ster" : "oog", "bw-ico");
     const tk = maak("span", "bw-tk"); tk.append(maak("span", "bw-nm"), maak("span", "bw-terug"));
     b.append(ico, tk);   // de naam staat in aria-label, per stand (werkRij)
     b.addEventListener("click", e => { e.stopPropagation(); druk(d, soort, b); });
@@ -3185,7 +3361,8 @@ const BW = (() => {
         b.setAttribute("aria-pressed", String(aan));
         b.setAttribute("aria-label", T["naam." + (aan ? soort : soort === "bewaard" ? "bewaar" : "verberg")].replace("{adres}", () => adres(d)));
         if (werkt) b.removeAttribute("aria-disabled"); else b.setAttribute("aria-disabled", "true");
-        b.querySelector(".bw-ico").textContent = soort === "bewaard" ? (aan ? "★" : "☆") : (aan ? "◌" : "⊘");
+        const naam = soort === "bewaard" ? (aan ? "ster_vol" : "ster") : (aan ? "oog_uit" : "oog"), ico = b.querySelector(".bw-ico");
+        if (ico.getAttribute("data-ico") !== naam) ico.replaceWith(icoon(naam, "bw-ico"));
         b.querySelector(".bw-nm").textContent = aan ? T["label." + soort] : T[soort === "bewaard" ? "bewaar" : "verberg"];
         b.querySelector(".bw-terug").textContent = aan ? T["terug." + soort] : ""; });
     }
@@ -3193,7 +3370,7 @@ const BW = (() => {
     if (card) { card.classList.toggle("bw-is-weg", s === "verborgen");
       const l = card.querySelector(".bw-label"); l.hidden = !s; l.className = "bw-label" + (s === "verborgen" ? " weg" : "");
       l.textContent = "";
-      if (s) { const i = maak("span", null, s === "bewaard" ? "★" : "◌"); i.setAttribute("aria-hidden", "true");
+      if (s) { const i = icoon(s === "bewaard" ? "ster_vol" : "oog_uit", "bw-label-ico");   // dezelfde iconen als de knop
         l.append(i, s === "verborgen" ? D["label.verborgen"].replace("{datum}", () => datum(stand[d.id])) : T["label." + s]); } }
   }
   // De statusregel boven de werklijst (en in 'Open pand'): role=status, dus voorgelezen zonder te onderbreken.
@@ -3281,7 +3458,8 @@ const BW = (() => {
   // VA-91: wat de pagina Bewaarde panden nodig heeft. bewaarde(): [id, opgeslagen object] van elk bewaard pand.
   const bewaarde = () => Object.keys(stand).filter(id => stand[id] && stand[id].stand === "bewaard").map(id => [id, stand[id]]);
   return {rij, ververs: werkRij, zichtbaar, aantalWeg, op: f => luisteraars.push(f), van, leeg, ongedaanVoor, lijstDeel,
-    naSluiten, bewaarde, weg: nietMeerBewaard, herstelId: (id, oud) => herstel({id}, oud), status, werkt: () => werkt, opAlles: f => alleLuisteraars.push(f)};
+    naSluiten, bewaarde, weg: nietMeerBewaard, herstelId: (id, oud) => herstel({id}, oud), status, werkt: () => werkt, opAlles: f => alleLuisteraars.push(f),
+    icoon};   // VA-105: dezelfde SVG-iconen op de pagina Bewaarde panden
 })();
 /* ============================ einde BEWAREN EN VERBERGEN ============================ */
 
@@ -3329,6 +3507,7 @@ const BWP = (() => {
     const d = PER.get(id), li = maak("li", "card bwp-rij" + (d ? "" : " weg")); li.dataset.pand = id;
     const s = R.score(v.score100), sc = maak("div", "score" + (s === null ? " onb" : ""));
     if (s === null) sc.append(maak("b", null, "onbekend")); else sc.append(maak("b", null, String(s)), maak("small", null, "/100"));
+    if (s !== null) sc.style.setProperty("--p", Math.max(0, Math.min(100, s)));   // de ring om de score (eigen pagina)
     const kern = maak("div", "bwp-kern");
     kern.append(maak("div", "addr", R.adres(v)));
     if (!d) kern.append(maak("span", "bw-label weg", T["pagina.weg.label"]));
@@ -3351,7 +3530,7 @@ const BWP = (() => {
     // De Bewaar-knop van VA-90, in de ingedrukte stand; nog eens drukken is niet meer bewaren.
     const b = maak("button", "bw-knop bw-bewaar"); b.type = "button"; b.setAttribute("aria-pressed", "true");
     b.setAttribute("aria-label", vul(T["naam.bewaard"], {adres: naamVan(v)}));
-    const ico = maak("span", "bw-ico", "★"); ico.setAttribute("aria-hidden", "true");
+    const ico = BW.icoon("ster_vol", "bw-ico");   // VA-105: de volle ster van de knop, niet voorgelezen
     const tk = maak("span", "bw-tk"); tk.append(maak("span", "bw-nm", T["label.bewaard"]), maak("span", "bw-terug", T["terug.bewaard"]));
     b.append(ico, tk); b.addEventListener("click", () => haalWeg(id));
     knoppen.append(b); li.append(sc, kern, knoppen);
@@ -3388,6 +3567,25 @@ const BWP = (() => {
     lijst.hidden = !wil.length;
     meer.hidden = n <= EERST;
     meer.textContent = alles ? T["pagina.minder"] : vul(T["pagina.meer"], {n: nl(n)});
+    held(werkt, r, n, m);
+  }
+  // De kop van de eigen pagina: vier tellingen en de verdeling over A–E, uit dezelfde opgeslagen gegevens.
+  const tel = {n: $("bwpTelN"), in: $("bwpTelIn"), weg: $("bwpTelWeg"), score: $("bwpTelScore")};
+  const cat = $("bwpCat"), staaf = $("bwpStaaf"), leg = $("bwpLeg");
+  function held(werkt, r, n, m) {
+    if (!tel.n) return;
+    const streep = "–";
+    tel.n.textContent = werkt ? nl(n) : streep;
+    tel.in.textContent = werkt ? nl(n - m) : streep;
+    tel.weg.textContent = werkt ? nl(m) : streep;
+    const sc = r.map(([, v]) => R.score(v.score100)).filter(x => x !== null);
+    tel.score.textContent = sc.length ? nl(Math.round(sc.reduce((a, b) => a + b, 0) / sc.length)) : streep;
+    if (sc.length) tel.score.append(maak("small", null, "/100"));
+    const per = {}; r.forEach(([, v]) => { const c = R.categorie(v.pandcategorie); if (c) per[c] = (per[c] || 0) + 1; });
+    const cs = "ABCDE".split("").filter(c => per[c]);
+    cat.hidden = !cs.length; staaf.replaceChildren(); leg.replaceChildren();
+    cs.forEach(c => { const i = maak("i", "c" + c); i.style.flexGrow = per[c]; staaf.append(i);
+      const li = maak("li"), k = maak("i", "c" + c); k.setAttribute("aria-hidden", "true"); li.append(k, c + " · " + nl(per[c])); leg.append(li); });
   }
   // Niet verspringen (Lumi §9): ligt dit deel helemaal boven het scherm, dan blijft de werklijst staan waar hij
   // stond. Safari kent geen scroll-anchoring, dus het script doet het zelf. In Chrome heeft scroll-anchoring het al
@@ -3698,6 +3896,25 @@ document.getElementById("themeBtn").addEventListener("click",()=>{
     e.preventDefault(); e.stopPropagation(); sluitMenu(true);
   }, true);
 
+  // Een deel met .pagina (Bewaarde panden) is een eigen pagina: dan staat alleen dat deel er (.op-pagina op
+  // .vg, .nu op het deel; de CSS doet de rest). De andere delen zijn samen de lange scroll.
+  const PAGINAS = delen.filter(d => d.classList.contains("pagina")).map(d => d.id);
+  const scroll = delen.filter(d => !PAGINAS.includes(d.id));
+  const opPagina = () => vg.classList.contains("op-pagina");
+  function toon(id) {   // geeft true als de keuze tussen pagina en lange scroll veranderde
+    const p = PAGINAS.includes(id), was = opPagina();
+    vg.classList.toggle("op-pagina", p);
+    delen.forEach(d => d.classList.toggle("nu", p && d.id === id));
+    return p !== was;
+  }
+  function ga(id, glijd) {   // naar een deel of pagina; het adres zet de aanroeper
+    const anders = toon(id);
+    zet(id, false); slot = Date.now() + 900;
+    const d = document.getElementById(id);
+    if (PAGINAS.includes(id)) { scrollTo({top: 0, behavior: "instant"}); d.focus({preventScroll: true}); }
+    else d.scrollIntoView({behavior: glijd && !anders && !rustig.matches ? "smooth" : "instant"});
+  }
+
   let actief = null, slot = 0;
   function zet(id, adres) {
     if (id === actief) return;
@@ -3708,31 +3925,33 @@ document.getElementById("themeBtn").addEventListener("click",()=>{
   // Actief is het laatste deel waarvan de bovenkant boven 30% van het scherm staat (smal: plus de
   // bovenbalk van 56 px); helemaal onderaan is het laatste deel actief.
   function bepaal() {
-    if (Date.now() < slot) return;
+    if (Date.now() < slot || opPagina()) return;   // op een eigen pagina blijft die pagina actief
     const lijn = (mqSmal.matches ? 56 : 0) + innerHeight * 0.3;
-    let id = DELEN[0];
-    delen.forEach(d => { if (d.getBoundingClientRect().top <= lijn) id = d.id; });
-    if (vg.getBoundingClientRect().bottom <= innerHeight + 2) id = DELEN[DELEN.length - 1];
+    let id = scroll[0].id;
+    scroll.forEach(d => { if (d.getBoundingClientRect().top <= lijn) id = d.id; });
+    if (vg.getBoundingClientRect().bottom <= innerHeight + 2) id = scroll[scroll.length - 1].id;
     zet(id, true);
   }
   let wacht = false;
   addEventListener("scroll", () => { if (!wacht) { wacht = true; requestAnimationFrame(() => { wacht = false; bepaal(); }); } }, {passive: true});
   addEventListener("scrollend", () => { slot = 0; bepaal(); });
 
-  links.forEach(a => a.addEventListener("click", e => {
-    const id = a.dataset.doel;
-    zet(id, false); slot = Date.now() + 900;   // geen flikkering over de delen ertussen
-    if (isOpen()) {
-      e.preventDefault();
-      sluitMenu(true);
-      document.getElementById(id).scrollIntoView({behavior: rustig.matches ? "auto" : "smooth"});
-      history.pushState(null, "", "#" + id);
-    }
-  }));
+  // Elke link naar een deel (het menu, en 'Terug naar de werklijst' op een pagina) gaat via ga(): het
+  // adres komt in de geschiedenis, dus de terugknop van de browser brengt je terug.
+  document.addEventListener("click", e => {
+    const a = e.target.closest && e.target.closest('a[href^="#"]');
+    const id = a && a.getAttribute("href").slice(1);
+    if (!DELEN.includes(id) || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    if (isOpen()) sluitMenu(!PAGINAS.includes(id));
+    if (location.hash !== "#" + id) history.pushState(null, "", "#" + id);
+    ga(id, true);
+  });
+  addEventListener("popstate", () => { const id = location.hash.slice(1); ga(DELEN.includes(id) ? id : scroll[0].id, false); });
 
   // Openen met een adres: de cijfers en kaarten staan er nu, dus één keer naar het deel.
   const start = location.hash.slice(1);
-  if (DELEN.includes(start)) { zet(start, false); document.getElementById(start).scrollIntoView({behavior: "instant"}); }
+  if (DELEN.includes(start)) ga(start, false);
   else zet(DELEN[0], false);
 })();
 /* ============================ einde MENU ============================ */
@@ -4992,6 +5211,16 @@ function kantoorStart(root, data, opties = {}) {
 """
 
 
+def zonder_css_uitleg(t: str) -> str:
+    """
+    Het sjabloon zonder de /* uitleg */ in zijn <style> (VA-105). De uitleg blijft in de bron staan; de pagina
+    blijft zo onder 1 MB (VA-39 crit. 5), en er verandert niets wat de browser toont. Het CSS heeft geen tekst
+    tussen aanhalingstekens met '/*' erin; een test bewaakt dat.
+    """
+    i, j = t.index("<style>"), t.index("</style>")
+    return t[:i] + re.sub(r"[ \t]*/\*.*?\*/[ \t]*\n?", "", t[i:j], flags=re.S) + t[j:]
+
+
 def render(payload: dict) -> str:
     """Vul het sjabloon. De payload als laatste, zodat zijn inhoud niet wordt vervangen."""
     payload = {**payload, "kaartfoto": payload.get("kaartfoto") or kaartfoto_tekst(),  # elke kaart (VA-71)
@@ -5004,7 +5233,7 @@ def render(payload: dict) -> str:
     lijst = pg["lijst"]
     naam = next(n for g in menu_voor(lijst) for d, n in g["items"] if d == lijst)
     band = band_html(payload.get("kaart"))
-    html = (TEMPLATE
+    html = (zonder_css_uitleg(TEMPLATE)
             .replace("__TITEL__", escape(pg["titel"]))
             .replace("__LABEL__", payload["gebied"])
             .replace("__PEILDATUM__", escape(payload["peildatum"]))

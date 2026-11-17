@@ -112,7 +112,7 @@ const ctx = {
                              static now() { return inv.nu; } static parse(s) { return Date.parse(s); } },
   localStorage: { getItem: k => (k in winkel ? winkel[k] : null), setItem: (k, v) => { winkel[k] = String(v); },
                   removeItem: k => { delete winkel[k]; } },
-  document: { getElementById: () => null, addEventListener: () => {}, hidden: false },
+  document: { getElementById: () => null, addEventListener: () => {}, hidden: false, createElement: () => ({}) },
   addEventListener: () => {},
 };
 vm.createContext(ctx);
