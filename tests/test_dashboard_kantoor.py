@@ -259,6 +259,8 @@ class Pagina(unittest.TestCase):
         # Geen aan/uit-knop voor het kantoor. Sinds VA-90 hebben de panden wel Bewaar en Verberg met
         # aria-pressed; die staan alleen tussen de VA-90-markeringen en tellen hier niet mee.
         buiten_va90 = re.sub(r"(?is)bewaren en verbergen \(VA-90\).*?einde bewaren en verbergen", "", t)
+        # VA-91: de Bewaar-knop op de pagina Bewaarde panden is dezelfde knop, met aria-pressed.
+        buiten_va90 = re.sub(r"(?is)bewaarde panden \(VA-91\).*?einde bewaarde panden", "", buiten_va90)
         self.assertNotIn("aria-pressed", buiten_va90)
         for begin in ('<section class="deel" id="kantoor"', '<div class="pk" id="pk"'):
             tag = t[t.index(begin):]

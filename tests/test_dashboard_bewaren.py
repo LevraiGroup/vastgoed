@@ -267,7 +267,7 @@ class FocusNaSluiten(unittest.TestCase):
     def test_volgorde(self):
         s = self.sluit()
         kaart = s.index("if (pandOpener && pandOpener.isConnected) { pandOpener.focus(); return; }")
-        ongedaan = s.index("if (pandId != null) (BW.ongedaanVoor(pandId) || BW.lijstDeel()).focus();")
+        ongedaan = s.index("if (pandId != null) BW.naSluiten(pandId).focus();")
         self.assertLess(kaart, ongedaan)   # eerst de kaart (VA-61), dan Ongedaan maken, dan de werklijst
         self.assertIn("pandOpener = opener; pandId = d.id;", bd.TEMPLATE)
 
@@ -294,14 +294,20 @@ class FocusNaSluiten(unittest.TestCase):
         self.assertIn('<section class="deel" id="__LIJST__" aria-labelledby="t-__LIJST__" tabindex="-1">', bd.TEMPLATE)
         self.assertIn('<main class="inhoud" id="inhoud" tabindex="-1">', bd.TEMPLATE)
         self.assertIn("return {rij, ververs: werkRij, zichtbaar, aantalWeg, op: f => luisteraars.push(f), van, leeg, "
-                      "ongedaanVoor, lijstDeel};", js)
+                      "ongedaanVoor, lijstDeel,", js)
+        # VA-91: na het sluiten eerst Ongedaan maken van dit pand, dan de werklijst (of, vanaf Bewaarde panden, dat deel).
+        self.assertIn("if (!vanB) return ongedaanVoor(id) || lijstDeel();", js)
 
 
 class Kopij(unittest.TestCase):
     def test_alles_uit_lumis_tabel(self):
-        # Elke zin staat letterlijk in Lumi's kopijtabel (design/copy-va90.md).
+        # Elke zin staat letterlijk in Lumi's kopijtabel (design/copy-va90.md). De pagina Bewaarde panden en het
+        # vervolg op status.bewaard zijn van VA-91 (design/copy-va91.md), en die pint test_dashboard_bewaard.py
+        # op de kolom GOEDGEKEURD.
         tabel = (HIER.parent / "design" / "copy-va90.md").read_text(encoding="utf-8")
         for k, t in bd.BEWAAR_TEKST.items():
+            if k.startswith("pagina.") or k == "status.bewaard":
+                continue
             self.assertIn(t, tabel, k)
         t = bd.BEWAAR_TEKST
         self.assertEqual(t["terug.bewaard"], "Druk om niet meer te bewaren")
