@@ -39,23 +39,21 @@
     --brand:#0a1524;
   }
 
-  /* Menu-tinten: bestaande kleuren uit de vroegere kop (VA-63). */
   :root{
     --nav-tekst:#c6d3e4; --nav-label:#9fb3cc;
     --nav-hover:rgba(255,255,255,.08); --nav-actief:rgba(255,255,255,.14); --nav-lijn:rgba(255,255,255,.10);
   }
-  /* Landkaart (VA-85, Lumi #h-tokens): alleen mengsels van tokens die er al zijn, geen nieuwe kleur.
-     Ze volgen --brand en --s1, dus de band wordt donker met het thema. */
   :root{
     --brand-2:color-mix(in srgb,var(--brand) 78%,var(--s1));
     --held:linear-gradient(155deg,var(--brand) 0%,var(--brand) 35%,var(--brand-2) 100%);
     --gloed:color-mix(in srgb,var(--s1) 40%,transparent);
     --schaduw-hoog:0 1px 2px rgba(11,11,11,.05),0 28px 56px -28px color-mix(in srgb,var(--brand) 60%,transparent);
-  }
+    --glans:rgba(255,255,255,.75);  }
   @media (prefers-color-scheme: dark){
-    :root:where(:not([data-theme="light"])){--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9)}
+    :root:where(:not([data-theme="light"])){--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9);
+      --glans:rgba(255,255,255,.06)}
   }
-  :root[data-theme="dark"]{--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9)}
+  :root[data-theme="dark"]{--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9);--glans:rgba(255,255,255,.06)}
 
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
@@ -65,9 +63,6 @@
     -webkit-font-smoothing:antialiased;line-height:1.45}
   a{color:inherit}
 
-  /* =====================================================================
-     MENU (VA-63, Lumi; gebouwd in VA-64)
-     ===================================================================== */
   .skip{position:absolute;left:12px;top:-60px;z-index:100;background:var(--brand);color:#fff;
     padding:10px 14px;border-radius:10px;font-size:14px;font-weight:650;text-decoration:none}
   .skip:focus{top:12px;outline:2px solid #fff;outline-offset:2px}
@@ -92,7 +87,6 @@
   .vg.klaar .nav a{transition:background-color .15s ease,color .15s ease}
   @media (hover:hover){ .nav a:hover{background:var(--nav-hover);color:#fff} }
   .nav a:focus-visible{outline:2px solid #fff;outline-offset:-2px}
-  /* actief: meer dan kleur alleen — streep links, vet, lichter vlak, aria-current */
   .nav a[aria-current]{background:var(--nav-actief);color:#fff;font-weight:700}
   .nav a[aria-current]::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;
     border-radius:0 3px 3px 0;background:#fff}
@@ -103,8 +97,7 @@
     color:#fff;font:inherit;font-size:12px;padding:7px 12px;border-radius:999px;min-height:32px}
   @media (hover:hover){ .toggle:hover{background:rgba(255,255,255,.18)} }
   .toggle:focus-visible{outline:2px solid #fff;outline-offset:2px}
-  .uitlog{margin:0}   /* VA-106: het formulier om de knop neemt geen eigen ruimte */
-
+  .uitlog{margin:0}
   .sluit-menu{display:none;align-items:center;gap:6px;cursor:pointer;flex:none;
     background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#fff;
     font:inherit;font-size:13px;font-weight:650;min-height:40px;padding:0 12px;border-radius:10px}
@@ -140,7 +133,6 @@
   .pill{font-size:12px;color:var(--ink-2);background:var(--surface);border:1px solid var(--ring);
     padding:4px 11px;border-radius:999px;white-space:nowrap}
   .kop-meta{font-size:12px;color:var(--ink-2)}
-  /* ===================== einde MENU-blok (smal: zie @media (max-width:800px) onderaan) ===================== */
 
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
   .kpi{background:var(--surface);border:1px solid var(--ring);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
@@ -204,7 +196,6 @@
   .fnleg span{display:flex;align-items:center;gap:5px}
   .dot{width:8px;height:8px;border-radius:2px;flex:none}
 
-  /* ---- score-opbouw ---- */
   details.brk{border-top:1px solid var(--grid);padding-top:9px}
   details.brk summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
     font-size:12px;font-weight:650;color:var(--ink)}
@@ -241,9 +232,6 @@
     background:var(--brand);color:#fff;font-size:11.5px;padding:6px 9px;border-radius:8px;
     box-shadow:var(--shadow);white-space:nowrap;transition:opacity .12s;z-index:50}
 
-  /* =====================================================================
-     PIXELKANTOOR — dit blok gaat mee naar build_dashboard.py
-     ===================================================================== */
   .pk{background:var(--surface);border:1px solid var(--ring);border-radius:14px;
     box-shadow:var(--shadow);overflow:hidden;container-type:inline-size}
   .pk-scene{position:relative}
@@ -294,20 +282,9 @@
   @keyframes pk-hup{to{transform:translate(-50%,calc(-100% - 2px))}}
   .pk-stil .pk-bel{animation:none}
   @media (prefers-reduced-motion: reduce){ .pk-bel{animation:none} }
-  /* ===================== einde PIXELKANTOOR-blok ===================== */
-  /* =====================================================================
-     KANTOOR3D — dit blok gaat mee naar build_dashboard.py (na het PIXELKANTOOR-blok)
-     ===================================================================== */
-  /* .pk-start: dezelfde maat al voordat three.js er is, zodat niets onder het kantoor verschuift
-     als het laadt (een adres als #proefresultaat blijft kloppen). Het 2D-kantoor haalt hem weg.
-     width:100% houdt de breedte vast: zonder die regel geeft aspect-ratio de max-height door aan de
-     breedte en wordt de scène smaller dan het kantoor. */
   .pk-scene.pk-start,.pk-scene.pk-3d{width:100%;aspect-ratio:1.45/1;min-height:240px;overflow:hidden;background:var(--surface-2)}
   .pk-smal .pk-scene.pk-3d{aspect-ratio:1/1}
-  @container (max-width:559.98px){ .pk-scene.pk-start{aspect-ratio:1/1} }   /* = .pk-smal: scène smaller dan 560 px */
-  /* VA-63/64 crit. 13: breed past het hele kantoor met de werkbalk op een scherm van 1280 × 800.
-     270 px = bovenmarge, kop, werkbalk, voettekst en randen (Lumi, gemeten). */
-  @media (min-width:801px){ .pk-scene.pk-start,.pk-scene.pk-3d{max-height:calc(100vh - 270px)} }
+  @container (max-width:559.98px){ .pk-scene.pk-start{aspect-ratio:1/1} }  @media (min-width:801px){ .pk-scene.pk-start,.pk-scene.pk-3d{max-height:calc(100vh - 270px)} }
   .pk-scene.pk-3d canvas{display:block;width:100%;height:100%;image-rendering:auto}
   .pk-3d .pk-ov{overflow:hidden}
   .pk-3d .pk-bel{z-index:2;animation:none}
@@ -324,12 +301,10 @@
   .pk-z{transform:translate(-50%,-100%);white-space:nowrap;font-size:12px;font-weight:800;letter-spacing:.12em;color:var(--muted);
     pointer-events:none;text-shadow:0 1px 0 var(--surface-2)}
   .pk-smal .pk-3d .pk-bel,.pk-smal .pk-3d .pk-z{display:none}
-  .pk-smal .pk-3d .pk-naam{font-size:0;padding:0 5px}   /* smal: alleen het nummer; de namen staan in de werkbalk eronder */
-  .pk-smal .pk-3d .pk-naam b{font-size:10px;margin:0}
+  .pk-smal .pk-3d .pk-naam{font-size:0;padding:0 5px}  .pk-smal .pk-3d .pk-naam b{font-size:10px;margin:0}
   .pk-smal .pk-3d .pk-naam.chef{display:none}
   .pk-smal .pk-3d .pk-naam.aandacht{background:color-mix(in srgb,var(--s4) 30%,var(--surface));border-color:var(--s4);color:var(--ink)}
   .pk-smal .pk-3d .pk-bord{font-size:7px;letter-spacing:.06em;padding:1px 4px}
-  /* WERKBALK VAN HET KANTOOR (VA-63, vervangt .pk-lijst): vier genummerde medewerkers, dan de Kantoormanager. */
   .pk-balk{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border-top:1px solid var(--grid);background:var(--surface)}
   .pk-knop{display:inline-flex;align-items:center;gap:9px;cursor:pointer;min-height:42px;padding:6px 14px 6px 6px;
     border-radius:10px;border:1px solid var(--ring);background:var(--surface-2);color:var(--ink);
@@ -347,23 +322,13 @@
   .pk-knop.chef .nm::before{background:var(--brand);box-shadow:0 0 0 1px var(--baseline)}
   .pk-knop .bel{display:none;font-size:12px;font-weight:500;color:var(--ink-2);margin-top:1px}
   .pk-knop.aandacht .bel::before{content:"! ";color:var(--s2);font-weight:800}
-  .pk-smal .pk-knop .bel{display:block}   /* zonder ballonnen in de scène staat de regel in de knop */
-  @media (hover:hover){ .pk-knop:hover{background:var(--grid)} }
+  .pk-smal .pk-knop .bel{display:block}  @media (hover:hover){ .pk-knop:hover{background:var(--grid)} }
   .pk-knop:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
-  /* open: lichtblauw vlak + dubbele rand (vorm, niet alleen kleur) + aria-expanded */
   .pk-knop[aria-expanded="true"]{background:color-mix(in srgb,var(--s1) 12%,var(--surface-2));
     border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
   .pk-balk .tussen{flex:1}
   .pk-noot{flex-basis:100%;color:var(--ink-2)}
-  /* ===================== einde KANTOOR3D-blok ===================== */
 
-  /* =====================================================================
-     LANDKAART (VA-85): Lumi's concepten A, B en C samen in één navy band boven het kantoor.
-     Eén canvas onder de hele band tekent het raster, de stroom langs de cijfers (A), het brein rond
-     de kern (B) en de kaart (C); de kop, de glazen cijfers en de legenda zijn gewone HTML erboven.
-     Let op VA-64 crit. 13: met deze band staat de werkbalk van het kantoor op 1280 × 800 niet meer
-     bij het laden in beeld. Het kantoor zelf blijft even groot en altijd zichtbaar.
-     ===================================================================== */
   .band{position:relative;isolation:isolate;overflow:hidden;margin:-26px -28px 0;padding:24px 28px 64px;
     background:var(--held);color:#fff;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,46%);
     grid-template-rows:auto 1fr;grid-template-areas:"kop kaart" "trap kaart";gap:18px 28px}
@@ -379,7 +344,6 @@
   .band .kop-zin{color:var(--nav-tekst)}
   .band .pill{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.14);color:var(--nav-tekst)}
   .band + .pk{position:relative;z-index:2;margin-top:-40px;box-shadow:var(--schaduw-hoog)}
-  /* De vijf glazen cijfers (A): onder elkaar, links een kanaal waar de stroom langs loopt. */
   .trap-blok{grid-area:trap;align-self:end}
   .trap{list-style:none;margin:0;padding:0 0 0 26px;display:flex;flex-direction:column;gap:7px;max-width:440px}
   .trap li{position:relative;overflow:hidden;display:flex;align-items:baseline;gap:12px;padding:9px 14px 11px;
@@ -391,7 +355,6 @@
   .trap b{min-width:7.2ch;color:#fff;font-size:21px;font-weight:750;letter-spacing:-.01em;font-variant-numeric:tabular-nums;text-align:right}
   .trap li.trap-wl{background:color-mix(in srgb,var(--s3) 20%,transparent);border-color:color-mix(in srgb,var(--s3) 58%,transparent)}
   .stroom-noot{margin:8px 0 0 26px;font-size:11.5px;color:var(--nav-label)}
-  /* De kaart (C): het vlak houdt alleen plek vrij; het canvas eronder tekent erin. */
   .kaart{grid-area:kaart;margin:0;display:flex;flex-direction:column;justify-content:flex-end;gap:6px}
   .kaart-vlak{height:clamp(380px,58vh,560px);pointer-events:none}
   .kaart-tip{position:absolute;z-index:3;pointer-events:none;transform:translate(-50%,calc(-100% - 8px));
@@ -416,8 +379,6 @@
     .trap b{font-size:18px}
     .stroom-noot{margin-left:22px}
   }
-  /* ===================== einde LANDKAART ===================== */
-  /* ===================== RUNPANEEL (VA-86): wanneer de laatste en de volgende run zijn, in glas ===================== */
   .run-paneel{display:flex;flex-direction:column;gap:8px;width:fit-content;max-width:100%;margin-top:4px;padding:10px 14px 11px;
     border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.13);
     box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 24px -8px var(--gloed);
@@ -442,7 +403,6 @@
   .run-lijn i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;
     background:linear-gradient(90deg,var(--s1),var(--s3));box-shadow:0 0 10px var(--gloed)}
   .run-noot{margin:0 0 0 19px;font-size:12px;color:var(--nav-tekst)}
-  /* ===================== einde RUNPANEEL ===================== */
 
   @media(max-width:900px){
     .kpis{grid-template-columns:repeat(2,1fr)}
@@ -450,7 +410,6 @@
     .grid{grid-template-columns:1fr}
     .bar{grid-template-columns:120px 1fr}
   }
-  /* ---- MENU smal (≤ 800 px, VA-63): bovenbalk met menuknop, de zijbalk wordt een lade ---- */
   @media (max-width:800px){
     .vg{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr}
     .topbalk{grid-column:1;grid-row:1;display:flex;position:sticky;top:0;z-index:20;align-items:center;
@@ -466,7 +425,6 @@
     .side{position:fixed;top:0;bottom:0;left:0;width:min(304px,86%);height:auto;z-index:40;
       transform:translateX(-100%);visibility:hidden;box-shadow:0 0 40px rgba(0,0,0,.35);padding-top:14px}
     .vg.open .side{transform:none;visibility:visible}
-    /* Overgangen pas na de eerste frames (.klaar), anders schuift de lade bij elke laadbeurt zichtbaar weg. */
     .vg.klaar .side{transition:transform .22s ease,visibility 0s linear .22s}
     .vg.klaar.open .side{transition:transform .22s ease}
     .sluit-menu{display:inline-flex}
@@ -484,7 +442,6 @@
   @media (prefers-reduced-motion: reduce){
     .vg.klaar .nav a,.vg.klaar .side,.vg.klaar.open .side,.vg.klaar .scrim,.vg.klaar.open .scrim,.pk-knop{transition:none}
   }
-  /* ===================== PAND OPENEN (VA-61, VA-62) ===================== */
   .card.open-baar{cursor:pointer}
   .pand-open{font:inherit;font-size:13px;font-weight:600;color:var(--s1);background:none;border:0;padding:0;cursor:pointer}
   .pand-open:hover{text-decoration:underline}
@@ -533,11 +490,6 @@
     dialog.pand[open]{animation:pandIn .16s ease-out}
     @keyframes pandIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   }
-  /* ===================== einde PAND OPENEN ===================== */
-  /* =====================================================================
-     WERKLIJSTFILTERS (VA-68, VA-69, VA-70; Lumi: design/filters.html). Breed of smal hangt af van de breedte
-     van de werklijst zelf (container), niet van het scherm.
-     ===================================================================== */
   :root{--knop:#12233b;--knop-rand:transparent}
   @media (prefers-color-scheme: dark){ :root:where(:not([data-theme="light"])){--knop-rand:rgba(255,255,255,.18)} }
   :root[data-theme="dark"]{--knop-rand:rgba(255,255,255,.18)}
@@ -585,7 +537,6 @@
     .wl-optie:has(input:focus-visible){outline:2px solid var(--s1);outline-offset:2px}
     .wl-optie input:focus-visible{outline:none}
   }
-  /* getalvelden (VA-69): type="text" met 16 px, anders zoomt iOS in */
   .wl-bereiken{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px 20px;align-items:start;
     margin-top:16px;padding-top:14px;border-top:1px solid var(--grid)}
   .wl-hint{margin:-2px 0 6px;font-size:11.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
@@ -630,7 +581,6 @@
       border-top:1px solid var(--grid);border-radius:0 0 14px 14px}
   }
   .schildwacht{height:1px}
-  /* ---- KAART MET LUCHTFOTO (VA-71): een vast vlak, dus niets verschuift als de foto komt of faalt ---- */
   .card-foto{position:relative;width:100px;height:100px;border-radius:10px;overflow:hidden;background:var(--grid)}
   .card-foto.laadt{background:repeating-linear-gradient(135deg,var(--grid) 0 7px,color-mix(in srgb,var(--grid) 55%,var(--surface)) 7px 14px)}
   .card-foto img{display:block;width:100%;height:100%;object-fit:cover;opacity:0}
@@ -647,24 +597,42 @@
     .card-top{grid-template-columns:84px minmax(0,1fr) auto;gap:10px}
     .card-foto{width:84px;height:84px}
   }
-  /* ===================== BEWAREN EN VERBERGEN (VA-90) =====================
-     Op elke kaart en in 'Open pand': Bewaar en Verberg. De stand staat in de knop met meer dan kleur:
-     een ster (☆/★) en het woord, een stippelrand bij Verborgen, en aria-pressed. */
-  .bw-rij{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
-  .bw-knop{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:5px 12px 5px 10px;border-radius:9px;
-    border:1px solid var(--ring);background:var(--surface-2);color:var(--ink);font:inherit;font-size:12.5px;
-    font-weight:650;text-align:left;cursor:pointer}
-  .bw-knop .bw-ico{flex:none;width:1.1em;text-align:center;font-size:14px;line-height:1}
-  .bw-knop .bw-tk{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+  .bw-rij{display:flex;gap:0;margin-top:4px;padding:3px;border-radius:13px;
+    background:linear-gradient(180deg,var(--surface-2),color-mix(in srgb,var(--s1) 5%,var(--surface-2)));
+    border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);box-shadow:inset 0 1px 0 var(--glans)}
+  .bw-knop{flex:1 1 0;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    min-height:44px;padding:6px 12px;border-radius:10px;border:1px solid transparent;background:transparent;
+    color:var(--ink);font:inherit;font-size:13px;font-weight:650;cursor:pointer;position:relative;
+    transition:background-color .15s,border-color .15s,box-shadow .15s,transform .08s}
+  .bw-knop .bw-ico{flex:none;width:18px;height:18px;color:var(--ink-2)}
+  .bw-knop .bw-tk{display:flex;flex-direction:column;line-height:1.2;min-width:0;text-align:left}
   .bw-knop .bw-terug{font-size:11px;font-weight:500;color:var(--ink-2)}
   .bw-knop .bw-terug:empty{display:none}
-  .bw-knop.bw-bewaar[aria-pressed="true"]{background:color-mix(in srgb,var(--s1) 12%,var(--surface-2));
-    border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
-  .bw-knop.bw-bewaar[aria-pressed="true"] .bw-ico{color:var(--s1)}
-  .bw-knop.bw-weg[aria-pressed="true"]{background:var(--grid);border:1px dashed var(--ink-2)}
-  .bw-knop[aria-disabled="true"]{cursor:not-allowed;opacity:.65}
-  @media (hover:hover){ .bw-knop:not([aria-disabled="true"]):hover{background:var(--grid)} }
-  .bw-knop:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .bw-knop+.bw-knop::before{content:"";position:absolute;left:-1px;top:10px;bottom:10px;width:1px;
+    background:color-mix(in srgb,var(--ink) 12%,transparent)}
+  .bw-knop[aria-pressed="true"]::before,.bw-knop[aria-pressed="true"]+.bw-knop::before{display:none}
+  @media (hover:hover){
+    .bw-knop:not([aria-disabled="true"]):hover{background:color-mix(in srgb,var(--s1) 9%,transparent)}
+    .bw-knop:not([aria-disabled="true"]):hover .bw-ico{color:var(--s1)} }
+  .bw-knop:focus-visible{outline:2px solid var(--s1);outline-offset:2px;z-index:1}
+  .bw-knop:not([aria-disabled="true"]):active{transform:translateY(1px);
+    background:color-mix(in srgb,var(--s1) 14%,transparent);
+    box-shadow:inset 0 1px 3px color-mix(in srgb,var(--ink) 18%,transparent)}
+  .bw-knop.bw-bewaar[aria-pressed="true"]{background:var(--held);color:#fff;
+    border-color:color-mix(in srgb,var(--s1) 70%,transparent);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 6px 16px -8px var(--gloed)}
+  .bw-knop.bw-bewaar[aria-pressed="true"] .bw-ico{color:var(--s4);
+    filter:drop-shadow(0 0 5px color-mix(in srgb,var(--s4) 55%,transparent))}
+  .bw-knop.bw-bewaar[aria-pressed="true"] .bw-terug{color:var(--nav-tekst)}
+  @media (hover:hover){ .bw-knop.bw-bewaar[aria-pressed="true"]:hover{background:var(--held);filter:brightness(1.12)} }
+  .bw-knop.bw-weg[aria-pressed="true"]{border:1px dashed var(--ink-2);color:var(--ink);
+    background:repeating-linear-gradient(135deg,var(--grid) 0 6px,
+      color-mix(in srgb,var(--grid) 55%,var(--surface-2)) 6px 12px)}
+  .bw-knop.bw-weg[aria-pressed="true"] .bw-ico{color:var(--ink)}
+  .bw-knop[aria-disabled="true"]{cursor:not-allowed;opacity:.55}
+  @media (prefers-reduced-motion: reduce){ .bw-knop{transition:none} .bw-knop:active{transform:none} }
+  .pand-bw .bw-rij{max-width:420px}
+  .bw-label .bw-label-ico{flex:none;width:12px;height:12px}
   .bw-label{display:inline-flex;align-self:flex-start;width:max-content;max-width:100%;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;
     color:var(--ink);background:color-mix(in srgb,var(--s1) 12%,var(--surface-2));border:1px solid var(--s1)}
   .bw-label.weg{background:var(--grid);border:1px dashed var(--ink-2)}
@@ -680,8 +648,6 @@
   .bw-toon.aan{border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
   .bw-toon:focus-visible,.bw-ongedaan:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
   .bw-status{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;color:var(--ink)}
-  /* Leeg blijft de statusregel in de toegankelijkheidsboom (Lumi §3): geen display:none, alleen geen hoogte.
-     De -6px heft de rijafstand van de balk op, zodat een lege regel geen ruimte inneemt. */
   .bw-balk .bw-status:empty{margin-top:-6px}
   .pand-bw{margin:0 0 14px;padding:0 0 12px;border-bottom:1px solid var(--grid)}
   .pand-bw .bw-apparaat{margin:8px 0 0;font-size:12px;color:var(--ink-2)}
@@ -690,10 +656,6 @@
   .wl-leeg .bw-leeg-toon{font:inherit;font-size:13px;font-weight:650;background:var(--surface-2);border:1px solid var(--ring);
     border-radius:9px;padding:7px 12px;min-height:40px;color:var(--ink);cursor:pointer}
   .wl-leeg .bw-leeg-toon:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
-  /* ===================== einde BEWAREN EN VERBERGEN ===================== */
-  /* ===================== BEWAARDE PANDEN (VA-91) =====================
-     Een eigen deel tussen Voorraad en de werklijst. Een korte rij per pand, in de vorm van een kaart; geen
-     luchtfoto. Alleen bestaande tokens; licht en donker komen daaruit. */
   .nav a .nav-n{margin-left:auto;font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.4;
     background:var(--nav-actief);color:#fff;border-radius:999px;padding:1px 8px}
   .nav a[aria-current] .nav-n{background:rgba(255,255,255,.22)}
@@ -709,14 +671,14 @@
   .bwp-kern .addr{max-width:100%}
   .bwp-kern .lid{max-width:62ch}
   .bwp-rij > .bw-rij{flex:0 1 auto;margin-top:0;align-items:center;gap:8px 12px}
+  .bwp-rij > .bw-rij{padding:0;background:none;border:0;box-shadow:none;border-radius:0}
+  .bwp-rij > .bw-rij > .bw-knop{flex:0 1 auto}
   .bwp-rij .pand-open{display:inline-flex;align-items:center;min-height:38px}
   .bwp-rij .baglink{display:inline-block;padding:10px 0;line-height:18px}
   .bwp-rij .baglink:focus-visible{outline:2px solid var(--s1);outline-offset:2px;border-radius:4px}
   .bwp .wl-leeg{margin-bottom:0}
   .bwp .bw-toon{margin-top:12px}
   @container kaart (max-width:520px){ .bwp-rij > .bw-rij{flex-basis:100%} }
-  /* ===================== einde BEWAARDE PANDEN ===================== */
-  /* ===================== SLOT (VA-96): de panden na de eerste n, achter één blok ===================== */
   .slot-blok{position:relative;margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid var(--ring);
     background:var(--surface)}
   .slot-schim{padding:14px;filter:blur(2px);opacity:.6;pointer-events:none;user-select:none}
@@ -735,8 +697,6 @@
   .slot-tekst{margin:0;max-width:46ch;font-size:14px;line-height:1.5;color:var(--ink-2)}
   .slot-tekst b{display:block;margin-bottom:2px;font-size:16px;color:var(--ink)}
   @media (max-width:900px){ .slot-kaart:nth-child(n+2){display:none} }
-  /* ===================== einde SLOT ===================== */
-  /* ===================== einde WERKLIJST ===================== */
 </style>
 </head>
 <body>
@@ -1355,9 +1315,26 @@ const BW = (() => {
     overal(false); return oud;
   }
   const adres = d => d.detail ? d.detail.titel : d.a;
+  // Vier iconen, inline SVG (Lumi, knoppen-spec.md): geen lettertype, beeld of bestand erbij. Nooit voorgelezen.
+  const STER = "M12 3.2l2.6 5.5 6 .7-4.4 4.1 1.1 6L12 16.6l-5.3 2.9 1.1-6L3.4 9.4l6-.7z",
+    OOG = "M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z",
+    LIJN = ' fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"',
+    STREEP = '<path d="M4 20L20 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>';
+  const ICO = {
+    ster: '<path d="' + STER + '"' + LIJN + '/>',
+    ster_vol: '<path d="' + STER + '"' + LIJN.replace('fill="none"', 'fill="currentColor"') + '/>',
+    oog: '<path d="' + OOG + '"' + LIJN + '/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.8"/>' + STREEP,
+    oog_uit: '<path d="' + OOG + '"' + LIJN + ' stroke-dasharray="2.6 2.4"/>' + STREEP};
+  // Via de HTML-parser (template), die een <svg> zelf in de SVG-naamruimte zet.
+  const SJ = document.createElement("template");
+  function icoon(naam, cls) {
+    SJ.innerHTML = '<svg class="' + cls + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-ico="' + naam + '">'
+      + ICO[naam] + "</svg>";
+    return SJ.content.firstChild;
+  }
   function knop(d, soort) {
     const b = maak("button", "bw-knop bw-" + (soort === "bewaard" ? "bewaar" : "weg")); b.type = "button";
-    const ico = maak("span", "bw-ico"); ico.setAttribute("aria-hidden", "true");
+    const ico = icoon(soort === "bewaard" ? "ster" : "oog", "bw-ico");
     const tk = maak("span", "bw-tk"); tk.append(maak("span", "bw-nm"), maak("span", "bw-terug"));
     b.append(ico, tk);   // de naam staat in aria-label, per stand (werkRij)
     b.addEventListener("click", e => { e.stopPropagation(); druk(d, soort, b); });
@@ -1378,7 +1355,8 @@ const BW = (() => {
         b.setAttribute("aria-pressed", String(aan));
         b.setAttribute("aria-label", T["naam." + (aan ? soort : soort === "bewaard" ? "bewaar" : "verberg")].replace("{adres}", () => adres(d)));
         if (werkt) b.removeAttribute("aria-disabled"); else b.setAttribute("aria-disabled", "true");
-        b.querySelector(".bw-ico").textContent = soort === "bewaard" ? (aan ? "★" : "☆") : (aan ? "◌" : "⊘");
+        const naam = soort === "bewaard" ? (aan ? "ster_vol" : "ster") : (aan ? "oog_uit" : "oog"), ico = b.querySelector(".bw-ico");
+        if (ico.getAttribute("data-ico") !== naam) ico.replaceWith(icoon(naam, "bw-ico"));
         b.querySelector(".bw-nm").textContent = aan ? T["label." + soort] : T[soort === "bewaard" ? "bewaar" : "verberg"];
         b.querySelector(".bw-terug").textContent = aan ? T["terug." + soort] : ""; });
     }
@@ -1386,7 +1364,7 @@ const BW = (() => {
     if (card) { card.classList.toggle("bw-is-weg", s === "verborgen");
       const l = card.querySelector(".bw-label"); l.hidden = !s; l.className = "bw-label" + (s === "verborgen" ? " weg" : "");
       l.textContent = "";
-      if (s) { const i = maak("span", null, s === "bewaard" ? "★" : "◌"); i.setAttribute("aria-hidden", "true");
+      if (s) { const i = icoon(s === "bewaard" ? "ster_vol" : "oog_uit", "bw-label-ico");   // dezelfde iconen als de knop
         l.append(i, s === "verborgen" ? D["label.verborgen"].replace("{datum}", () => datum(stand[d.id])) : T["label." + s]); } }
   }
   // De statusregel boven de werklijst (en in 'Open pand'): role=status, dus voorgelezen zonder te onderbreken.
@@ -1474,7 +1452,8 @@ const BW = (() => {
   // VA-91: wat de pagina Bewaarde panden nodig heeft. bewaarde(): [id, opgeslagen object] van elk bewaard pand.
   const bewaarde = () => Object.keys(stand).filter(id => stand[id] && stand[id].stand === "bewaard").map(id => [id, stand[id]]);
   return {rij, ververs: werkRij, zichtbaar, aantalWeg, op: f => luisteraars.push(f), van, leeg, ongedaanVoor, lijstDeel,
-    naSluiten, bewaarde, weg: nietMeerBewaard, herstelId: (id, oud) => herstel({id}, oud), status, werkt: () => werkt, opAlles: f => alleLuisteraars.push(f)};
+    naSluiten, bewaarde, weg: nietMeerBewaard, herstelId: (id, oud) => herstel({id}, oud), status, werkt: () => werkt, opAlles: f => alleLuisteraars.push(f),
+    icoon};   // VA-105: dezelfde SVG-iconen op de pagina Bewaarde panden
 })();
 /* ============================ einde BEWAREN EN VERBERGEN ============================ */
 
@@ -1544,7 +1523,7 @@ const BWP = (() => {
     // De Bewaar-knop van VA-90, in de ingedrukte stand; nog eens drukken is niet meer bewaren.
     const b = maak("button", "bw-knop bw-bewaar"); b.type = "button"; b.setAttribute("aria-pressed", "true");
     b.setAttribute("aria-label", vul(T["naam.bewaard"], {adres: naamVan(v)}));
-    const ico = maak("span", "bw-ico", "★"); ico.setAttribute("aria-hidden", "true");
+    const ico = BW.icoon("ster_vol", "bw-ico");   // VA-105: de volle ster van de knop, niet voorgelezen
     const tk = maak("span", "bw-tk"); tk.append(maak("span", "bw-nm", T["label.bewaard"]), maak("span", "bw-terug", T["terug.bewaard"]));
     b.append(ico, tk); b.addEventListener("click", () => haalWeg(id));
     knoppen.append(b); li.append(sc, kern, knoppen);
