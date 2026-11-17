@@ -516,9 +516,9 @@ PAND_VELDEN = [  # (veld, label, soort)
     ("beoordeling", "Beoordeling", "invul"),
     ("eerder_geselecteerd", "Eerder geselecteerd", "janee"),
     ("laatst_beoordeeld", "Laatst beoordeeld", "invuldatum"),
-    # VA-58: alleen als het energielabel aan staat. Labels: concept van Rex, ter goedkeuring bij Lumi.
+    # VA-58: alleen als het energielabel aan staat. Labels uit Lumi's tabel (design/copy-va61-62.md).
     ("energielabel", "Energielabel (EP-online)", "geen_tekst"),
-    ("energielabel_registratiedatum", "Energielabel geregistreerd op", "geen_datum"),
+    ("energielabel_registratiedatum", "Registratiedatum energielabel", "geen_datum"),
 ]
 # Velden die een Delfts record niet heeft: daar geen rij, in plaats van drie keer 'onbekend'.
 ALLEEN_LANDELIJK = {"gemeente", "gemeentecode", "grote_gemeente"}

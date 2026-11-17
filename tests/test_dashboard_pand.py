@@ -83,10 +83,10 @@ class ElkVeld(unittest.TestCase):
         # VA-58 crit. 5: het label en de registratiedatum staan onder een Nederlands label.
         rij = {r["k"]: r["v"] for r in bd.pand_detail(pand(**MET_LABEL), 25)["rijen"]}
         self.assertEqual(rij["Energielabel (EP-online)"], "F")
-        self.assertEqual(rij["Energielabel geregistreerd op"], bd.nl_datum("2021-03-04"))
+        self.assertEqual(rij["Registratiedatum energielabel"], bd.nl_datum("2021-03-04"))
         rij = {r["k"]: r["v"] for r in bd.pand_detail(
             pand(energielabel=None, energielabel_registratiedatum=None), 25)["rijen"]}
-        self.assertEqual((rij["Energielabel (EP-online)"], rij["Energielabel geregistreerd op"]), ("geen", "geen"))
+        self.assertEqual((rij["Energielabel (EP-online)"], rij["Registratiedatum energielabel"]), ("geen", "geen"))
         # Signaal uit: het record heeft de velden niet, en dan is er geen rij (geen 'onbekend').
         labels = [r["k"] for r in bd.pand_detail(pand(), 25)["rijen"]]
         self.assertNotIn("Energielabel (EP-online)", labels)
