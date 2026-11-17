@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inloggen · Levrai Vastgoed</title>
+<!--
+  Ontwerp: het inlogscherm voor VASTGOED (VA-49, Lumi, 2026-11-08).
+  Aangepast vanaf het Claude Design-bord "Levrai Vastgoed — inlogscherm" (export Main.dc.html, 2026-11-07),
+  niet opnieuw begonnen. De wijzigingen staan onderaan deze pagina, elk met de reden.
+  Geen externe bron: geen web font, geen script van buiten, geen gelinkte afbeelding.
+  Kleuren: alleen de tokens en kleuren uit design/index.html, of een menging van twee daarvan (color-mix).
+  Het formulier werkt zonder JavaScript (VA-52). Het script onderaan is alleen de ontwerpbediening.
+-->
+<style>
+  :root{
+    color-scheme: light;
+    --plane:#f9f9f7; --surface:#fcfcfb; --surface-2:#ffffff;
+    --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --baseline:#c3c2b7; --ring:rgba(11,11,11,.10);
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4;
+    --good:#0ca30c; --crit:#d03b3b;
+    --shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -12px rgba(11,11,11,.12);
+    --brand:#12233b;
+    /* alleen login: knop, vinkje en link. Licht = het merk-navy van het bord. */
+    --knop:#12233b; --knop-tekst:#ffffff; --link:#12233b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])){
+      color-scheme: dark;
+      --plane:#0d0d0d; --surface:#1a1a19; --surface-2:#201f1e;
+      --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,.10);
+      --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+      --good:#0ca30c; --crit:#e06666;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);
+      --brand:#0a1524;
+      /* donker: --brand (#0a1524) verdwijnt tegen --plane, dus de knop wordt het lichte blauwgrijs van de kop */
+      --knop:#c6d3e4; --knop-tekst:#12233b; --link:#3987e5;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --plane:#0d0d0d; --surface:#1a1a19; --surface-2:#201f1e;
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,.10);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+    --good:#0ca30c; --crit:#e06666;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);
+    --brand:#0a1524;
+    --knop:#c6d3e4; --knop-tekst:#12233b; --link:#3987e5;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--plane);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.45}
+  [hidden]{display:none!important}
+  .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+    clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+  /* ============================ LOGIN (overnemen) ============================ */
+  .login{display:grid;grid-template-columns:440px minmax(0,1fr);min-height:100vh;min-height:100dvh}
+
+  .paneel{background:var(--brand);color:#fff;padding:56px 56px 40px;
+    display:flex;flex-direction:column;justify-content:space-between;gap:48px}
+  /* het woordmerk precies zoals de kop van het dashboard (.mark in index.html) */
+  .mark{font-weight:800;letter-spacing:.16em;font-size:15px}
+  .mark small{display:block;letter-spacing:.28em;font-weight:600;font-size:10px;color:#9fb3cc;margin-top:3px}
+  .paneel-midden{display:flex;flex-direction:column;gap:28px}
+  .huizen{--u:1px;display:flex;align-items:flex-end;gap:calc(6 * var(--u));height:calc(110 * var(--u))}
+  .huis{width:calc(var(--b) * var(--u));height:calc(var(--h) * var(--u));
+    clip-path:polygon(0 var(--n),50% 0,100% var(--n),100% 100%,0 100%)}
+  .hA{background:var(--s1)} .hB{background:var(--s2)} .hC{background:var(--s3)}
+  .hD{background:var(--s4)} .hE{background:var(--s5)}
+  .paneel h1{margin:0;font-size:40px;line-height:1.12;font-weight:700;letter-spacing:-.01em;max-width:440px}
+  .lead{margin:0;font-size:16px;line-height:1.55;color:#c6d3e4;max-width:440px}
+  .bron{font-size:13px;color:#9fb3cc}
+
+  .zijde{display:flex;align-items:center;justify-content:center;padding:48px 24px}
+  .formulier{width:100%;max-width:400px;display:flex;flex-direction:column;gap:20px}
+  .kop h2{margin:0;font-size:28px;line-height:1.2;font-weight:700}
+  .kop p{margin:8px 0 0;font-size:15px;color:var(--ink-2)}
+
+  .fout{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:10px;
+    background:color-mix(in srgb,var(--crit) 10%,var(--surface-2));
+    border:1px solid color-mix(in srgb,var(--crit) 55%,transparent);
+    color:var(--ink);font-size:14px;line-height:1.45}
+  .fout:empty{display:none}
+  .fout .ic{flex:none;width:20px;height:20px;border-radius:50%;background:var(--crit);color:#fff;
+    font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:0}
+
+  .veld{display:flex;flex-direction:column;gap:6px}
+  .veld label{font-size:14px;font-weight:600;color:var(--ink)}
+  .veld input{width:100%;height:48px;padding:0 14px;font:inherit;font-size:16px;
+    border:1px solid var(--muted);border-radius:10px;background:var(--surface-2);color:var(--ink)}
+  .veld input:focus{outline:2px solid var(--s1);outline-offset:2px;border-color:var(--s1)}
+  .veld input[aria-invalid="true"]{border:2px solid var(--crit);padding:0 13px}
+  .veld input[readonly]{background:var(--surface);color:var(--ink-2)}
+
+  .blijven{display:flex;align-items:center;gap:10px;align-self:flex-start;min-height:44px;
+    font-size:14px;color:var(--ink-2);cursor:pointer}
+  .blijven input{width:18px;height:18px;margin:0;flex:none;accent-color:var(--knop)}
+  .blijven input:focus-visible{outline:2px solid var(--s1);outline-offset:3px}
+
+  .knop{height:52px;border:0;border-radius:10px;background:var(--knop);color:var(--knop-tekst);
+    font:inherit;font-size:16px;font-weight:600;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:10px}
+  .knop:hover{background:color-mix(in srgb,var(--knop) 85%,var(--s1))}
+  .knop:focus-visible{outline:2px solid var(--s1);outline-offset:3px}
+  .knop[aria-disabled="true"]{cursor:progress;background:var(--knop)}
+  .draai{width:16px;height:16px;border-radius:50%;border:2px solid currentColor;
+    border-right-color:transparent;animation:draai .8s linear infinite}
+  @keyframes draai{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion: reduce){ .draai{animation:none;border-right-color:currentColor;border-style:dotted} }
+
+  .vergeten{align-self:flex-start;font-size:14px;font-weight:500;color:var(--link);
+    text-underline-offset:3px;padding:4px 0}
+  .vergeten:hover{text-decoration-thickness:2px}
+  .vergeten:focus-visible{outline:2px solid var(--s1);outline-offset:3px;border-radius:4px}
+  .voet{margin:0;font-size:13px;line-height:1.5;color:var(--ink-2)}
+
+  @media (max-width: 899px){
+    .login{grid-template-columns:minmax(0,1fr);min-height:0}
+    /* het paneel krimpt tot een kop: woordmerk en huisjes op een rij, de titel eronder */
+    .paneel{display:grid;grid-template-columns:minmax(0,1fr) auto;
+      grid-template-areas:"mark huizen" "titel titel";align-items:end;gap:14px 12px;padding:18px 20px 20px}
+    .paneel-midden{display:contents}
+    .mark{grid-area:mark;align-self:center}
+    .huizen{grid-area:huizen;--u:.4px}
+    .paneel h1{grid-area:titel;font-size:22px;line-height:1.2}
+    .lead,.bron{display:none}
+    .zijde{align-items:flex-start;padding:28px 20px 40px}
+  }
+  /* ========================= einde LOGIN-blok ========================= */
+
+  /* ---- alleen ontwerppagina ---- */
+  .wrap{max-width:1160px;margin:0 auto;padding:22px 22px 64px}
+  .ontwerp{border-top:1px dashed var(--baseline)}
+  .panel{background:var(--surface);border:1px solid var(--ring);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow)}
+  .panel h2{margin:0 0 4px;font-size:14px;font-weight:700}
+  .panel .cap{margin:0 0 14px;font-size:12px;color:var(--muted)}
+  .sec-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:26px 2px 12px}
+  .sec-h h2{margin:0;font-size:15px}
+  .sec-h span{font-size:12px;color:var(--muted)}
+  .ctl{display:flex;flex-direction:column;gap:10px;font-size:12px;color:var(--ink-2)}
+  .ctl .grp{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .ctl .gl{min-width:150px;font-weight:700;color:var(--ink)}
+  .ctl button{font:inherit;font-size:12px;color:var(--ink);background:var(--surface-2);
+    border:1px solid var(--ring);border-radius:8px;padding:4px 9px;cursor:pointer}
+  .ctl button[aria-pressed="true"]{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .ctl button:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .ctl code,.ada code{font-size:11.5px;background:var(--grid);padding:1px 4px;border-radius:4px;color:var(--ink)}
+  .links a{color:var(--s1)}
+  table.copy{width:100%;border-collapse:collapse;font-size:12px}
+  table.copy th,table.copy td{text-align:left;vertical-align:top;padding:7px 8px;border-bottom:1px solid var(--grid)}
+  table.copy th{font-size:11px;color:var(--muted);font-weight:700}
+  table.copy td.k{font-weight:700;white-space:nowrap}
+  table.copy .ja{color:var(--good);font-weight:650}
+  table.copy .nee{color:var(--crit);font-weight:650}
+  .tabwrap{overflow-x:auto}
+  .ada{font-size:12.5px;color:var(--ink-2);overflow-wrap:anywhere}
+  .ada li{margin:6px 0}
+  .ada b{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN (markup voor VA-52; werkt zonder JavaScript) ============ -->
+<div class="login" id="login">
+  <header class="paneel">
+    <div class="mark">LEVRAI GROUP<small>VASTGOED</small></div>
+    <div class="paneel-midden">
+      <div class="huizen" aria-hidden="true">
+        <div class="huis hA" style="--b:44;--h:92;--n:22%"></div>
+        <div class="huis hB" style="--b:40;--h:110;--n:18%"></div>
+        <div class="huis hC" style="--b:46;--h:84;--n:26%"></div>
+        <div class="huis hD" style="--b:38;--h:104;--n:20%"></div>
+        <div class="huis hE" style="--b:44;--h:96;--n:22%"></div>
+      </div>
+      <h1>Pandenselectie voor heel Nederland</h1>
+      <p class="lead">De kansrijkste panden uit de BAG, gescoord en klaar voor je visuele controle.</p>
+    </div>
+    <div class="bron">Bron: PDOK BAG · open data van het Kadaster</div>
+  </header>
+
+  <main class="zijde">
+    <form class="formulier" id="formulier" method="post" action="/login" aria-labelledby="kopForm">
+      <div class="kop">
+        <h2 id="kopForm">Inloggen</h2>
+        <p>Log in om het dashboard te openen.</p>
+      </div>
+
+      <!-- Leeg als er geen fout is. Na een mislukte login vult de server dit blok (zie Voor Ada). -->
+      <div class="fout" id="fout" role="alert"></div>
+
+      <div class="veld">
+        <label for="gebruiker" id="labelGebruiker">Gebruikersnaam</label>
+        <input id="gebruiker" name="gebruiker" type="text" autocomplete="username"
+               autocapitalize="none" spellcheck="false" required>
+      </div>
+      <div class="veld">
+        <label for="wachtwoord">Wachtwoord</label>
+        <input id="wachtwoord" name="wachtwoord" type="password" autocomplete="current-password" required>
+      </div>
+      <label class="blijven"><input type="checkbox" name="blijven" value="1" id="blijven"> Ingelogd blijven op dit apparaat</label>
+      <button class="knop" type="submit" id="knop"><span class="draai" id="draai" aria-hidden="true" hidden></span><span id="knopTekst">Inloggen</span></button>
+      <p class="sr" role="status" id="status"></p>
+
+      <!-- Variant A (zoals op het bord): alleen bouwen als VA-53 bestaat. Variant B: geen link, de voetregel zegt bij wie je moet zijn. -->
+      <a class="vergeten" id="vergeten" href="#vergeten" hidden>Wachtwoord vergeten?</a>
+      <p class="voet" id="voet">Alleen voor medewerkers van Levrai Group. Wachtwoord vergeten of geen toegang? Vraag het je beheerder.</p>
+    </form>
+  </main>
+</div>
+<!-- ======================================================================= -->
+
+<div class="ontwerp">
+<div class="wrap">
+  <div class="sec-h"><h2>Ontwerp — inlogscherm (VA-49)</h2>
+    <span>alles hieronder staat alleen op deze ontwerppagina</span></div>
+
+  <div class="panel">
+    <h2>Ontwerpbediening</h2>
+    <p class="cap">Kies een toestand of variant; het scherm hierboven verandert mee. Op de echte pagina kiest de server de toestand.</p>
+    <div class="ctl" id="ctl">
+      <div class="grp" role="group" aria-label="Toestand"><span class="gl">Toestand</span>
+        <button type="button" data-k="toestand" data-v="leeg">Leeg</button>
+        <button type="button" data-k="toestand" data-v="ingevuld">Ingevuld</button>
+        <button type="button" data-k="toestand" data-v="fout">Fout</button>
+        <button type="button" data-k="toestand" data-v="bezig">Bezig</button>
+      </div>
+      <div class="grp" role="group" aria-label="Eerste veld"><span class="gl">Eerste veld (Q22)</span>
+        <button type="button" data-k="veld" data-v="gebruiker">Gebruikersnaam — één gedeeld account (bouwen)</button>
+        <button type="button" data-k="veld" data-v="email">E-mailadres — account per persoon (bord)</button>
+      </div>
+      <div class="grp" role="group" aria-label="Wachtwoord vergeten"><span class="gl">Wachtwoord vergeten (Q23)</span>
+        <button type="button" data-k="vergeten" data-v="link">A — link, zoals op het bord</button>
+        <button type="button" data-k="vergeten" data-v="contact">B — regel met wie je vraagt (voorstel)</button>
+      </div>
+      <div class="grp" role="group" aria-label="Thema"><span class="gl">Thema</span>
+        <button type="button" data-k="thema" data-v="systeem">Systeem</button>
+        <button type="button" data-k="thema" data-v="licht">Licht</button>
+        <button type="button" data-k="thema" data-v="donker">Donker</button>
+      </div>
+      <div class="links">Direct openen (voor schermafdrukken):
+        <a href="?toestand=leeg">leeg</a> ·
+        <a href="?toestand=ingevuld">ingevuld</a> ·
+        <a href="?toestand=fout">fout</a> ·
+        <a href="?toestand=bezig">bezig</a> ·
+        <a href="?toestand=fout&amp;veld=email&amp;vergeten=link">bord-variant met fout</a> ·
+        <a href="?toestand=fout&amp;thema=donker">fout, donker</a>.
+        Parameters: <code>toestand</code> leeg|ingevuld|fout|bezig, <code>veld</code> gebruiker|email,
+        <code>vergeten</code> link|contact, <code>thema</code> systeem|licht|donker.
+        Op het scherm: klik Inloggen met iets ingevuld om bezig en daarna fout te zien.
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-h"><h2>Copy — elke zichtbare regel</h2>
+    <span>alleen Nederlands: het product heeft één taal</span></div>
+  <div class="panel tabwrap">
+    <table class="copy">
+      <tr><th>Sleutel</th><th>Tekst</th><th>Waar en wanneer</th><th>Bouwen?</th></tr>
+      <tr><td class="k">titel</td><td>Inloggen · Levrai Vastgoed</td><td>Tabblad van de browser, elke toestand behalve fout</td><td class="ja">ja</td></tr>
+      <tr><td class="k">titel_fout</td><td>Inloggen mislukt · Levrai Vastgoed</td><td>Tabblad, na een mislukte login</td><td class="ja">ja</td></tr>
+      <tr><td class="k">merk</td><td>LEVRAI GROUP / VASTGOED</td><td>Woordmerk linksboven, gelijk aan de kop van het dashboard</td><td class="ja">ja</td></tr>
+      <tr><td class="k">paneel_kop</td><td>Pandenselectie voor heel Nederland</td><td>Navy paneel; vanaf 900 px groot, smaller als kop</td><td class="ja">ja</td></tr>
+      <tr><td class="k">paneel_lead</td><td>De kansrijkste panden uit de BAG, gescoord en klaar voor je visuele controle.</td><td>Navy paneel, alleen vanaf 900 px</td><td class="ja">ja</td></tr>
+      <tr><td class="k">paneel_bron</td><td>Bron: PDOK BAG · open data van het Kadaster</td><td>Onder in het navy paneel, alleen vanaf 900 px</td><td class="ja">ja</td></tr>
+      <tr><td class="k">form_kop</td><td>Inloggen</td><td>Kop boven het formulier</td><td class="ja">ja</td></tr>
+      <tr><td class="k">form_intro</td><td>Log in om het dashboard te openen.</td><td>Onder de kop</td><td class="ja">ja</td></tr>
+      <tr><td class="k">label_gebruiker</td><td>Gebruikersnaam</td><td>Label van het eerste veld bij één gedeeld account</td><td class="ja">ja — Ayman 2026-11-07: één gedeeld account</td></tr>
+      <tr><td class="k">label_email</td><td>E-mailadres</td><td>Label van het eerste veld bij een account per persoon (het bord)</td><td class="nee">nee, tenzij Q22 verandert</td></tr>
+      <tr><td class="k">label_wachtwoord</td><td>Wachtwoord</td><td>Label van het tweede veld</td><td class="ja">ja</td></tr>
+      <tr><td class="k">blijven</td><td>Ingelogd blijven op dit apparaat</td><td>Vinkje onder de velden. Geen duur in de tekst: die wacht op Q22</td><td class="ja">ja</td></tr>
+      <tr><td class="k">knop</td><td>Inloggen</td><td>Knop</td><td class="ja">ja</td></tr>
+      <tr><td class="k">knop_bezig</td><td>Bezig met inloggen…</td><td>Knop tijdens het inloggen, ook als statusmelding voor schermlezers</td><td class="ja">ja (alleen met JavaScript)</td></tr>
+      <tr><td class="k">fout_gebruiker</td><td>! Gebruikersnaam of wachtwoord klopt niet. Probeer het opnieuw.</td><td>Foutblok boven de velden (role="alert"), na een mislukte login. Het "!" is een teken in een rondje, niet voorgelezen</td><td class="ja">ja</td></tr>
+      <tr><td class="k">fout_email</td><td>! E-mailadres of wachtwoord klopt niet. Probeer het opnieuw.</td><td>Zelfde, bij een account per persoon</td><td class="nee">nee, tenzij Q22 verandert</td></tr>
+      <tr><td class="k">vergeten_link</td><td>Wachtwoord vergeten?</td><td>Variant A: link onder de knop</td><td class="nee">nee — pas met VA-53 (e-mail); een link naar niets belooft wat het product niet doet</td></tr>
+      <tr><td class="k">voet_a</td><td>Alleen voor medewerkers van Levrai Group. Geen toegang? Vraag het je beheerder.</td><td>Voetregel bij variant A</td><td class="nee">alleen met variant A</td></tr>
+      <tr><td class="k">voet_b</td><td>Alleen voor medewerkers van Levrai Group. Wachtwoord vergeten of geen toegang? Vraag het je beheerder.</td><td>Voetregel bij variant B (geen link)</td><td class="ja">ja, voorstel tot Q23 beantwoord is</td></tr>
+    </table>
+  </div>
+
+  <div class="sec-h"><h2>Wijzigingen ten opzichte van het Claude Design-bord</h2>
+    <span>bron: Main.dc.html, 2026-11-07</span></div>
+  <div class="panel ada">
+    <ol>
+      <li><b>Inter van Google Fonts en support.js zijn eruit.</b> De lettertypen zijn die van het dashboard (<code>system-ui, -apple-system, "Segoe UI", sans-serif</code>). Reden: criterium 2, geen web font en geen script van buiten.</li>
+      <li><b>Kleuren buiten index.html zijn vervangen</b> (hexwaarden van het bord hier zonder #, zodat een zoektocht naar kleuren in dit bestand alleen echte kleuren vindt): <code>a9b4c4</code> → <code>#9fb3cc</code>, <code>c3cad6</code> → <code>#c6d3e4</code> (beide uit de kop van het dashboard), <code>6b6a65</code> → <code>--ink-2</code>, en het foutblok (<code>fdecec</code>, <code>8f1d1d</code>, <code>f3c2c2</code>) → mengingen van <code>--crit</code>. Alle vaste hexwaarden werden tokens. Reden: criterium 2, en anders werkt donker niet.</li>
+      <li><b>Woordmerk gelijk aan het dashboard</b> (15 px, gewicht 800, spatiëring .16em; VASTGOED 10 px, .28em) in plaats van 20 px en .32em. Reden: hetzelfde product, hetzelfde merk.</li>
+      <li><b>Donker thema toegevoegd</b>, met hetzelfde mechanisme als index.html (<code>data-theme</code> en <code>prefers-color-scheme</code>). In donker zijn knop, vinkje en link niet navy: <code>--brand</code> donker (<code>#0a1524</code>) valt weg tegen <code>--plane</code> (<code>#0d0d0d</code>). De knop wordt <code>#c6d3e4</code> met navy tekst, de link <code>--s1</code>.</li>
+      <li><b>Eerste veld standaard "Gebruikersnaam".</b> Reden: Ayman koos op 2026-11-07 één gedeeld account (PROJECT.md). "E-mailadres" van het bord blijft als variant, zoals criterium 5 vraagt.</li>
+      <li><b>"Wachtwoord vergeten?" staat onder de knop</b>, niet meer naast het label Wachtwoord. Reden: op het bord stond de link in de bron tussen de twee velden, dus de tabvolgorde was e-mail, link, wachtwoord. Criterium 7 vraagt e-mail, wachtwoord, Ingelogd blijven, Inloggen.</li>
+      <li><b>Variant B toegevoegd:</b> geen link; de voetregel zegt "Wachtwoord vergeten of geen toegang? Vraag het je beheerder." Reden: criterium 4, en zonder VA-53 kan het product geen herstelmail sturen.</li>
+      <li><b>De voorbeeldtekst "naam@levraigroup.nl" is weg.</b> Reden: het label staat er al, het domein van Levrai is nergens vastgelegd, en een gedeeld account heeft geen e-mailadres.</li>
+      <li><b>"van deze maand" en "Elke maand" zijn weg</b> ("Log in om het dashboard te openen.", "De kansrijkste panden uit de BAG, …"). Reden: het dashboard toont nu data van augustus, en een maandelijkse levering draait nog niet. Copy belooft niet wat het product nog niet doet.</li>
+      <li><b>Randen van de velden in <code>--muted</code></b> in plaats van <code>#c3c2b7</code>. Reden: <code>#c3c2b7</code> op wit haalt geen 3:1, en dan is een leeg veld slecht te zien.</li>
+      <li><b>Een volle focusrand van 2 px in <code>--s1</code></b> op elk element dat focus krijgt (velden, vinkje, knop, link), niet alleen een doorzichtige rand om de velden.</li>
+      <li><b>De fout zegt het niet alleen met kleur:</b> een tekst met "!" in <code>role="alert"</code>, beide velden <code>aria-invalid</code> en <code>aria-describedby="fout"</code>. Beide velden, zodat niet te zien is welk van de twee fout was. De gebruikersnaam blijft staan; het wachtwoord wordt leeggemaakt.</li>
+      <li><b>De toestanden ingevuld en bezig zijn erbij</b> (het bord had alleen leeg en fout). Reden: criterium 3.</li>
+      <li><b>Op 375 px krimpt het navy paneel tot een kop</b>: woordmerk en kleine huisjes op een rij, de titel eronder; de lead en de bronregel vallen weg. Op het bord liep het paneel bij smal scherm volledig door boven het formulier, met de velden pas onder de vouw.</li>
+      <li><b>Het formulier is een echt POST-formulier</b> (<code>method="post" action="/login"</code>, velden <code>gebruiker</code>, <code>wachtwoord</code>, <code>blijven</code>), in plaats van de klikhandler van het bord. Reden: VA-52, inloggen werkt zonder JavaScript.</li>
+      <li>Ongewijzigd: de vijf huisjes (maten en volgorde van het bord, nu in de A–E-tokens), de kopstructuur, de teksten "Pandenselectie voor heel Nederland", "Ingelogd blijven op dit apparaat", "Inloggen", de fouttekst en de regel "Alleen voor medewerkers van Levrai Group".</li>
+    </ol>
+  </div>
+
+  <div class="sec-h"><h2>Voor Ada</h2><span>VA-52, met Rex' server uit VA-50</span></div>
+  <div class="panel ada">
+    <ol>
+      <li>Neem de CSS tussen <code>LOGIN</code> en <code>einde LOGIN-blok</code> en de markup <code>&lt;div class="login"&gt;</code> over, met de tokens bovenaan. Het script onderaan neem je niet over: dat is alleen de ontwerpbediening.</li>
+      <li><b>Zonder JavaScript</b> gaat het formulier als gewone POST naar <code>/login</code>. Het vinkje stuurt <code>blijven=1</code>, of niets als het uit staat.</li>
+      <li><b>Na een mislukte login</b> geeft de server dezelfde pagina terug, met: de titel <code>titel_fout</code>; het foutblok <code>#fout</code> gevuld zoals in de toestand Fout (het "!" in <code>.ic</code> met <code>aria-hidden</code>, daarna de tekst); <code>aria-invalid="true" aria-describedby="fout"</code> op beide velden; de getypte gebruikersnaam terug in <code>value</code>, HTML-geëscaped; het wachtwoordveld leeg en met <code>autofocus</code>. <code>role="alert"</code> wordt bij het laden van een pagina niet door elke schermlezer voorgelezen; de focus op het wachtwoord met <code>aria-describedby</code> zorgt dat de fout toch wordt gehoord.</li>
+      <li><b>Bezig</b> is een verbetering met JavaScript. Zet bij <code>submit</code> de knop op <code>aria-disabled="true"</code>, toon <code>.draai</code>, zet <code>knop_bezig</code> in de knop en in <code>#status</code>, en maak de velden <code>readonly</code>. Gebruik geen <code>disabled</code>: uitgeschakelde velden worden niet meegestuurd. Een tweede klik doet niets.</li>
+      <li>De fout zegt nooit welk van de twee velden fout was, ook niet in de HTTP-status of in de tijd die het antwoord duurt (dat laatste is Rex').</li>
+      <li>De lege velden worden tegengehouden door <code>required</code>. Die melding komt van de browser, in de taal van de browser; er is geen eigen tekst voor nodig.</li>
+      <li>Bouw alleen de sleutels met "ja" in de copytabel. Variant A en de e-mailsleutels blijven liggen tot Q22 of Q23 anders beslist.</li>
+    </ol>
+  </div>
+
+  <div class="sec-h"><h2>Open</h2><span>niet door dit ontwerp te beslissen</span></div>
+  <div class="panel ada">
+    <ul>
+      <li><b>Q23</b> (Ayman): variant A of B. Dit ontwerp stelt B voor, omdat er zonder VA-53 geen herstelmail is en Ayman bij één gedeeld account het wachtwoord zelf in Railway zet.</li>
+      <li><b>Wie is "je beheerder"?</b> Voor Nova: bij één gedeeld account weet ik niet of dat iemand bij Levrai is of Fortunas. Als er een naam of adres moet staan, verandert alleen <code>voet_b</code>.</li>
+      <li><b>Q22, tweede helft</b> (Ayman): hoe lang "Ingelogd blijven" duurt. De tekst noemt geen duur, dus hij hoeft niet te veranderen.</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<script>
+/* ---- alleen voor de ontwerppagina: wisselt toestand, variant en thema ---- */
+(function(){
+  const T = {
+    label:     {gebruiker:"Gebruikersnaam", email:"E-mailadres"},
+    fout:      {gebruiker:"Gebruikersnaam of wachtwoord klopt niet. Probeer het opnieuw.",
+                email:"E-mailadres of wachtwoord klopt niet. Probeer het opnieuw."},
+    voorbeeld: {gebruiker:"voorbeeldnaam", email:"naam@voorbeeld.nl"},
+    knop: "Inloggen", bezig: "Bezig met inloggen…",
+    voet: {link:"Alleen voor medewerkers van Levrai Group. Geen toegang? Vraag het je beheerder.",
+           contact:"Alleen voor medewerkers van Levrai Group. Wachtwoord vergeten of geen toegang? Vraag het je beheerder."},
+    titel: "Inloggen · Levrai Vastgoed", titelFout: "Inloggen mislukt · Levrai Vastgoed"
+  };
+  const KEUZES = {toestand:["leeg","ingevuld","fout","bezig"], veld:["gebruiker","email"],
+                  vergeten:["link","contact"], thema:["systeem","licht","donker"]};
+  const S = {toestand:"leeg", veld:"gebruiker", vergeten:"contact", thema:"systeem"};
+  const q = new URLSearchParams(location.search);
+  for (const k in KEUZES) if (KEUZES[k].includes(q.get(k))) S[k] = q.get(k);
+
+  const $ = id => document.getElementById(id);
+  const form = $("formulier"), g = $("gebruiker"), w = $("wachtwoord"), bl = $("blijven");
+  let klok = null;
+
+  function zet(vul){
+    const t = S.toestand, fout = t === "fout", bezig = t === "bezig";
+    $("labelGebruiker").textContent = T.label[S.veld];
+    if (S.veld === "email"){ g.type = "email"; g.setAttribute("inputmode","email"); }
+    else { g.type = "text"; g.removeAttribute("inputmode"); }
+
+    if (vul){
+      g.value = t === "leeg" ? "" : T.voorbeeld[S.veld];
+      w.value = (t === "ingevuld" || t === "bezig") ? "voorbeeld1234" : "";
+      bl.checked = t !== "leeg";
+    }
+    if (fout) w.value = "";
+
+    const blok = $("fout");
+    blok.textContent = "";
+    if (fout){
+      const ic = document.createElement("span"); ic.className = "ic"; ic.setAttribute("aria-hidden","true"); ic.textContent = "!";
+      const tx = document.createElement("span"); tx.textContent = T.fout[S.veld];
+      blok.append(ic, tx);
+    }
+    for (const el of [g, w]){
+      if (fout){ el.setAttribute("aria-invalid","true"); el.setAttribute("aria-describedby","fout"); }
+      else { el.removeAttribute("aria-invalid"); el.removeAttribute("aria-describedby"); }
+      el.readOnly = bezig;
+    }
+    if (bezig){ form.setAttribute("aria-busy","true"); $("knop").setAttribute("aria-disabled","true"); }
+    else { form.removeAttribute("aria-busy"); $("knop").removeAttribute("aria-disabled"); }
+    $("draai").hidden = !bezig;
+    $("knopTekst").textContent = bezig ? T.bezig : T.knop;
+    $("status").textContent = bezig ? T.bezig : "";
+
+    $("vergeten").hidden = S.vergeten !== "link";
+    $("voet").textContent = T.voet[S.vergeten];
+
+    const root = document.documentElement;
+    if (S.thema === "systeem") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", S.thema === "donker" ? "dark" : "light");
+    document.title = fout ? T.titelFout : T.titel;
+
+    document.querySelectorAll("#ctl button[data-k]").forEach(b =>
+      b.setAttribute("aria-pressed", String(S[b.dataset.k] === b.dataset.v)));
+    const p = new URLSearchParams();
+    for (const k in S) p.set(k, S[k]);
+    history.replaceState(null, "", "?" + p.toString());
+  }
+
+  document.getElementById("ctl").addEventListener("click", e => {
+    const b = e.target.closest("button[data-k]");
+    if (!b) return;
+    clearTimeout(klok);
+    S[b.dataset.k] = b.dataset.v;
+    zet(b.dataset.k === "toestand" || b.dataset.k === "veld");
+  });
+
+  // Op de ontwerppagina gaat er niets naar /login: inloggen toont bezig en daarna de fout.
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    if (S.toestand === "bezig") return;
+    S.toestand = "bezig"; zet(false);
+    klok = setTimeout(() => { S.toestand = "fout"; zet(false); w.focus(); }, 1400);
+  });
+  bl.addEventListener("click", e => { if (S.toestand === "bezig") e.preventDefault(); });
+  $("vergeten").addEventListener("click", e => e.preventDefault());
+
+  zet(true);
+})();
+</script>
+</body>
+</html>

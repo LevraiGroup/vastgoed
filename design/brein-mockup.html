@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="nl" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Levrai · Pandenselectie — Brein (schets VA-98/VA-99)</title>
+<!--
+  SCHETS van Lumi, 2026-11-16, voor Ada. Niet gebouwd, niet voor design/.
+  De cijfers zijn die van de run van 1 november 2026 en staan hier ALLEEN in de schets vast.
+  In brein.html levert Python elke regel kant-en-klaar aan (BREIN_TEKST, copy-va98-99.md); het script tekent alleen.
+  Geen externe bron, geen bibliotheek, geen lettertype, geen afbeelding.
+-->
+<style>
+  :root{
+    color-scheme: light;
+    --plane:#f9f9f7; --surface:#fcfcfb; --surface-2:#ffffff;
+    --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --ring:rgba(11,11,11,.10);
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4;
+    --brand:#12233b;
+    --nav-tekst:#c6d3e4; --nav-label:#9fb3cc; --nav-actief:rgba(255,255,255,.14);
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --plane:#0d0d0d; --surface:#1a1a19; --surface-2:#201f1e;
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781; --ring:rgba(255,255,255,.10);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+    --brand:#0a1524;
+  }
+  :root{
+    --brand-2:color-mix(in srgb,var(--brand) 78%,var(--s1));
+    --held:linear-gradient(155deg,var(--brand) 0%,var(--brand) 35%,var(--brand-2) 100%);
+    --gloed:color-mix(in srgb,var(--s1) 40%,transparent);
+    --schaduw-hoog:0 1px 2px rgba(11,11,11,.05),0 28px 56px -28px color-mix(in srgb,var(--brand) 60%,transparent);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--plane);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .vg{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh}
+  .side{background:var(--brand);color:var(--nav-tekst);padding:22px 14px}
+  .side .merk{color:#fff;font-weight:800;letter-spacing:.02em;margin:0 8px 22px}
+  .side .groep{margin:18px 8px 6px;font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--nav-label)}
+  .side ul{list-style:none;margin:0;padding:0}
+  .side a{display:block;padding:8px 10px;border-radius:8px;color:var(--nav-tekst);text-decoration:none;font-weight:600}
+  .side a[aria-current]{background:var(--nav-actief);color:#fff}
+  .side a:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .inhoud{padding:26px 30px 40px;min-width:0}
+  .kruimel{margin:0;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+  .kruimel b{color:var(--ink);font-weight:800}
+  h1{margin:4px 0 4px;font-size:26px;letter-spacing:-.01em}
+  .kop-zin{margin:0 0 18px;color:var(--ink-2);max-width:78ch}
+  .toggle{float:right;font:inherit;font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--ring);background:var(--surface);color:var(--ink);cursor:pointer}
+
+  /* Het paneel: de navy van de band, glas, één hoge schaduw */
+  .brein{position:relative;background:var(--held);border-radius:18px;box-shadow:var(--schaduw-hoog);color:#fff;
+    display:grid;grid-template-columns:minmax(0,58fr) minmax(0,42fr);gap:18px;padding:22px;overflow:hidden}
+  .brein::before{content:"";position:absolute;left:12%;top:8%;width:46%;aspect-ratio:1;border-radius:50%;
+    background:radial-gradient(circle,var(--gloed),transparent 62%);pointer-events:none}
+  .doek-vak{position:relative;align-self:start}
+  canvas{display:block;width:100%;aspect-ratio:1;max-width:620px;margin:0 auto}
+  .stil-knop{position:absolute;right:22px;top:16px;z-index:2;font:inherit;font-size:12px;font-weight:650;color:#fff;
+    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:5px 11px;cursor:pointer}
+  .stil-knop:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  @media (prefers-reduced-motion: reduce){ .stil-knop{display:none} }
+
+  .route{list-style:none;margin:28px 0 0;padding:0;display:flex;flex-direction:column;gap:7px;position:relative}
+  .route>li{border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);transition:background .2s,border-color .2s}
+  .route>li.actief{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.34)}
+  .route>li.wl{background:color-mix(in srgb,var(--s3) 20%,transparent);border-color:color-mix(in srgb,var(--s3) 58%,transparent)}
+  .stap{all:unset;box-sizing:border-box;display:grid;grid-template-columns:22px minmax(0,1fr) auto 14px;align-items:baseline;
+    column-gap:10px;width:100%;padding:9px 12px 10px;cursor:pointer;border-radius:12px}
+  .stap:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .nr{font-size:11px;font-weight:800;color:var(--nav-label);font-variant-numeric:tabular-nums}
+  .naam{font-weight:700;font-size:14px}
+  .sub{grid-column:2 / 4;font-size:12px;color:var(--nav-tekst)}
+  .getal{font-size:19px;font-weight:750;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+  .pijl{font-size:11px;color:var(--nav-label);transition:transform .2s}
+  .stap[aria-expanded="true"] .pijl{transform:rotate(90deg)}
+  .letters{display:inline-flex;flex-wrap:wrap;gap:4px 10px}
+  .letters i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:0}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .regel{padding:2px 14px 12px 44px;font-size:13px;line-height:1.55;color:#e8eef6}
+  .regel p{margin:0 0 8px}
+  .regel h3{margin:10px 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--nav-label)}
+  .regel ul{margin:0 0 8px;padding-left:18px}
+  .regel table{width:100%;border-collapse:collapse;margin:2px 0 8px}
+  .regel td{padding:3px 0;vertical-align:top;border-top:1px solid rgba(255,255,255,.08)}
+  .regel td:last-child{text-align:right;font-weight:750;font-variant-numeric:tabular-nums;white-space:nowrap;padding-left:10px}
+  .regel .klein{display:block;font-size:11.5px;color:var(--nav-label)}
+  .regel .uit{color:var(--nav-label);font-weight:600}
+  .noten{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:4px 18px;font-size:11.5px;color:var(--nav-label);margin:0}
+  .noten p{margin:0}
+  #tip{position:fixed;pointer-events:none;z-index:5;background:rgba(10,21,36,.94);color:#fff;font-size:12px;padding:5px 9px;
+    border-radius:7px;border:1px solid rgba(255,255,255,.18);display:none;white-space:nowrap}
+
+  @media (max-width:800px){
+    .vg{grid-template-columns:1fr}
+    .side{padding:12px 14px}
+    .side .groep,.side ul{display:none}  /* in de echte pagina: de lade van VA-63 */
+    .side .merk{margin:0}
+    .inhoud{padding:18px 14px 30px}
+    .brein{grid-template-columns:1fr;padding:16px 12px}
+    canvas{max-width:420px}
+    .route{margin-top:4px}
+    .regel{padding-left:14px}
+  }
+</style>
+</head>
+<body>
+<div class="vg">
+  <aside class="side" aria-label="Menu">
+    <p class="merk">Levrai</p>
+    <nav aria-label="Onderdelen van het dashboard">
+      <p class="groep" id="g1">Overzicht</p>
+      <ul aria-labelledby="g1">
+        <li><a href="index.html#kantoor">Kantoor</a></li>
+        <li><a href="index.html#kerncijfers">Kerncijfers</a></li>
+        <li><a href="brein.html" aria-current="page">Brein</a></li>
+      </ul>
+      <p class="groep" id="g2">Panden</p>
+      <ul aria-labelledby="g2">
+        <li><a href="index.html#voorraad">Voorraad</a></li>
+        <li><a href="index.html#werklijst">Werklijst</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="inhoud" id="inhoud">
+    <button class="toggle" id="thema" type="button">◐ Thema</button>
+    <p class="kruimel">Overzicht · <b>Brein</b></p>
+    <h1>Brein</h1>
+    <p class="kop-zin">Van elk verblijfsobject in de BAG tot je werklijst, stap voor stap, met het echte aantal uit de selectie van 1&nbsp;november&nbsp;2026.</p>
+
+    <section class="brein" aria-labelledby="h-route">
+      <h2 id="h-route" class="sr">Van BAG naar werklijst</h2>
+      <div class="doek-vak">
+        <canvas id="doek" aria-hidden="true"></canvas>
+      </div>
+      <button class="stil-knop" id="stil" type="button" aria-label="Zet het brein stil">Zet stil</button>
+
+      <ol class="route" id="route" aria-label="Van BAG naar werklijst">
+        <li data-i="0">
+          <button class="stap" type="button" aria-expanded="false" aria-controls="r0">
+            <span class="nr">1</span><span class="naam">Verblijfsobjecten</span><span class="getal">9.998.456</span><span class="pijl" aria-hidden="true">▶</span>
+            <span class="sub">in de BAG van 1&nbsp;november&nbsp;2026</span>
+          </button>
+          <div class="regel" id="r0" hidden>
+            <p>Het systeem leest de hele BAG in, het openbare register van het Kadaster met elk gebouw en elk adres in Nederland, uit het bestand van PDOK van 1&nbsp;november&nbsp;2026. Een verblijfsobject is één woning, winkel, kantoor of andere ruimte met een eigen adres.</p>
+          </div>
+        </li>
+        <li data-i="1">
+          <button class="stap" type="button" aria-expanded="false" aria-controls="r1">
+            <span class="nr">2</span><span class="naam">Panden</span><span class="getal">6.568.913</span><span class="pijl" aria-hidden="true">▶</span>
+            <span class="sub">verblijfsobjecten samengevoegd per gebouw</span>
+          </button>
+          <div class="regel" id="r1" hidden>
+            <p>Verblijfsobjecten in hetzelfde gebouw horen bij één BAG-pand. Het systeem voegt ze per pand samen en telt hoeveel woningen, winkels, kantoren en andere ruimtes erin zitten, hoeveel adressen het pand heeft, de oppervlakte van alles samen en het bouwjaar. Vanaf hier is het pand de eenheid: één pand is één lead.</p>
+          </div>
+        </li>
+        <li data-i="2">
+          <button class="stap" type="button" aria-expanded="false" aria-controls="r2">
+            <span class="nr">3</span><span class="naam">Categorie A–E</span><span class="getal">441.997</span><span class="pijl" aria-hidden="true">▶</span>
+            <span class="sub"><span class="letters">
+              <span><i style="background:var(--s1)"></i><span aria-hidden="true">A 45.359</span><span class="sr">A, Winkel + wonen: 45.359</span></span>
+              <span><i style="background:var(--s2)"></i><span aria-hidden="true">B 54.325</span><span class="sr">B, Bedrijf/kantoor + wonen: 54.325</span></span>
+              <span><i style="background:var(--s3)"></i><span aria-hidden="true">C 175.135</span><span class="sr">C, Klein wooncomplex: 175.135</span></span>
+              <span><i style="background:var(--s4)"></i><span aria-hidden="true">D 151.174</span><span class="sr">D, Groot oud pand: 151.174</span></span>
+              <span><i style="background:var(--s5)"></i><span aria-hidden="true">E 135.662</span><span class="sr">E, Afwijkende combinatie: 135.662</span></span>
+            </span><br>Een pand kan in meer dan één categorie vallen. Daarom tellen A tot en met E samen op tot meer dan 441.997.</span>
+          </button>
+          <div class="regel" id="r2" hidden>
+            <p>Een pand gaat door als het in minstens één van vijf categorieën uit de briefing van Levrai valt:</p>
+            <ul>
+              <li><b>A · Winkel + wonen.</b> Minstens 1 winkel en 1 woning, samen minstens 2 verblijfsobjecten, 150–1.000&nbsp;m², gebouwd vóór 2000.</li>
+              <li><b>B · Bedrijf/kantoor + wonen.</b> Minstens 1 woning en 1 kantoor- of bedrijfsruimte, minstens 2 verblijfsobjecten of adressen, 200–1.500&nbsp;m², gebouwd vóór 2000. Een ruimte met een overige gebruiksfunctie, vaak een berging, telt alleen mee als het pand geen winkel heeft.</li>
+              <li><b>C · Klein wooncomplex.</b> 3 tot en met 15 woningen, 150–1.500&nbsp;m², gebouwd vóór 2000.</li>
+              <li><b>D · Groot oud pand.</b> Gebouwd vóór 1940, minstens 250&nbsp;m², met 1 tot en met 2 verblijfsobjecten.</li>
+              <li><b>E · Afwijkende combinatie.</b> Minstens 400&nbsp;m² met hoogstens 2 verblijfsobjecten, of minstens 3 adressen met minstens 3 soorten gebruik in één pand (wonen, winkel, kantoor, bedrijf, overig).</li>
+            </ul>
+            <p>Een pand kan in meer dan één categorie vallen; het telt dan in elke categorie mee, maar het blijft één pand. Grenzen tellen mee.</p>
+            <h3>Wat altijd afvalt</h3>
+            <p>Sommige panden doen nooit mee, ook niet als ze in een categorie passen:</p>
+            <ul>
+              <li>panden met de BAG-status ‘Pand gesloopt’, ‘Niet gerealiseerd pand’ of ‘Bouwvergunning verleend’;</li>
+              <li>panden groter dan 2.000&nbsp;m², en panden zonder bekende oppervlakte;</li>
+              <li>panden die alleen een of meer van deze gebruiksdoelen hebben: industriefunctie, logiesfunctie, onderwijsfunctie, gezondheidszorgfunctie, bijeenkomstfunctie, celfunctie of sportfunctie;</li>
+              <li>grote moderne complexen: 16 of meer verblijfsobjecten en gebouwd in 1990 of later.</li>
+            </ul>
+            <p>Leegstand sluit niet uit. Een pand dat buiten gebruik is, krijgt juist 4 punten extra (zie Score).</p>
+          </div>
+        </li>
+        <li data-i="3">
+          <button class="stap" type="button" aria-expanded="false" aria-controls="r3">
+            <span class="nr">4</span><span class="naam">Score 8 of hoger</span><span class="getal">263.319</span><span class="pijl" aria-hidden="true">▶</span>
+            <span class="sub">panden in A–E met genoeg punten</span>
+          </button>
+          <div class="regel" id="r3" hidden>
+            <p>Elk pand in A–E krijgt punten voor wat het kansrijk maakt. Opgeteld is dat de leadscore.</p>
+            <table>
+              <tr><td>Winkel en woning in één pand</td><td>+5</td></tr>
+              <tr><td>Kantoor of bedrijf en woning in één pand<span class="klein">Niet samen met winkel en woning: dan telt alleen die.</span></td><td>+4</td></tr>
+              <tr><td>3 tot en met 10 verblijfsobjecten</td><td>+3</td></tr>
+              <tr><td>400&nbsp;m² of meer, met 1 of 2 verblijfsobjecten<span class="klein">Kan niet samen met 3 tot en met 10 verblijfsobjecten.</span></td><td>+3</td></tr>
+              <tr><td>Gebouwd vóór 1940</td><td>+3</td></tr>
+              <tr><td>200–800&nbsp;m²</td><td>+3</td></tr>
+              <tr><td>3 of meer adressen</td><td>+2</td></tr>
+              <tr><td>3 of meer soorten gebruik in één pand</td><td>+2</td></tr>
+              <tr><td>Leegstaand: buiten gebruik volgens de BAG</td><td>+4</td></tr>
+              <tr><td>In verbouwing volgens de BAG</td><td>+2</td></tr>
+              <tr><td>Slecht of geen energielabel (E, F of G)<span class="klein">Staat uit: telt nu niet mee.</span></td><td class="uit">uit</td></tr>
+            </table>
+            <h3>Aftrek</h3>
+            <table>
+              <tr><td>Gebouwd in 2000 of later</td><td>−4</td></tr>
+              <tr><td>16 of meer verblijfsobjecten</td><td>−5</td></tr>
+            </table>
+            <p>Een pand komt in aanmerking voor de werklijst bij 8 punten of meer. Grenzen tellen mee.</p>
+            <p>Op de kaarten van de werklijst staat de score als index: 26 punten is 100, 8 punten is 31.</p>
+          </div>
+        </li>
+        <li data-i="4">
+          <button class="stap" type="button" aria-expanded="false" aria-controls="r4">
+            <span class="nr">5</span><span class="naam">Nooit twee keer</span><span class="getal"></span><span class="pijl" aria-hidden="true">▶</span>
+            <span class="sub">500 panden staan in het register als geleverd</span>
+          </button>
+          <div class="regel" id="r4" hidden>
+            <p>Een pand dat op een werklijst is geleverd, komt niet opnieuw op een werklijst, in welk gebied ook. Het register legt per pand vast in welke maand en op welke werklijst het is geleverd.</p>
+            <p>Nu staan er 500 panden in het register, de werklijst van november 2026 meegerekend.</p>
+          </div>
+        </li>
+        <li data-i="5">
+          <button class="stap" type="button" aria-expanded="false" aria-controls="r5">
+            <span class="nr">6</span><span class="naam">Rangorde en loting</span><span class="getal"></span><span class="pijl" aria-hidden="true">▶</span>
+            <span class="sub">hoogste score eerst, bij gelijke score de loting van november 2026</span>
+          </button>
+          <div class="regel" id="r5" hidden>
+            <p>De geschikte panden staan op leadscore, de hoogste eerst. Bij gelijke score beslist een loting die voor de hele maand vastligt: wie de werklijst van november 2026 opnieuw maakt, krijgt precies dezelfde volgorde. Elke maand heeft zijn eigen loting, en waar een pand in het land staat, telt daarin niet mee.</p>
+          </div>
+        </li>
+        <li data-i="6">
+          <button class="stap" type="button" aria-expanded="false" aria-controls="r6">
+            <span class="nr">7</span><span class="naam">Verdeling</span><span class="getal"><span aria-hidden="true">450 + 50</span></span><span class="pijl" aria-hidden="true">▶</span>
+            <span class="sub"><span aria-hidden="true" class="letters"><span><i style="background:var(--s1)"></i>uit de 25 grootste gemeenten</span><span><i style="background:#fff"></i>elders</span></span><span class="sr">450 uit de 25 grootste gemeenten en 50 elders</span></span>
+          </button>
+          <div class="regel" id="r6" hidden>
+            <p>De werklijst heeft plaats voor 500 panden. 50 daarvan zijn voor panden buiten de 25 gemeenten met de meeste inwoners (CBS), de andere 450 voor die 25 gemeenten. Elk deel neemt de hoogste scores van heel Nederland. Heeft een deel te weinig geschikte panden, dan vult het andere deel aan.</p>
+          </div>
+        </li>
+        <li data-i="7" class="wl">
+          <button class="stap" type="button" aria-expanded="false" aria-controls="r7">
+            <span class="nr">8</span><span class="naam">Werklijst<span class="sr">: 500 panden</span></span><span class="getal"></span><span class="pijl" aria-hidden="true">▶</span>
+            <span class="sub">november 2026, klaar voor je visuele controle</span>
+          </button>
+          <div class="regel" id="r7" hidden>
+            <p>Wat overblijft, is je werklijst van november 2026: de hoogst scorende panden die je nog niet kreeg, klaar voor je visuele controle op de kaart, de luchtfoto en Street View.</p>
+          </div>
+        </li>
+      </ol>
+
+      <div class="noten">
+        <p>De ringen zijn niet op schaal, de cijfers wel.</p>
+        <p>Open een stap om te lezen hoe de regel werkt.</p>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="tip" aria-hidden="true"></div>
+
+<script>
+(() => {
+  "use strict";
+  const M = Math, D = document, cv = D.getElementById("doek"), x = cv.getContext("2d");
+  const rm = matchMedia("(prefers-reduced-motion: reduce)");
+  // In de build: PAYLOAD.brein (Python). Hier vast, alleen in de schets.
+  const STAPPEN = [
+    {naam: "Verblijfsobjecten", getal: "9.998.456"}, {naam: "Panden", getal: "6.568.913"},
+    {naam: "Categorie A–E", getal: "441.997"}, {naam: "Score 8 of hoger", getal: "263.319"},
+    {naam: "Nooit twee keer", getal: ""}, {naam: "Rangorde en loting", getal: ""},
+    {naam: "Verdeling", getal: "450 + 50"}, {naam: "Werklijst", getal: ""}];
+  const CATS = [["A", 45359, "--s1", "Winkel + wonen"], ["B", 54325, "--s2", "Bedrijf/kantoor + wonen"],
+                ["C", 175135, "--s3", "Klein wooncomplex"], ["D", 151174, "--s4", "Groot oud pand"],
+                ["E", 135662, "--s5", "Afwijkende combinatie"]];
+  const SPLIT = [450, 50];
+  // Straal per ring (deel van de halve breedte), buiten naar binnen. Niet op schaal.
+  const R = [.93, .80, .685, .575, .49, .415, .33, .17];
+  const OVERLEEFT = [.9, .5, .62, .97, 1, .9, 1, 1];   // alleen beeld: hoeveel stippen een ring doorlaten
+  let W = 0, c = 0, act = -1, hover = -1, klok = 0, raf = 0, last = 0, zicht = true, stil = false, kleuren = {};
+  const css = n => getComputedStyle(D.documentElement).getPropertyValue(n).trim();
+  const catTot = CATS.reduce((s, k) => s + k[1], 0);
+  const catHoek = []; { let a = -M.PI / 2 + .06; for (const k of CATS) { const w = (k[1] / catTot) * (2 * M.PI - .3); catHoek.push([a, a + w - .06]); a += w; } }
+
+  function maat() {
+    const b = cv.getBoundingClientRect(), dpr = M.min(2, devicePixelRatio || 1);
+    W = b.width; c = W / 2; cv.width = W * dpr; cv.height = W * dpr; x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    kleuren = Object.fromEntries(["--s1", "--s2", "--s3", "--s4", "--s5"].map(k => [k, css(k)]));
+    teken();
+  }
+  const a = i => act < 0 ? (hover === i ? 1 : .8) : (act === i ? 1 : .3);
+  function boog(r, a0, a1, kleur, alfa, dik, dash) {
+    x.beginPath(); x.arc(c, c, r, a0, a1); x.globalAlpha = alfa; x.strokeStyle = kleur; x.lineWidth = dik;
+    x.setLineDash(dash || []); x.stroke(); x.setLineDash([]); x.globalAlpha = 1;
+  }
+  // Stippen: lopen van buiten naar de kern; vallen grijs weg of gaan door; krijgen hun kleur bij A–E.
+  const S = [];
+  function nieuw(s) { s.h = M.random() * 2 * M.PI; s.r = .97 + M.random() * .03; s.v = .05 + M.random() * .05; s.k = null; s.weg = 0; s.ring = 0; return s; }
+  for (let i = 0; i < 260; i++) { const s = nieuw({}); s.r = .2 + M.random() * .8; s.ring = R.findIndex(q => q < s.r); if (s.ring < 0) s.ring = 7; S.push(s); }
+  function stap(dt) {
+    klok += dt;
+    for (const s of S) {
+      if (s.weg) { s.weg -= dt; if (s.weg <= 0) nieuw(s); continue; }
+      s.r -= s.v * dt * (1 - s.r * .3);
+      if (s.ring < 7 && s.r <= R[s.ring]) {
+        if (M.random() > OVERLEEFT[s.ring]) { s.weg = .9; continue; }
+        if (s.ring === 2) { const h = ((s.h % (2 * M.PI)) + 2 * M.PI) % (2 * M.PI) - M.PI / 2;
+          const j = catHoek.findIndex(([p, q]) => { let t = h; while (t < p) t += 2 * M.PI; return t <= q; });
+          s.k = j < 0 ? CATS[2][2] : CATS[j][2]; }
+        s.ring++;
+      }
+      if (s.r < R[7] * .9) nieuw(s);
+    }
+  }
+  function teken() {
+    if (!W) return;
+    x.clearRect(0, 0, W, W);
+    const h = c * .96;
+    // 1 verblijfsobjecten: vaag veld
+    x.fillStyle = "#c6d3e4";
+    for (let i = 0; i < 340; i++) { const hk = i * 2.39996 + klok * .02, rr = h * (.86 + (i * 37 % 13) / 100);
+      x.globalAlpha = .18 * a(0) / .8; x.fillRect(c + M.cos(hk) * rr, c + M.sin(hk) * rr, 1.3, 1.3); }
+    x.globalAlpha = 1;
+    // 2 panden: stippelring
+    boog(h * R[1], 0, 2 * M.PI, "#c6d3e4", .55 * a(1), 1.4, [1.5, 4]);
+    // 3 A–E: vakken in verhouding
+    CATS.forEach((k, j) => boog(h * R[2], catHoek[j][0], catHoek[j][1], kleuren[k[2]], a(2), M.max(6, h * .04)));
+    // 4 score ≥ drempel: streepring die loopt
+    x.lineDashOffset = -klok * 9; boog(h * R[3], 0, 2 * M.PI, kleuren["--s3"], .75 * a(3), 1.3, [3, 5]); x.lineDashOffset = 0;
+    // 5 register: dunne ring met een poortje
+    boog(h * R[4], -M.PI / 2 + .12, 1.5 * M.PI - .12, "#ffffff", .5 * a(4), 1.2);
+    // 6 loting: korte streepjes, schudden één keer per ronde en liggen dan stil
+    const schud = (klok % 8) < 1.2 ? M.sin(klok * 40) * .03 : 0;
+    x.strokeStyle = "#ffffff"; x.lineWidth = 1.2; x.globalAlpha = .55 * a(5);
+    for (let i = 0; i < 60; i++) { const hk = i / 60 * 2 * M.PI + schud * ((i * 7) % 3 - 1), r0 = h * R[5] - 3, r1 = h * R[5] + 3;
+      x.beginPath(); x.moveTo(c + M.cos(hk) * r0, c + M.sin(hk) * r0); x.lineTo(c + M.cos(hk) * r1, c + M.sin(hk) * r1); x.stroke(); }
+    x.globalAlpha = 1;
+    // 7 verdeling: twee bogen in verhouding 450 : 50
+    const tot = SPLIT[0] + SPLIT[1], g = SPLIT[0] / tot * (2 * M.PI - .2), a0 = -M.PI / 2 + .05;
+    boog(h * R[6], a0, a0 + g, kleuren["--s1"], a(6), M.max(4, h * .025));
+    boog(h * R[6], a0 + g + .1, a0 + 2 * M.PI - .05, "#ffffff", .8 * a(6), M.max(4, h * .025));
+    // stippen
+    for (const s of S) {
+      const r = h * s.r, px = c + M.cos(s.h) * r, py = c + M.sin(s.h) * r;
+      x.globalAlpha = s.weg ? M.max(0, s.weg) * .35 : .85;
+      x.fillStyle = s.weg ? "#898781" : (s.k ? kleuren[s.k] : "#ffffff");
+      x.beginPath(); x.arc(px, py, s.k ? 1.8 : 1.2, 0, 2 * M.PI); x.fill();
+    }
+    x.globalAlpha = 1;
+    // 8 de kern
+    const kr = h * R[7], gl = x.createRadialGradient(c, c, kr * .2, c, c, kr * 1.9);
+    gl.addColorStop(0, "rgba(27,175,122,.55)"); gl.addColorStop(1, "rgba(27,175,122,0)");
+    x.fillStyle = gl; x.beginPath(); x.arc(c, c, kr * 1.9, 0, 2 * M.PI); x.fill();
+    x.fillStyle = kleuren["--s3"]; x.globalAlpha = a(7) === .3 ? .6 : 1; x.beginPath(); x.arc(c, c, kr * (1 + .03 * M.sin(klok * 2.2)), 0, 2 * M.PI); x.fill();
+    x.globalAlpha = 1; x.fillStyle = "#fff"; x.font = `750 ${M.max(11, M.round(kr * .3))}px system-ui,sans-serif`;
+    x.textAlign = "center"; x.textBaseline = "middle"; x.fillText("Werklijst", c, c);
+    // stapnummers op twaalf uur
+    x.font = "800 10px system-ui,sans-serif";
+    R.slice(0, 7).forEach((q, i) => { const y = c - h * q;
+      x.globalAlpha = act === i ? 1 : (act < 0 ? .85 : .35);
+      x.fillStyle = "#0a1524"; x.beginPath(); x.arc(c, y, 8, 0, 2 * M.PI); x.fill();
+      x.fillStyle = act === i ? "#fff" : "#9fb3cc"; x.fillText(String(i + 1), c, y + .5); });
+    x.globalAlpha = 1;
+  }
+  const loopt = () => !rm.matches && zicht && !D.hidden && !stil;
+  function beeld(ts) { raf = 0; if (!loopt()) return; const dt = last ? M.min(.05, (ts - last) / 1000) : 1 / 60; last = ts; stap(dt); teken(); raf = requestAnimationFrame(beeld); }
+  function start() { if (!raf && loopt()) { last = 0; raf = requestAnimationFrame(beeld); } else teken(); }
+
+  // De route: één stap tegelijk open; de bijbehorende ring licht op.
+  const items = [...D.querySelectorAll("#route > li")];
+  function zet(i) {
+    items.forEach((li, j) => { const b = li.querySelector(".stap"), open = j === i;
+      b.setAttribute("aria-expanded", String(open)); li.querySelector(".regel").hidden = !open; li.classList.toggle("actief", open); });
+    act = i; teken();
+  }
+  items.forEach((li, i) => {
+    const b = li.querySelector(".stap");
+    b.addEventListener("click", () => zet(act === i ? -1 : i));
+    li.addEventListener("pointerenter", () => { hover = i; if (act < 0) teken(); });
+    li.addEventListener("pointerleave", () => { hover = -1; if (act < 0) teken(); });
+  });
+  D.addEventListener("keydown", e => { if (e.key === "Escape" && act >= 0) { const b = items[act].querySelector(".stap"); zet(-1); b.focus(); } });
+
+  // Wijs een ring aan: de tip noemt de stap en het getal.
+  const tip = D.getElementById("tip");
+  cv.addEventListener("pointermove", e => {
+    const b = cv.getBoundingClientRect(), dx = e.clientX - b.left - c, dy = e.clientY - b.top - c, d = M.hypot(dx, dy) / (c * .96);
+    let i = -1, best = .05; R.forEach((q, j) => { if (M.abs(q - d) < best) { best = M.abs(q - d); i = j; } });
+    if (d < R[7]) i = 7; if (d > .86 && d < 1.02) i = 0;
+    if (i < 0) { tip.style.display = "none"; return; }
+    let t = STAPPEN[i].getal ? `${STAPPEN[i].naam} · ${STAPPEN[i].getal}` : STAPPEN[i].naam;
+    if (i === 2) { let h = M.atan2(dy, dx); const j = catHoek.findIndex(([p, q]) => { let u = h; while (u < p) u += 2 * M.PI; return u <= q; });
+      if (j >= 0) t = `Categorie ${CATS[j][0]} · ${CATS[j][3]} · ${CATS[j][1].toLocaleString("nl-NL")} panden`; }  // schets; in de build uit Python (cat.tip)
+    if (i === 7) t = "Je werklijst: 450 uit de 25 grootste gemeenten, 50 elders";
+    tip.textContent = t; tip.style.display = "block"; tip.style.left = e.clientX + 12 + "px"; tip.style.top = e.clientY + 12 + "px";
+  });
+  cv.addEventListener("pointerleave", () => { tip.style.display = "none"; });
+
+  const knop = D.getElementById("stil");
+  knop.addEventListener("click", () => { stil = !stil;
+    knop.textContent = stil ? "Laat bewegen" : "Zet stil";
+    knop.setAttribute("aria-label", stil ? "Laat het brein bewegen" : "Zet het brein stil"); start(); });
+  D.getElementById("thema").addEventListener("click", () => {
+    const r = D.documentElement; r.dataset.theme = r.dataset.theme === "dark" ? "light" : "dark"; maat(); });
+  new IntersectionObserver(es => { zicht = es[0].isIntersecting; start(); }).observe(cv);
+  D.addEventListener("visibilitychange", start);
+  rm.addEventListener("change", start);
+  new ResizeObserver(maat).observe(cv);
+  maat(); start();
+})();
+</script>
+</body>
+</html>

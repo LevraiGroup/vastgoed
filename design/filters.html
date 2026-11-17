@@ -1,0 +1,777 @@
+<!-- @dsCard group="Levrai VASTGOED" name="Werklijst: filters, sorteren en luchtfoto per kaart (VA-68 t/m VA-71)" subtitle="Filterpaneel, actieve filters, sorteren, lege lijst en de kleine luchtfoto · 1280 en 375 px, licht en donker" -->
+<!doctype html>
+<html lang="nl" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Levrai · Ontwerp werklijstfilters (VA-68 t/m VA-71)</title>
+<!--
+  VA-68, VA-69, VA-70, VA-71 · Lumi · 12 november 2026 · ontwerp, geen productiecode.
+  Bovenaan: het filterpaneel werkend, op een momentopname van de echte werklijst van november
+  (500 panden, alleen de velden die de filters nodig hebben, uit de VA-39-payload in
+  _scratch/wt-landen, 12 nov). Daaronder: elke toestand op 1280 en 375 px, licht en donker, de
+  kopijtabel, de adresparameters, de gemeten contrasten en de bouwnotities voor Ada.
+  Geen externe bron: geen CDN, geen webfont, geen gekoppelde afbeelding. DE LUCHTFOTO'S ZIJN
+  GETEKENDE PLAATSVERVANGERS (inline SVG met het woord "voorbeeld"), geen PDOK-beelden. Op de
+  pagina komt het beeld van service.pdok.nl (VA-71); hier wordt niets opgevraagd.
+  Kleuren: alleen die uit design/index.html. De plaatsvervangers gebruiken aardetinten die
+  geen UI-kleur zijn; ze staan voor een foto.
+  Dit bestand schrijft de filterstand in zijn eigen adres (zoals de pagina dat doet), zodat je
+  herladen en delen kunt proberen.
+-->
+<style>
+  /* ---------- thema's: exact de waarden van design/index.html ---------- */
+  :root, .thema-licht{
+    color-scheme: light;
+    --plane:#f9f9f7; --surface:#fcfcfb; --surface-2:#ffffff;
+    --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --baseline:#c3c2b7; --ring:rgba(11,11,11,.10);
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4;
+    --good:#0ca30c; --crit:#d03b3b;
+    --shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -12px rgba(11,11,11,.12);
+    --brand:#12233b;
+    --knop-rand:transparent;
+  }
+  /* Altijd licht openen (Ayman, 2026-11-09); donker alleen via de Thema-knop. */
+  :root[data-theme="dark"], .thema-donker{
+    color-scheme: dark;
+    --plane:#0d0d0d; --surface:#1a1a19; --surface-2:#201f1e;
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,.10);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+    --good:#0ca30c; --crit:#e06666;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);
+    --brand:#0a1524;
+    --knop-rand:rgba(255,255,255,.18);
+  }
+  /* De knop "Toon … panden" is in beide thema's Levrai-navy #12233b (in donker met de witte rand van .toggle). */
+  :root, .thema-licht, .thema-donker{ --knop:#12233b; }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--plane);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.45}
+  a{color:inherit}
+  .vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+  /* =====================================================================
+     ONTWERPBORD (niet voor de pagina)
+     ===================================================================== */
+  .bord-w{max-width:1340px;margin:0 auto;padding:30px 24px 90px}
+  .bord-w > p, .bord-w > ul, .bord-w > ol{font-size:14px;color:var(--ink-2);max-width:92ch}
+  .bord-w li{margin:4px 0}
+  .bord-w > p b,.bord-w li b,.raam-fig figcaption b{color:var(--ink)}
+  .bord-kruimel{margin:0;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+  .bord-w > h1{margin:6px 0 10px;font-size:28px;letter-spacing:-.02em;line-height:1.15}
+  .bord-w > h2{margin:52px 0 8px;font-size:21px;letter-spacing:-.01em}
+  .bord-w > h3{margin:28px 0 8px;font-size:15px}
+  .bedien{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:14px 0 16px;padding:10px 12px;
+    background:var(--surface);border:1px solid var(--ring);border-radius:12px;font-size:13px;color:var(--ink-2)}
+  .bedien button{font:inherit;font-size:12.5px;font-weight:650;color:var(--ink);background:var(--surface-2);
+    border:1px solid var(--muted);border-radius:999px;padding:5px 12px;cursor:pointer;min-height:32px}
+  .bedien button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+  .bedien label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+  .bedien input{accent-color:var(--s1);width:16px;height:16px;margin:0}
+  .bedien .tus{width:1px;height:20px;background:var(--grid)}
+  .bedien :focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .proef{max-width:100%;margin:0 auto 0 0;padding:20px 18px;background:var(--plane);border:1px dashed var(--baseline);border-radius:12px}
+
+  .frames{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start;overflow-x:auto;padding:4px 2px 10px}
+  .raam-fig{margin:0;flex:none}
+  .raam-fig figcaption{font-size:12.5px;color:var(--ink-2);margin:0 0 8px;max-width:375px}
+  .raam-fig.breed figcaption{max-width:900px}
+  .raam-fig figcaption b{color:var(--ink)}
+  .raam{border:1px solid var(--baseline);border-radius:12px;overflow:hidden;background:var(--plane);color:var(--ink)}
+  .raam.w1280{width:1280px} .raam.w375{width:375px}
+  .r-vg{display:grid;grid-template-columns:248px minmax(0,1fr)}
+  .r-side{background:var(--brand);color:#fff;padding:22px 12px;min-height:100%}
+  .r-merk{padding:2px 10px 18px;font-weight:800;letter-spacing:.16em;font-size:15px}
+  .r-merk small{display:block;letter-spacing:.28em;font-weight:600;font-size:10px;color:#9fb3cc;margin-top:3px}
+  .r-nav{display:flex;flex-direction:column;gap:2px;font-size:14px;color:#c6d3e4}
+  .r-nav span{padding:9px 14px;border-radius:10px}
+  .r-nav span.actief{background:rgba(255,255,255,.14);color:#fff;font-weight:700;box-shadow:inset 3px 0 0 #fff}
+  .r-inhoud{padding:26px 28px 32px;min-width:0}
+  .w375 .r-inhoud{padding:18px 14px 24px}
+  .r-top{height:56px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 16px}
+  .r-top .r-merk{padding:0;font-size:13px}
+  .r-top .r-merk small{font-size:9px}
+  .r-menuknop{font-size:14px;font-weight:650;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.10);border-radius:10px;padding:10px 14px}
+
+  .fotorij{display:flex;flex-wrap:wrap;gap:18px;padding:16px;border-radius:12px;border:1px solid var(--baseline);background:var(--surface)}
+  .fotorij figure{margin:0;width:120px;font-size:11.5px;color:var(--ink-2)}
+  .fotorij figcaption{margin-top:6px}
+
+  .tabel{border-collapse:collapse;width:100%;max-width:1200px;font-size:13px;margin:8px 0 6px}
+  .tabel th,.tabel td{border-bottom:1px solid var(--grid);padding:8px 10px;text-align:left;vertical-align:top}
+  .tabel th{color:var(--ink-2);font-size:12px;font-weight:700;background:var(--surface)}
+  .tabel td:first-child{white-space:nowrap}
+  code{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;background:var(--surface-2);border:1px solid var(--ring);border-radius:5px;padding:0 4px;overflow-wrap:anywhere}
+  .tabel code{white-space:normal}
+
+  /* =====================================================================
+     WERKLIJST-KOP (zoals de pagina)
+     ===================================================================== */
+  .kop{display:flex;flex-direction:column;gap:6px;margin:0 2px 16px}
+  .kop-rij{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 14px}
+  .kruimel{margin:0;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+  .kruimel b{color:var(--ink);font-weight:800}
+  .kruimel span{margin:0 .35em}
+  .titel{margin:0;font-size:22px;font-weight:750;letter-spacing:-.02em;line-height:1.15}
+  .kop-zin{margin:0;font-size:14.5px;color:var(--ink-2);max-width:78ch}
+  .kop-meta{font-size:12px;color:var(--ink-2)}
+  .w375 .titel{font-size:19px} .w375 .kop-zin{font-size:14px}
+
+  /* =====================================================================
+     WERKLIJSTFILTERS (VA-68, VA-69, VA-70) — dit blok gaat mee naar build_dashboard.py
+     Breed of smal hangt af van de breedte van de werklijst zelf (container), niet van het scherm.
+     ===================================================================== */
+  .wl{container:wl / inline-size}
+
+  /* -- balk: Filters-knop, telling, sorteren -- */
+  .wl-balk{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 14px;margin:0 2px 12px}
+  .wl-knop{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 12px 0 14px;font:inherit;font-size:13.5px;
+    font-weight:650;color:var(--ink);background:var(--surface);border:1px solid var(--muted);border-radius:10px;cursor:pointer;box-shadow:var(--shadow)}
+  .wl-knop[aria-expanded="true"]{border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
+  .wl-ico{width:16px;height:12px;flex:none;
+    background:linear-gradient(currentColor 0 0) 0 0/100% 2px no-repeat,
+               linear-gradient(currentColor 0 0) 50% 50%/66% 2px no-repeat,
+               linear-gradient(currentColor 0 0) 50% 100%/34% 2px no-repeat}
+  .wl-aantal{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;
+    background:var(--ink);color:var(--surface);font-size:11.5px;font-weight:800;font-variant-numeric:tabular-nums}
+  .wl-aantal[hidden]{display:none}
+  .wl-pijl{width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:translateY(-2px) rotate(45deg);margin-left:2px}
+  .wl-knop[aria-expanded="true"] .wl-pijl{transform:translateY(2px) rotate(-135deg)}
+  .wl-telling{margin:0 0 10px;font-size:13px;font-weight:650;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .wl-sorteer{margin-left:auto;display:flex;gap:10px;align-items:flex-end}
+
+  .wl-veld{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .wl-veld label,.wl legend{font-size:12px;font-weight:700;color:var(--ink-2)}
+  .wl select{font:inherit;font-size:13.5px;color:var(--ink);background:var(--surface-2);border:1px solid var(--muted);
+    border-radius:10px;min-height:40px;padding:6px 10px;max-width:100%;cursor:pointer}
+
+  /* -- paneel -- */
+  .wl-paneel{background:var(--surface);border:1px solid var(--ring);border-radius:14px;box-shadow:var(--shadow);
+    padding:16px 18px;margin:0 0 12px}
+  .wl-paneel[hidden]{display:none}
+  .wl-keuzes{display:flex;flex-wrap:wrap;gap:16px 28px}
+  .wl-heel{flex-basis:100%}
+  .wl fieldset{border:0;margin:0;padding:0;min-width:0}
+  .wl legend{padding:0;margin:0 0 6px}
+  .wl-opties{display:flex;flex-wrap:wrap;gap:6px}
+  .wl-optie{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:6px 12px 6px 10px;border:1px solid var(--ring);
+    border-radius:10px;background:var(--surface-2);font-size:13px;color:var(--ink);cursor:pointer;user-select:none}
+  .wl-optie input{margin:0;width:16px;height:16px;flex:none;accent-color:var(--s1);cursor:pointer}
+  .wl-kleur{width:10px;height:10px;border-radius:3px;flex:none}
+  .wl-letter{font-weight:800}
+  .wl-n{margin-left:2px;font-size:12px;font-weight:650;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .wl-optie.nul{border-style:dashed;border-color:var(--baseline)}
+  .wl-optie.nul .wl-naam,.wl-optie.nul .wl-letter{color:var(--ink-2)}
+  @supports selector(:has(a)){
+    .wl-optie:has(input:checked){border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1);
+      background:color-mix(in srgb,var(--s1) 9%,var(--surface-2))}
+    .wl-optie:has(input:checked) .wl-naam{font-weight:650}
+    .wl-optie:has(input:focus-visible){outline:2px solid var(--s1);outline-offset:2px}
+    .wl-optie input:focus-visible{outline:none}
+  }
+
+  .wl-bereiken{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px 20px;align-items:start;
+    margin-top:16px;padding-top:14px;border-top:1px solid var(--grid)}
+  .wl-hint{margin:-2px 0 6px;font-size:11.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .wl-invoer{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+  .wl-invoer label{display:block;font-size:11.5px;color:var(--ink-2);margin-bottom:3px}
+  .wl-invoer input{width:100%;min-width:0;font:inherit;font-size:16px;min-height:40px;padding:6px 10px;color:var(--ink);
+    background:var(--surface-2);border:1px solid var(--muted);border-radius:9px;font-variant-numeric:tabular-nums}
+  .wl-invoer input[aria-invalid="true"]{border:2px solid var(--crit);padding:5px 9px}
+  .wl-fout{margin:6px 0 0;font-size:12px;line-height:1.35;font-weight:600;color:var(--crit)}
+  .wl-fout[hidden]{display:none}
+  .wl-paneelvoet{display:none}
+  .wl-toon{flex:1;min-height:44px;font:inherit;font-size:14px;font-weight:700;color:#fff;background:var(--knop);
+    border:1px solid var(--knop-rand);border-radius:10px;cursor:pointer}
+
+  /* -- actieve filters, bron, lege lijst -- */
+  .wl-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 2px 10px}
+  .wl-chips[hidden]{display:none}
+  .wl-chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:4px 8px 4px 12px;border-radius:999px;
+    border:1px solid var(--muted);background:var(--surface);color:var(--ink);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+  .wl-chip .x{font-size:16px;line-height:1;color:var(--ink-2)}
+  @media (hover:hover){ .wl-chip:hover{background:var(--grid)} .wl-wis:hover{color:var(--ink-2)} }
+  .wl-wis{font:inherit;font-size:12.5px;font-weight:650;color:var(--ink);background:none;border:0;padding:6px 6px;min-height:32px;
+    text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+  .wl-bron{margin:0 2px 12px;font-size:11.5px;color:var(--ink-2)}
+  .wl-leeg{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:0 0 14px;padding:16px 18px;
+    background:var(--surface);border:1px solid var(--ring);border-radius:14px;box-shadow:var(--shadow)}
+  .wl-leeg[hidden]{display:none}
+  .wl-leeg p{margin:0;font-size:13.5px;color:var(--ink-2);flex:1 1 260px}
+  .wl-leeg .wl-wis{text-decoration:none;background:var(--surface-2);border:1px solid var(--muted);border-radius:9px;padding:7px 12px;min-height:40px}
+
+  .wl :is(button,select,input,a):focus-visible,.nep-focus{outline:2px solid var(--s1);outline-offset:2px}
+  .wl-optie.nep-focus{outline-offset:2px}
+
+  .wl .grid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+  .wl .grid[hidden]{display:none}
+  @container wl (min-width:720px){ .wl .grid{grid-template-columns:repeat(2,minmax(0,1fr))} }
+
+  /* -- smal: werklijst smaller dan 600 px (telefoon) -- */
+  @container wl (max-width:599.98px){
+    .wl-sorteer{margin-left:0;flex-basis:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+    .wl-sorteer select{width:100%}
+    .wl-telling{flex:1}
+    .wl-paneel{padding:14px 14px 0}
+    .wl-keuzes > *{flex-basis:100%}
+    .wl-gem select{width:100%}
+    .wl-optie{min-height:44px}
+    .wl-bereiken{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px 14px}
+    .wl-paneelvoet{display:flex;position:sticky;bottom:0;margin:14px -14px 0;padding:12px 14px;background:var(--surface);
+      border-top:1px solid var(--grid);border-radius:0 0 14px 14px}
+  }
+
+  /* =====================================================================
+     KAART MET LUCHTFOTO (VA-71) — de bestaande .card, met een nieuwe bovenrij
+     ===================================================================== */
+  .card{container:kaart / inline-size;background:var(--surface);border:1px solid var(--ring);border-radius:14px;padding:16px 17px;
+    box-shadow:var(--shadow);display:flex;flex-direction:column;gap:11px;cursor:pointer;min-width:0}
+  .card-top{display:grid;grid-template-columns:100px minmax(0,1fr) auto;gap:12px;align-items:start}
+  .card-kern{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .addr{font-size:14.5px;font-weight:700;letter-spacing:-.01em;overflow-wrap:anywhere}
+  .lid{font-size:11.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .card-foto{position:relative;width:100px;height:100px;border-radius:10px;overflow:hidden;background:var(--grid)}
+  .card-foto.laadt{background:repeating-linear-gradient(135deg,var(--grid) 0 7px,color-mix(in srgb,var(--grid) 55%,var(--surface)) 7px 14px)}
+  .card-foto img{display:block;width:100%;height:100%;object-fit:cover;opacity:0}
+  .card-foto.geladen img{opacity:1}
+  @media (prefers-reduced-motion: no-preference){ .card-foto.geladen img{transition:opacity .15s ease} }
+  .card-foto .merk{display:none;position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+    border:2px solid #fff;box-shadow:0 0 0 1.5px var(--crit);pointer-events:none}
+  .card-foto.geladen .merk{display:block}
+  .card-foto .melding{display:none;position:absolute;inset:0;align-items:center;justify-content:center;padding:6px;text-align:center;
+    font-size:11px;line-height:1.25;font-weight:600;color:var(--ink-2)}
+  .card-foto.mislukt,.card-foto.geen{background:var(--grid);box-shadow:inset 0 0 0 1px var(--baseline)}
+  .card-foto.mislukt .melding,.card-foto.geen .melding{display:flex}
+  @container kaart (max-width:380px){
+    .card-top{grid-template-columns:84px minmax(0,1fr) auto;gap:10px}
+    .card-foto{width:84px;height:84px}
+  }
+  .score{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;width:56px;height:56px;border-radius:14px;background:var(--brand);color:#fff}
+  .score b{font-size:22px;font-weight:800;line-height:1}
+  .score small{font-size:8px;letter-spacing:.08em;color:#9fb3cc;margin-top:2px}
+  .meter{height:6px;border-radius:4px;background:var(--grid);overflow:hidden}
+  .meter i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--s1),var(--s3))}
+  .chips{display:flex;flex-wrap:wrap;gap:5px}
+  .chip{font-size:10.5px;font-weight:700;color:#fff;padding:2px 8px;border-radius:999px}
+  .cA{background:var(--s1)} .cB{background:var(--s2)} .cC{background:var(--s3)}
+  .cD{background:var(--s4);color:#3a2a00} .cE{background:var(--s5);color:#3a1220}
+  .sigtags{display:flex;flex-wrap:wrap;gap:5px}
+  .sigtag{font-size:10.5px;font-weight:650;padding:3px 9px;border-radius:999px;background:color-mix(in srgb,var(--good) 13%,transparent);
+    color:var(--good);border:1px solid color-mix(in srgb,var(--good) 35%,transparent)}
+  .sigtag.leeg{background:color-mix(in srgb,var(--s4) 18%,transparent);color:var(--s2);border-color:color-mix(in srgb,var(--s2) 40%,transparent)}
+  .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .meta > div{background:var(--surface-2);border:1px solid var(--ring);border-radius:9px;padding:7px 8px;text-align:center}
+  .meta .mv{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+  .meta .ml{font-size:9.5px;color:var(--muted);letter-spacing:.03em;margin-top:1px;border:0;padding:0;background:none}
+  .weggelaten{margin:0;padding:7px 9px;border:1px dashed var(--baseline);border-radius:9px;font-size:11px;color:var(--ink-2)}
+  .foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 12px}
+  .baglink{font-size:11.5px;font-weight:650;color:var(--s1);text-decoration:none}
+  .pand-open{font:inherit;font-size:13px;font-weight:600;color:var(--s1);background:none;border:0;padding:0;cursor:pointer}
+  .status{font-size:10.5px;color:var(--good);display:flex;align-items:center;gap:5px}
+  .status::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--good)}
+  .schildwacht{height:1px}
+</style>
+</head>
+<body>
+<div class="bord-w">
+  <p class="bord-kruimel">Ontwerp VA-68 · VA-69 · VA-70 · VA-71 · Lumi · 12 november 2026</p>
+  <h1>De werklijst filteren, sorteren en elk pand van boven zien</h1>
+  <p><b>Waarom.</b> Ayman vroeg op 12 november om meer filters ("meer filters toevoegen") en koos: categorie, signaal, score en bouwjaar, grootte, 25 grootste of elders, en sorteren. Een zoekveld voor adressen koos hij niet, dus dat staat er niet. Op dezelfde dag vroeg hij om de luchtfoto op de kaart ("hier moet je ook al de foto kunnen zien klein"). De criteria staan in <code>BACKLOG.md</code> (Nova, HQ-commit <code>1144e77</code>).</p>
+  <p><b>Eén paneel, dat inklapt.</b> Op een laptop staat het paneel open boven de kaarten, en op een telefoon staat het dicht achter één knop "Filters". Het is één opbouw die op elke breedte hetzelfde werkt. Op de telefoon is het paneel geen lade of venster, want het menu is daar al een lade (VA-63), en twee lades over elkaar verwarren. Wat je gekozen hebt, staat altijd als losse knopjes boven de kaarten, ook als het paneel dicht is. Met één tik haal je er een weg.</p>
+  <p><b>Wat de echte lijst laat zien.</b> Op de werklijst van november heeft categorie D 0 panden, zijn er 6 leegstaand, lopen de scores van 69 tot 92 en zijn 499 van de 500 panden van 1939 of ouder. Een filter "score vanaf 60" of "voor 1940" verandert dus bijna niets. Daarom staat onder elk getalveld wat er op de lijst staat ("Op de werklijst: 69–92"), en daarom toont elke keuze haar aantal, ook als dat 0 is.</p>
+
+  <h2>1. Werkend voorbeeld</h2>
+  <p>Probeer het met het toetsenbord: Tab, Spatie, Enter en Escape (Escape sluit het paneel op smal). De aantallen komen van de echte 500 panden. De kaarten tonen alleen de bovenrij, de cijfers en de voet. De functiebalk, de legenda en de score-opbouw veranderen niet en zijn hier weggelaten. De filterstand komt in het adres van deze pagina, dus herlaad gerust.</p>
+  <div class="bedien" role="group" aria-label="Instellingen van het voorbeeld">
+    <span>Breedte</span>
+    <button type="button" data-breedte="976" aria-pressed="true">976 px (laptop, 1280 min menu)</button>
+    <button type="button" data-breedte="375" aria-pressed="false">375 px (telefoon)</button>
+    <span class="tus" aria-hidden="true"></span>
+    <button type="button" id="themaKnop" aria-pressed="false">Thema: donker</button>
+    <span class="tus" aria-hidden="true"></span>
+    <label><input type="checkbox" id="pdokWeg"> Doe alsof PDOK onbereikbaar is</label>
+  </div>
+  <div class="proef" id="proef" style="width:976px">
+    <header class="kop">
+      <div class="kop-rij">
+        <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Werklijst</b></p>
+        <span class="kop-meta">500 panden · 450 uit de 25 grootste gemeenten · 50 elders</span>
+      </div>
+      <h2 class="titel" style="margin:0">Werklijst november 2026</h2>
+      <p class="kop-zin">De 500 hoogst scorende panden van Nederland, klaar voor je visuele controle. Open een pand voor alle gegevens.</p>
+    </header>
+    <div id="live"></div>
+  </div>
+
+  <h2>2. Elke toestand</h2>
+  <p>Stilstaande beelden, gemaakt met dezelfde code als het voorbeeld, met een vaste stand. Een blauwe ring betekent toetsenbordfocus. De breedte van 1280 is het scherm. De werklijst is daar 976 px breed, naast het menu van 248 px.</p>
+
+  <h3>Laptop, 1280 px</h3>
+  <div class="frames">
+    <figure class="raam-fig breed"><figcaption><b>Licht · zo opent de werklijst.</b> Het paneel staat open, niets is gekozen en de telling zegt "Alle 500 panden". Categorie D staat er met 0 en een gestippelde rand. Je kunt hem aanvinken, maar er komt niets bij. Er zijn nog geen actieve filters en er is geen "Wis alle filters".</figcaption>
+      <div class="raam w1280 thema-licht" data-raam='{"breed":1,"open":1,"kaarten":2,"foto":["geladen","geladen"]}'></div></figure>
+    <figure class="raam-fig breed"><figcaption><b>Licht · drie filters en gesorteerd op bouwjaar.</b> Categorie A en C, in verbouwing, bouwjaar tot en met 1939, oudste eerst. Focus op de optie C. Elk aantal is wat die keuze zou geven bij de andere filters. De kaarten laten de vier toestanden van de foto zien: geladen, geladen, kon niet laden en laadt nog (gestreept vlak, zonder tekst).</figcaption>
+      <div class="raam w1280 thema-licht" data-raam='{"breed":1,"open":1,"stand":"?categorie=A,C&signaal=verbouwing&bouwjaar_tm=1939&sorteer=bouwjaar","kaarten":4,"foto":["geladen","geladen","mislukt","laadt"],"focus":".wl-optie[data-waarde=C]"}'></div></figure>
+    <figure class="raam-fig breed"><figcaption><b>Donker · dezelfde stand.</b> Focus op "Wis alle filters".</figcaption>
+      <div class="raam w1280 thema-donker" data-raam='{"breed":1,"open":1,"stand":"?categorie=A,C&signaal=verbouwing&bouwjaar_tm=1939&sorteer=bouwjaar","kaarten":4,"foto":["geladen","geladen","mislukt","laadt"],"focus":".wl-chips .wl-wis"}'></div></figure>
+  </div>
+
+  <h3>Telefoon, 375 px</h3>
+  <div class="frames">
+    <figure class="raam-fig"><figcaption><b>Licht · paneel dicht (zo opent hij op een telefoon).</b> De knop zegt hoeveel filters er actief zijn. De actieve filters staan eronder, en de eerste kaart staat in beeld zonder dat je langs het paneel hoeft.</figcaption>
+      <div class="raam w375 thema-licht" data-raam='{"open":0,"stand":"?categorie=A,C&signaal=verbouwing&bouwjaar_tm=1939&sorteer=bouwjaar","kaarten":2,"foto":["geladen","geladen"]}'></div></figure>
+    <figure class="raam-fig"><figcaption><b>Licht · paneel open, met een ongeldig bereik.</b> Oppervlakte van 800 tot en met 400: de melding staat bij het veld, de rode rand is dikker, en dat filter telt niet mee. De rest werkt wel. "Toon 207 panden" blijft onderaan in beeld terwijl je door het paneel scrolt.</figcaption>
+      <div class="raam w375 thema-licht" data-raam='{"open":1,"stand":"?categorie=A,C&signaal=verbouwing&bouwjaar_tm=1939&sorteer=bouwjaar","ruw":{"m2":["800","400"]},"kaarten":1,"foto":["geladen"],"focus":"input[id$=m2-van]"}'></div></figure>
+    <figure class="raam-fig"><figcaption><b>Donker · paneel dicht.</b></figcaption>
+      <div class="raam w375 thema-donker" data-raam='{"open":0,"stand":"?categorie=A,C&signaal=verbouwing&bouwjaar_tm=1939&sorteer=bouwjaar","kaarten":2,"foto":["geladen","mislukt"],"focus":".wl-knop"}'></div></figure>
+  </div>
+  <div class="frames">
+    <figure class="raam-fig"><figcaption><b>Licht · niets past.</b> Gemeente Leiden, categorie A en leegstaand (het voorbeeld van VA-68 criterium 4) geeft op deze werklijst echt 0. In plaats van de kaarten staat de melding met "Wis alle filters". Er is geen leeg vlak en geen foutmelding.</figcaption>
+      <div class="raam w375 thema-licht" data-raam='{"open":0,"stand":"?gemeente=Leiden&categorie=A&signaal=leeg","kaarten":0}'></div></figure>
+    <figure class="raam-fig"><figcaption><b>Donker · dezelfde stand, paneel open.</b> Je ziet waarom het 0 is: "Leegstaand 0" binnen Leiden. Opties met 0 blijven aan te vinken en uit te vinken.</figcaption>
+      <div class="raam w375 thema-donker" data-raam='{"open":1,"stand":"?gemeente=Leiden&categorie=A&signaal=leeg","kaarten":0,"focus":".wl-optie[data-waarde=leeg]"}'></div></figure>
+    <figure class="raam-fig"><figcaption><b>Licht · PDOK onbereikbaar.</b> Elke kaart zegt "Luchtfoto kon niet laden" op de plek van de foto. Er is geen kapot-beeldicoon en niets verschuift. De derde kaart laat zien hoe een pand zonder x/y eruitziet: "Locatie onbekend", en er gaat geen verzoek uit.</figcaption>
+      <div class="raam w375 thema-licht" data-raam='{"open":0,"kaarten":3,"foto":["mislukt","mislukt","geen"]}'></div></figure>
+  </div>
+
+  <h3>De luchtfoto, vier toestanden</h3>
+  <div class="fotorij thema-licht" id="fotorij-licht"></div>
+  <div class="fotorij thema-donker" id="fotorij-donker" style="margin-top:12px"></div>
+
+  <h2>3. Kopij</h2>
+  <p>De pagina is alleen Nederlands (huisregel), dus er is geen andere taal om te vullen. Alles hieronder is nieuw of gewijzigd. Tekst tussen accolades komt uit de cijfers. Python bouwt de zinnen en de vormen (LESSONS, VA-31), en het script vult alleen de getallen in (zie bouwnotitie 2).</p>
+  <table class="tabel">
+    <thead><tr><th>Sleutel</th><th>Tekst</th><th>Waar en waarom</th></tr></thead>
+    <tbody>
+      <tr><td>filters.knop</td><td>Filters</td><td>Met <b>{n}</b> in een bolletje als er filters actief zijn. De naam voor een schermlezer wordt "Filters ({n} actief)", met verborgen tekst en niet met <code>aria-label</code>, zodat de naam met de zichtbare tekst begint. Open of dicht staat in <code>aria-expanded</code>, en het pijltje draait.</td></tr>
+      <tr><td>filters.actief</td><td> ({n} actief)</td><td>Verborgen deel van de knopnaam.</td></tr>
+      <tr><td>telling.alle</td><td>Alle {totaal} panden</td><td>Als er geen filter actief is. <code>aria-live="polite"</code>.</td></tr>
+      <tr><td>telling</td><td>{n} van {totaal} panden</td><td>Ook bij 1 en bij 0 ("1 van 500 panden"). Telt alle treffers, niet alleen de getoonde kaarten.</td></tr>
+      <tr><td>toon</td><td>Toon {n} panden · Toon 1 pand · <i>bij 0:</i> Sluit filters</td><td>Alleen smal, onderaan het open paneel. Klapt het paneel dicht. Bij 0 zegt de knop wat hij doet, en de melding van de lege lijst staat er dan onder.</td></tr>
+      <tr><td>gemeente.label</td><td>Gemeente</td><td>Ongewijzigd (VA-39), nu in het paneel.</td></tr>
+      <tr><td>gemeente.alle · .optie</td><td>Alle gemeenten ({n}) · {gemeente} ({n})</td><td><b>Gewijzigd:</b> de getallen volgen nu de andere filters, net als bij elke andere keuze. Anders staat er "Amsterdam (111)" terwijl er na "categorie C" 43 komen. Groepen ongewijzigd: "De 25 grootste gemeenten", "Elders in Nederland".</td></tr>
+      <tr><td>gebied.label</td><td>Gebied</td><td>Nieuw. Hier staan de 25 grootste gemeenten en de rest van het land.</td></tr>
+      <tr><td>gebied.groot · .elders</td><td>De {aantal_grote_gemeenten} grootste gemeenten · Elders in Nederland</td><td>Dezelfde woorden als de verdeling en de groepen van het gemeentefilter (copy-va39 §2). Het getal komt uit <code>config.yaml</code>.</td></tr>
+      <tr><td>categorie.label</td><td>Categorie</td><td>Per optie: een kleurvlakje, de letter en de naam uit <code>PAYLOAD.cats</code> ("A Winkel + wonen" … "E Afwijkende combinatie"). Een losse letter zegt niets zonder de naam.</td></tr>
+      <tr><td>signaal.label</td><td>Signaal</td><td>Opties: <b>Leegstaand</b> · <b>In verbouwing</b>, dezelfde woorden als de labels op de kaart.</td></tr>
+      <tr><td>optie.aantal</td><td>{n}<span class="vh"> </span> + verborgen " panden"</td><td>Een schermlezer hoort dan "Leegstaand, 6 panden".</td></tr>
+      <tr><td>score.label</td><td>Score-index (/100) · veld: vanaf</td><td>Dezelfde schaal en naam als op de kaart en in "Open pand".</td></tr>
+      <tr><td>bouwjaar.label</td><td>Bouwjaar · velden: van · tot en met</td><td>Grenzen tellen mee. "Voor 1940" is "tot en met 1939". <b>Geen eenheid "jaar" achter het veld:</b> "1939 jaar" is een leeftijd en geen bouwjaar. De eenheid zit al in het woord (zie de vraag aan Nova).</td></tr>
+      <tr><td>oppervlakte.label</td><td>Oppervlakte (m²) · van · tot en met</td><td>Uit <code>totale_oppervlakte</code>.</td></tr>
+      <tr><td>vbo.label · adressen.label</td><td>Aantal VBO's · Aantal adressen</td><td>Ayman's woorden. Kort genoeg voor twee velden naast elkaar op 375.</td></tr>
+      <tr><td>bereik.hint</td><td>Op de werklijst: {min}–{max}</td><td>Onder elk getalveld, uit de lijst van deze maand. Zo zie je meteen dat "score vanaf 60" niets doet. Jaartallen zonder punt.</td></tr>
+      <tr><td>fout.score</td><td>Vul een score van 0 tot en met 100 in. Dit filter telt nu niet mee.</td><td rowspan="5">Bij het veld, met <code>aria-invalid="true"</code> en <code>aria-describedby</code>. Het filter staat uit, de andere filters werken door. Rood (4,68:1 licht, 5,19:1 donker), en de rand wordt dikker, zodat het niet alleen aan de kleur te zien is.</td></tr>
+      <tr><td>fout.bouwjaar</td><td>Vul een jaartal in, bijvoorbeeld 1939. Dit filter telt nu niet mee.</td></tr>
+      <tr><td>fout.oppervlakte</td><td>Vul een heel getal in, bijvoorbeeld 250. Dit filter telt nu niet mee.</td></tr>
+      <tr><td>fout.aantal</td><td>Vul een heel getal in, bijvoorbeeld 4. Dit filter telt nu niet mee.</td></tr>
+      <tr><td>fout.omgekeerd</td><td>Van is hoger dan tot en met. Dit filter telt nu niet mee.</td></tr>
+      <tr><td>sorteer.label</td><td>Sorteer op · opties: Score-index · Bouwjaar · Oppervlakte</td><td>VA-70.</td></tr>
+      <tr><td>volgorde.label</td><td>Volgorde · Score-index: Hoogste eerst / Laagste eerst · Bouwjaar: Oudste eerst / Nieuwste eerst · Oppervlakte: Grootste eerst / Kleinste eerst</td><td>De standaard staat steeds eerst. "Oplopend" zegt bij een bouwjaar niet of oud of nieuw bovenaan staat, "Oudste eerst" wel. Kies je een ander veld, dan springt de volgorde naar de standaard van dat veld.</td></tr>
+      <tr><td>chips.groep</td><td>Actieve filters</td><td><code>role="group"</code> met <code>aria-label</code>.</td></tr>
+      <tr><td>chip</td><td>Gemeente {gemeente} · Categorie {letter} · Leegstaand · In verbouwing · De 25 grootste gemeenten · Elders in Nederland · Score vanaf {n} · Bouwjaar {van}–{tm} · Bouwjaar vanaf {van} · Bouwjaar tot en met {tm} · Oppervlakte {van}–{tm} m² (ook vanaf / tot en met) · Aantal VBO's … · Aantal adressen …</td><td>Een × staat erachter (<code>aria-hidden</code>). Er is geen chip voor de sortering, want dat is geen filter.</td></tr>
+      <tr><td>chip.naam</td><td>Verwijder filter: {chip}</td><td>Toegankelijke naam, met de zichtbare tekst erin (WCAG 2.5.3).</td></tr>
+      <tr><td>wis</td><td>Wis alle filters</td><td>Achter de chips en in de lege lijst. Zet elk filter uit, ook de gemeente. De sortering blijft staan, want het zegt "filters".</td></tr>
+      <tr><td>leeg</td><td>Geen enkel pand op de werklijst van deze maand past bij deze filters. Verwijder hierboven een filter, of wis ze allemaal.</td><td>In plaats van de kaarten.</td></tr>
+      <tr><td>leeg.gemeente</td><td>Er staan geen panden uit {gemeente} op de werklijst van deze maand.</td><td>Ongewijzigd uit VA-39. Alleen als het adres een gemeente noemt die deze maand niet op de lijst staat (zie de vraag aan Nova).</td></tr>
+      <tr><td>werklijst.meta</td><td>{n} panden · {n_groot} uit de 25 grootste gemeenten · {n_rest} elders</td><td><b>Gewijzigd (VA-70):</b> "· gesorteerd op score-index" vervalt. Na "Sorteer op Bouwjaar" zou de regel iets onwaars zeggen, en het sorteerveld zegt het nu zelf.</td></tr>
+      <tr><td>foto.alt</td><td>Luchtfoto van {adres}</td><td>Het korte adres van de kaart, zoals <code>PAND_TEKST.alt</code>.</td></tr>
+      <tr><td>foto.laden</td><td><i>(geen tekst)</i></td><td>Een gestreept neutraal vlak. Veertig keer "laadt…" die tegelijk verschijnen en verdwijnen is ruis. De grote foto in "Open pand" houdt "De luchtfoto laadt…".</td></tr>
+      <tr><td>foto.mislukt</td><td>Luchtfoto kon niet laden</td><td>De kaartvorm van <code>PAND_TEKST.mislukt</code>. "Hieronder" past niet op de kaart, want de links staan in "Open pand".</td></tr>
+      <tr><td>foto.geenLocatie</td><td>Locatie onbekend</td><td>Er gaat geen verzoek uit (VA-71 criterium 6).</td></tr>
+      <tr><td>foto.bron</td><td>Luchtfoto's: Beeldmateriaal.nl, via PDOK · open data (CC BY 4.0).</td><td>Eén keer voor de hele lijst, direct boven de kaarten. Het meervoud van <code>PAND_TEKST.bron</code>, met dezelfde naamgeving. Verandert die na de NGR-controle van VA-62, dan verandert deze mee.</td></tr>
+    </tbody>
+  </table>
+  <p>Geen regel is Engels, en geen regel gebruikt het woord dat Nova op 6 november uitsloot. PDOK, BAG en Beeldmateriaal.nl zijn namen.</p>
+
+  <h2>4. De stand in het adres</h2>
+  <table class="tabel">
+    <thead><tr><th>Filter</th><th>Parameter</th><th>Waarden</th><th>Afwezig betekent</th></tr></thead>
+    <tbody>
+      <tr><td>Gemeente</td><td><code>gemeente</code></td><td>CBS-naam, zoals nu (VA-39)</td><td>alle gemeenten</td></tr>
+      <tr><td>Categorie</td><td><code>categorie</code></td><td><code>A,C</code>: letters A–E, met komma's, altijd in de volgorde A–E geschreven, kleine letters worden ook gelezen</td><td>uit</td></tr>
+      <tr><td>Signaal</td><td><code>signaal</code></td><td><code>leeg</code>, <code>verbouwing</code>, of <code>leeg,verbouwing</code></td><td>uit</td></tr>
+      <tr><td>Gebied</td><td><code>gebied</code></td><td><code>groot</code> of <code>elders</code>. Zijn beide aangevinkt, dan staat de parameter er niet, want dat is hetzelfde als uit.</td><td>beide</td></tr>
+      <tr><td>Score</td><td><code>min_score</code></td><td>heel getal 0–100</td><td>uit</td></tr>
+      <tr><td>Bouwjaar</td><td><code>bouwjaar_van</code>, <code>bouwjaar_tm</code></td><td>hele getallen, grenzen tellen mee</td><td>open</td></tr>
+      <tr><td>Oppervlakte</td><td><code>m2_van</code>, <code>m2_tm</code></td><td>hele getallen, zonder punt</td><td>open</td></tr>
+      <tr><td>VBO's · adressen</td><td><code>vbo_van</code>, <code>vbo_tm</code>, <code>adressen_van</code>, <code>adressen_tm</code></td><td>hele getallen</td><td>open</td></tr>
+      <tr><td>Sorteren</td><td><code>sorteer</code></td><td><code>bouwjaar</code> of <code>oppervlakte</code> (<code>score</code> wordt gelezen, maar niet geschreven)</td><td>score-index</td></tr>
+      <tr><td>Volgorde</td><td><code>richting</code></td><td><code>op</code> of <code>af</code>, alleen geschreven als het afwijkt van de standaard van het veld (score af, bouwjaar op, oppervlakte af)</td><td>de standaard</td></tr>
+    </tbody>
+  </table>
+  <p>Voorbeeld: <code>?gemeente=Leiden&amp;categorie=A,C&amp;signaal=leeg&amp;min_score=80&amp;bouwjaar_tm=1939&amp;sorteer=bouwjaar</code>. Zonder parameters is het de werklijst van vandaag, dus elke bestaande link blijft werken.</p>
+
+  <h2>5. Bouwnotities voor Ada</h2>
+  <ol>
+    <li><b>Opbouw.</b> Het blok <code>.filter</code> en <code>.filter-leeg</code> van VA-39 maakt plaats voor <code>.wl</code>, met daarin in deze volgorde: de balk (<code>.wl-knop</code>, <code>.wl-telling</code>, <code>.wl-sorteer</code>), het paneel (<code>.wl-paneel</code>), de actieve filters (<code>.wl-chips</code>), de bronregel (<code>.wl-bron</code>), de lege lijst (<code>.wl-leeg</code>), <code>#leads</code> en <code>.schildwacht</code>. De regel <code>#gemeente-uitkomst</code> vervalt, want de telling vervangt hem. De tabvolgorde volgt de leesvolgorde: Filters, Sorteer op, Volgorde, het paneel, de chips, de kaarten. Neem de CSS tussen "WERKLIJSTFILTERS" en het einde van "KAART MET LUCHTFOTO" over. Smal of breed hangt af van de breedte van de werklijst (<code>container: wl</code>, <code>kaart</code>) en niet van het scherm. Het kantoorblok doet dat al zo.</li>
+    <li><b>Tekst uit Python, getallen uit het script.</b> Alle labels, foutmeldingen en sjablonen komen uit één nieuw <code>PAYLOAD.werklijstfilter</code>, met de hints al ingevuld. Hoeveel panden een combinatie geeft, kan Python niet vooraf maken. Daarom vult het script alleen <code>{n}</code> en <code>{totaal}</code> in, met de bestaande <code>nl()</code>, en kiest het enkelvoud of 0 uit vormen die Python levert. Dat is de enige afwijking van LESSONS (VA-31). Een test in <code>tests/</code> controleert dat elk sjabloon precies de verwachte plaatshouders heeft. <b>Jaartallen gaan nooit door <code>nl()</code>:</b> <code>(1939).toLocaleString("nl-NL")</code> geeft "1.939". In chips en hints komt een jaartal er onbewerkt in.</li>
+    <li><b>Payload.</b> De kaart heeft <code>grote_gemeente</code> nodig. In de VA-39-payload van 12 november staat dat veld niet per pand (de sleutels zijn <code>a adr bj cat detail f g id m2 ob p r raw s100 sig vbo wp</code>). Voeg een korte sleutel toe (<code>gg: 1/0</code>), of leid hem af uit de groepen van <code>PAYLOAD.filter</code>. Filter op het signaal via <code>sig[].k</code> (<code>leeg</code>, <code>bouw</code>), nooit via de getoonde tekst. Zet de toename van de payload in de close-out.</li>
+    <li><b>Filteren.</b> Tussen filters geldt EN, binnen een lijstfilter OF (Nova's regels). Bij een getalfilter valt een pand zonder waarde weg zolang er een grens staat. Het aantal bij een optie zijn de panden die alle <i>andere</i> filters halen en die optie hebben, en dat geldt voor categorie, signaal, gebied en gemeente. Reken alles in de browser: 500 × 4 is niets. Een optie met 0 krijgt <code>.nul</code> en <b>nooit <code>disabled</code></b>. Een uitgeschakeld vakje dat al aangevinkt is, kun je niet meer uitvinken, en Tab slaat het over.</li>
+    <li><b>Getalvelden.</b> Gebruik <code>&lt;input type="text" inputmode="numeric" autocomplete="off" enterkeyhint="done"&gt;</code>, niet <code>type="number"</code>. Dat type geeft bij "abc" een lege waarde, zodat de melding van VA-69 criterium 5 niet kan, en het scrolwiel verandert de waarde ongemerkt. Gebruik lettergrootte 16 px, anders zoomt iOS in. Punten en spaties worden weggehaald ("1.200" wordt 1200). Een komma of letter is ongeldig. Pas het filter toe 400 ms na de laatste toets en meteen bij <code>change</code>. Vakjes en selects gelden meteen.</li>
+    <li><b>Adres.</b> Lees bij het laden met <code>URLSearchParams</code>. Een onbekende waarde valt weg en de rest geldt (<code>categorie=A,X</code> wordt A). Een ongeldig getal laat het veld leeg. Staat van hoger dan tot en met, dan krijgen de velden de waarden en de melding, net als bij typen. Schrijf met <code>history.replaceState</code>, zoals de gemeente nu (VA-68 criterium 9). Schrijf de parameters in de volgorde van de tabel, met letterlijke komma's (<code>encodeURIComponent(v).replace(/%2C/g, ",")</code>), alleen wat echt meetelt, en laat andere parameters en de <code>#hash</code> staan. Het voorbeeld hierboven doet precies dit, in <code>leesAdres</code> en <code>schrijfAdres</code>.</li>
+    <li><b>Paneel.</b> Het staat open als het scherm 801 px of breder is (<code>matchMedia</code>, dezelfde grens als het menu van VA-63), en anders dicht. Dat is geen adresstand. Escape in het paneel klapt het op smal dicht, net als "Toon {n} panden", en de focus gaat terug naar "Filters". Het paneel is een gewoon blok onder de knop, zonder val voor de focus en zonder scrollslot.</li>
+    <li><b>Focus.</b> Verwijder je een chip, dan gaat de focus naar de volgende chip, anders naar de vorige, en anders naar "Filters". "Wis alle filters" zet de focus op "Filters". Na een filterwijziging scrolt de pagina niet. De telling wordt voorgelezen, de aantallen per optie niet (te druk).</li>
+    <li><b>Kaarten opnieuw tekenen.</b> Houd de kaarten bij in een <code>Map</code> op <code>id</code>, en hang bij een filter of sortering de bestaande kaart terug in plaats van een nieuwe te bouwen. Dan is het dezelfde <code>&lt;img&gt;</code> en gaat er geen tweede verzoek naar PDOK, ongeacht de cache-headers (VA-71 criterium 3). Begin bij elke wijziging bij de eerste 40 en laad de rest bij het scrollen, zoals <code>teken()</code> nu.</li>
+    <li><b>Luchtfoto.</b> Python levert <code>PLEK.mini</code>: hetzelfde sjabloon als <code>PLEK.foto</code> (zelfde WMS, laag <code>Actueel_orthoHR</code> en BBOX <code>{b}</code> van 80 m), met <code>WIDTH=200&amp;HEIGHT=200</code>. Nova mat 9–11 KB. Het beeld is 100 × 100 op een brede kaart en 84 × 84 op een kaart smaller dan 380 px, met één URL voor beide. Maak de <code>img</code> met de DOM. Zet <code>loading="lazy"</code>, <code>decoding="async"</code>, <code>width</code>, <code>height</code>, <code>alt</code> en beide luisteraars <i>vóór</i> <code>src</code>. Bij <code>load</code> wordt het <code>.geladen</code> (met het kleine merkteken in het midden). Bij <code>error</code> haal je de <code>img</code> weg en wordt het <code>.mislukt</code>, met de tekst pas op dat moment. Het vlak heeft een vaste maat, dus er verschuift niets. De <code>img</code> is niet focusbaar en niet in een link gewikkeld. Een klik erop opent het pand, want de kaartklik van VA-61 sluit alleen <code>a, summary, details, button</code> uit. Zonder x/y: geen <code>img</code>, maar <code>.geen</code> met "Locatie onbekend".</li>
+    <li><b>Controlecijfers</b> voor de test van VA-68/69 en de close-out, uit de VA-39-payload van 12 november (500 panden). Bij een andere payload moeten de cijfers opnieuw geteld worden. <code>categorie=D</code> 0 · <code>categorie=A,C</code> 488 · <code>signaal=leeg</code> 6 · <code>signaal=verbouwing</code> 220 · <code>signaal=leeg,verbouwing</code> 221 · <code>gebied=groot</code> 450 · <code>gebied=elders</code> 50 · <code>gemeente=Leiden&amp;categorie=A&amp;signaal=leeg</code> 0 · <code>gemeente=Amsterdam&amp;categorie=C&amp;signaal=verbouwing</code> 43 · <code>min_score=80</code> 3 · <code>bouwjaar_tm=1939</code> 499 · <code>bouwjaar_van=1850&amp;bouwjaar_tm=1900</code> 133 · <code>min_score=75&amp;m2_van=500</code> 52 · <code>categorie=A,C&amp;signaal=verbouwing&amp;bouwjaar_tm=1939</code> 207.</li>
+    <li><b>Contrast (gemeten).</b> Alle nieuwe tekst gebruikt <code>--ink-2</code>, niet <code>--muted</code>: 7,73:1 licht en 9,72:1 donker op <code>--surface</code>, en 6,00:1 en 7,81:1 op het grijze fotovlak. <code>--muted</code> haalt als tekst maar 3,50:1. Als rand van de invoervelden is het genoeg (1.4.11 vraagt 3:1). Rood 4,68:1 en 5,19:1. De focusring <code>--s1</code> haalt 4,30:1 en 4,79:1 tegen <code>--surface</code>. Het bolletje met het aantal is <code>--ink</code> op <code>--surface</code>. De categoriekleuren staan alleen in vlakjes, niet achter tekst. VA-67 verandert dus niets aan dit blok.</li>
+  </ol>
+
+  <h2>6. Overwogen en niet gekozen</h2>
+  <ul>
+    <li><b>Een zijpaneel op 1280.</b> Het kost de kaarten 260 px, zodat ze ongeveer 350 px breed worden. Op 375 moet het toch iets anders worden, en dan heb je twee ontwerpen.</li>
+    <li><b>Een lade of venster op de telefoon.</b> Het menu is daar al een lade (VA-63). Een tweede overlay heeft een focusval en een scrollslot nodig, en dat heeft een blok dat inklapt niet.</li>
+    <li><b>Een balk die blijft staan bij het scrollen.</b> Die kost 48 px van een scherm van 667 px, bovenop de bovenbalk van 56 px.</li>
+    <li><b>Schuifjes voor de getallen.</b> Daarmee stel je "tot en met 1939" onnauwkeurig in, twee duimen zijn lastig met het toetsenbord, en je hebt een zelfgebouwd onderdeel of een afhankelijkheid nodig.</li>
+    <li><b>Eén select "Score, hoogste eerst" … (zes keuzes).</b> Dat is compacter, maar VA-70 vraagt een keuze voor het veld en een aparte voor de volgorde.</li>
+    <li><b>De foto als brede strook boven de kaart.</b> Die duwt de cijfers omlaag (VA-71 criterium 9), en met hooguit 240 px zou hij op een kaart van 474 px uitgerekt worden.</li>
+    <li><b>Zoeken op adres:</b> Ayman koos het niet.</li>
+  </ul>
+  <p>Gezocht in Rejected en Icebox van <code>BACKLOG.md</code>, in <code>TOEKOMSTVERBETERINGEN.md</code> en in <code>JOURNAL.md</code> naar filter, sorteren, foto en zoeken. Ik vond niets dat al eens geprobeerd en verworpen is. De enige eerdere regel is VA-62 criterium 3 (PDOK pas bij het openen van een pand). VA-71 vervangt die op Ayman's verzoek alleen voor de kaarten. Dit project heeft geen zolder voor oude ontwerpen, en dit bestand vervangt er geen.</p>
+</div>
+
+<script>
+/* ======================================================================
+   ONTWERP-SCRIPT. Logica om na te bouwen, tekst om uit Python te halen (bouwnotitie 2).
+   DATA: per pand [adres, regel, gemeente, grote_gemeente, bouwjaar, m2, vbo, adressen,
+   categorieën, signalen (l = leegstaand, b = verbouwing), score100, bag-id], in werklijstvolgorde.
+   ====================================================================== */
+const DATA = [["Hippolytusbuurt 1","2611HK Delft","Delft",0,1860,686,8,8,"ACE","bl",92,"0503100000026198"],["Vughterstraat 54","5211GK 's-Hertogenbosch","'s-Hertogenbosch",1,1890,726,7,6,"AC","bl",85,"0796100000279071"],["Kerkplein 24","6367ER Voerendaal","Voerendaal",0,1920,956,8,8,"ABCE","bl",81,"0986100000489031"],["Dorpsstraat 17","2935AE Ouderkerk aan den IJssel · gemeente Krimpenerwaard","Krimpenerwaard",0,1800,791,8,6,"ACE","b",77,"0644100002060945"],["Kattenburg 51","6651AM Druten","Druten",0,1785,717,5,4,"ACE","b",77,"0225100000000446"],["Houttil 7A","1811JL Alkmaar","Alkmaar",0,1937,591,7,6,"ACE","b",77,"0361100000105402"],["Albert Cuypstraat 90-1","1072CX Amsterdam","Amsterdam",1,1890,782,10,9,"ABCE","b",77,"0363100012157076"],["Stationsweg 31","7251EL Vorden · gemeente Bronckhorst","Bronckhorst",0,1920,725,6,5,"ACE","b",77,"1876100000012798"],["Hogeweg 2-1","1098CB Amsterdam","Amsterdam",1,1898,261,3,3,"AE","b",77,"0363100012166980"],["Wouwermanstraat 12","2525KT 's-Gravenhage","'s-Gravenhage",1,1910,456,6,6,"ACE","b",77,"0518100000231245"],["Loeff Berchmakerstraat 1A","3512AM Utrecht","Utrecht",1,1920,272,4,3,"ABE","b",77,"0344100000078290"],["Sint Annendwarsstraat 1A","1012HC Amsterdam","Amsterdam",1,1905,572,4,3,"ABE","b",77,"0363100012171874"],["Meeuwenlaan 140A","1025LN Amsterdam","Amsterdam",1,1934,656,4,4,"AE","b",77,"0363100012148098"],["Grootzand 85","8601AV Sneek · gemeente Súdwest-Fryslân","Súdwest-Fryslân",0,1853,399,4,3,"ABCE","b",77,"0091100000018394"],["Edisonstraat 86","2561BH 's-Gravenhage","'s-Gravenhage",1,1907,475,4,3,"AE","b",77,"0518100000219254"],["Markstraat 16","4844CR Terheijden · gemeente Drimmelen","Drimmelen",0,1900,390,4,4,"ACE","b",77,"1719100000002014"],["Kloosterkade 137","2628JK Delft","Delft",0,1928,507,8,8,"ACE","b",77,"0503100000021163"],["Amsterdamsestraatweg 305","3551CH Utrecht","Utrecht",1,1929,396,3,3,"AE","b",77,"0344100000047367"],["Oosthavenkade 92","3134KA Vlaardingen","Vlaardingen",0,1893,783,3,3,"ABE","b",77,"0622100000056132"],["Haarlemmerstraat 123","2312DH Leiden","Leiden",1,1750,561,6,6,"ABCE","b",77,"0546100000037540"],["Achter de Dom 8","3512JP Utrecht","Utrecht",1,1900,219,3,3,"ABE","b",77,"0344100000017458"],["Bloemendalsestraat 15","3811WL Amersfoort","Amersfoort",1,1750,411,4,4,"AE","b",77,"0307100000357558"],["Steenstraat 32","4561AS Hulst","Hulst",0,1910,320,4,4,"ABE","b",77,"0677100000601847"],["Oliestraat 16b","5361GP Grave · gemeente Land van Cuijk","Land van Cuijk",0,1720,673,5,4,"ACE","b",77,"0786100000007990"],["Arnhemseweg 5E","3811NN Amersfoort","Amersfoort",1,1937,502,8,8,"ABCE","b",77,"0307100000355990"],["Skilpaed 13","9035AL Dronryp · gemeente Waadhoeke","Waadhoeke",0,1926,449,4,4,"ACE","b",77,"0083100000006694"],["Molenstraat 13","5341GA Oss","Oss",0,1880,482,3,3,"AE","b",77,"0828100001489496"],["Kerkbrink 27","3621AN Breukelen · gemeente Stichtse Vecht","Stichtse Vecht",0,1800,397,4,3,"ABE","b",77,"0311100000005756"],["Javastraat 11-H","1094GX Amsterdam","Amsterdam",1,1905,531,5,5,"ACE","b",77,"0363100012160251"],["Zuid Willemsvaart 579","5211SJ 's-Hertogenbosch","'s-Hertogenbosch",1,1920,748,8,7,"ACE","b",77,"0796100000237045"],["Brouwerijstraat 9","4531EP Terneuzen","Terneuzen",0,1901,533,4,3,"AE","b",77,"0715100000019673"],["Jan Evertsenstraat 83-1","1057BR Amsterdam","Amsterdam",1,1927,509,9,9,"ACE","b",77,"0363100012119877"],["Willem Eggertstraat 10","1441CJ Purmerend","Purmerend",0,1891,255,4,3,"ACE","b",77,"0439100000007755"],["B.P. Hofstedestraat 11","7551CS Hengelo · gemeente Hengelo (O.)","Hengelo (O.)",0,1910,770,6,6,"ACE","b",77,"0164100000015852"],["Oranjelaan 34","2741ER Waddinxveen","Waddinxveen",0,1937,587,5,4,"AE","b",77,"0627100000010655"],["Schoolstraat 1","1261EV Blaricum","Blaricum",0,1920,380,3,3,"AE","b",77,"0376100000006483"],["Toussaintkade 20","2513CJ 's-Gravenhage","'s-Gravenhage",1,1880,436,4,4,"AE","b",77,"0518100000296933"],["Rodenrijselaan 43A","3037XD Rotterdam","Rotterdam",1,1910,538,6,5,"ACE","b",77,"0599100000668438"],["Bredesteeg 2","8011PD Zwolle","Zwolle",1,1832,305,3,3,"A","l",77,"0193100000042447"],["Vlierboomstraat 500","2564JM 's-Gravenhage","'s-Gravenhage",1,1931,555,6,6,"ABCE","b",77,"0518100000321476"],["Choorstraat 20","3511KM Utrecht","Utrecht",1,1450,390,6,5,"ABCE","b",77,"0344100000036831"],["Catharinastraat 44A","4811XJ Breda","Breda",1,1800,316,3,3,"AE","b",77,"0758100000058395"],["Albert Cuypstraat 46-1","1072CV Amsterdam","Amsterdam",1,1884,363,9,9,"ACE","b",77,"0363100012237062"],["St. Plechelmusplein 13","7571EG Oldenzaal","Oldenzaal",0,1928,535,3,3,"AE","b",77,"0173100000141177"],["Rosmarijnsteeg 11","1012RP Amsterdam","Amsterdam",1,1750,590,9,9,"ACE","b",77,"0363100012165112"],["Langstraat 55","3771BC Barneveld","Barneveld",0,1930,361,4,4,"ACE","b",77,"0203100000435863"],["Mulderstraat 2A","3581GR Utrecht","Utrecht",1,1900,631,8,8,"ABCE","b",77,"0344100000058302"],["Havenpark 28","4301CD Zierikzee · gemeente Schouwen-Duiveland","Schouwen-Duiveland",0,1800,306,3,3,"AE","b",77,"1676100000462197"],["Bovenste straat 36","6101EL Echt · gemeente Echt-Susteren","Echt-Susteren",0,1900,685,9,9,"ACE","b",77,"1711100000020009"],["Dierenselaan 50","2573KJ 's-Gravenhage","'s-Gravenhage",1,1933,688,8,8,"ABCE","b",77,"0518100000222377"],["Houtplein 10-RD","2012DG Haarlem","Haarlem",1,1880,611,4,4,"ABE","b",77,"0392100000018765"],["Laan van Nieuw-Guinea 15","3531JA Utrecht","Utrecht",1,1926,573,5,5,"ABCE","b",77,"0344100000068629"],["Weimarstraat 334","2562HT 's-Gravenhage","'s-Gravenhage",1,1911,580,5,5,"ABCE","b",77,"0518100000315744"],["Vissershavenweg 55B","2583DL 's-Gravenhage","'s-Gravenhage",1,1929,770,6,6,"ABCE","b",77,"0518100000267979"],["Tuinen 42","8911KE Leeuwarden","Leeuwarden",1,1860,619,4,3,"ABE","b",77,"0080100000366656"],["Ginnekenweg 20","4818JE Breda","Breda",1,1901,235,3,3,"ABE","b",77,"0758100000003409"],["Goudenregenplein 3","2565ES 's-Gravenhage","'s-Gravenhage",1,1921,360,4,4,"ABE","b",77,"0518100000268250"],["Nieuwstraat 38","3743BL Baarn","Baarn",0,1913,241,4,3,"ACE","b",77,"0308100000011725"],["Abdijstraat 45","5473AC Heeswijk-Dinther · gemeente Bernheze","Bernheze",0,1890,652,3,3,"AE","b",77,"1721100000003648"],["Heerenweg 201","1851KP Heiloo","Heiloo",0,1939,553,6,4,"ACE","b",77,"0399100000004031"],["Haarlemmerstraat 60","2312GC Leiden","Leiden",1,1650,265,3,3,"AE","b",77,"0546100000037902"],["Springweg 14","3511VP Utrecht","Utrecht",1,1250,477,8,5,"ABCE","b",77,"0344100000017472"],["Buurkerkhof 13","3511LR Utrecht","Utrecht",1,1450,218,4,3,"ABCE","b",77,"0344100000061759"],["Lange Hezelstraat 46","6511CL Nijmegen","Nijmegen",1,1881,217,3,3,"AE","b",77,"0268100000009948"],["Da Costakade 28-1","1052SJ Amsterdam","Amsterdam",1,1901,437,6,6,"ABCE","b",77,"0363100012081167"],["Markt 11","3142GE Maassluis","Maassluis",0,1700,677,7,5,"ACE","b",77,"0556100000011920"],["Stationsstraat 23","6221BN Maastricht","Maastricht",1,1886,510,10,10,"ACE","b",77,"0935100000024098"],["Fahrenheitstraat 517","2561DA 's-Gravenhage","'s-Gravenhage",1,1906,412,3,3,"AE","b",77,"0518100000272347"],["Hoogstraat 34","4201CE Gorinchem","Gorinchem",0,1900,500,8,8,"ACE","b",77,"0512100000041156"],["Oostenburgergracht 5-1","1018NA Amsterdam","Amsterdam",1,1874,599,7,7,"ABCE","b",77,"0363100012170327"],["Plaats 22","2513AE 's-Gravenhage","'s-Gravenhage",1,1825,695,4,4,"ABCE","b",77,"0518100000315433"],["Kalverstraat 113","1012PA Amsterdam","Amsterdam",1,1779,431,4,4,"ABE","b",77,"0363100012175632"],["Regentesseplein 228","2562EZ 's-Gravenhage","'s-Gravenhage",1,1900,381,7,7,"ACE","b",77,"0518100000316267"],["Westzijde 72","1506EG Zaandam · gemeente Zaanstad","Zaanstad",1,1910,327,3,3,"ABE","b",77,"0479100000082712"],["Kersstraat 11","4531EV Terneuzen","Terneuzen",0,1860,325,6,6,"ACE","b",77,"0715100000022195"],["Zoutkeetsgracht 366","1013LC Amsterdam","Amsterdam",1,1881,392,8,8,"ACE","b",77,"0363100012156331"],["Hoofdstraat 11","7011AA Gaanderen · gemeente Doetinchem","Doetinchem",0,1938,490,3,3,"ABE","b",77,"0222100000695045"],["Korte Houtstraat 10B","2511CD 's-Gravenhage","'s-Gravenhage",1,1825,467,4,4,"AE","b",77,"0518100000283151"],["Jan van der Heijdenstraat 10","2522EP 's-Gravenhage","'s-Gravenhage",1,1924,563,8,8,"ACE","b",77,"0518100000353205"],["Schoterweg 43","2021HZ Haarlem","Haarlem",1,1900,271,4,3,"ABCE","b",77,"0392100000066478"],["Midstraat 89","8501AG Joure · gemeente De Fryske Marren","De Fryske Marren",0,1870,400,3,3,"AE","b",77,"0051100001219458"],["Linnaeusstraat 279","2522GN 's-Gravenhage","'s-Gravenhage",1,1933,530,5,5,"ACE","b",77,"0518100000316972"],["Appelgaard 9","3971GZ Driebergen-Rijsenburg · gemeente Utrechtse Heuvelrug","Utrechtse Heuvelrug",0,1930,309,3,3,"ABE","b",77,"1581100000041085"],["Dorstige Hartsteeg 1A","3512NV Utrecht","Utrecht",1,1450,688,4,3,"ABE","b",77,"0344100000079720"],["Waddenweg 3","1025PR Amsterdam","Amsterdam",1,1932,326,5,5,"ACE","b",77,"0363100012105421"],["Breestraat 156","2311CX Leiden","Leiden",1,1650,360,6,6,"ACE","b",77,"0546100000042266"],["Mariaplaats 8A","3511LH Utrecht","Utrecht",1,1900,349,5,4,"ACE","b",77,"0344100000033798"],["Hippolytusbuurt 3","2611HM Delft","Delft",0,1740,745,3,3,"AE","b",77,"0503100000026196"],["Transvaalkade 75-1","1092JS Amsterdam","Amsterdam",1,1929,246,5,5,"ABCE","b",77,"0363100012154316"],["Dorpsstraat 63","1901EJ Castricum","Castricum",0,1900,419,4,3,"ABCE","b",77,"0383100000016508"],["Gentsestraat 2a"," Biervliet · gemeente Terneuzen","Terneuzen",0,1910,412,4,4,"AE","b",77,"0715100000037219"],["Utrechtsestraat 27-1","1017VH Amsterdam","Amsterdam",1,1905,519,6,6,"ACE","b",77,"0363100012178885"],["Koorstraat 19","1811GM Alkmaar","Alkmaar",0,1920,400,6,6,"ACE","b",77,"0361100000014957"],["Noordeinde 152A","2514GR 's-Gravenhage","'s-Gravenhage",1,1902,348,4,4,"ACE","b",77,"0518100000334228"],["Vlierboomstraat 557","2564JH 's-Gravenhage","'s-Gravenhage",1,1932,556,6,6,"ACE","b",77,"0518100000268132"],["Korte Molenstraat 9a","5431DT Cuijk · gemeente Land van Cuijk","Land van Cuijk",0,1928,560,3,3,"AE","b",77,"1684100000004589"],["Czarinastraat 43","1506RE Zaandam · gemeente Zaanstad","Zaanstad",1,1920,340,3,3,"ABE","b",77,"0479100000007064"],["Hoogstraat 20","2801HH Gouda","Gouda",0,1905,482,6,4,"ACE","b",77,"0513100011123037"],["Oude Binnenweg 89A","3012JA Rotterdam","Rotterdam",1,1899,666,7,7,"ACE","b",77,"0599100000659402"],["Nieuwe Binnenweg 5-01","3014GA Rotterdam","Rotterdam",1,1894,388,6,4,"ACE","b",77,"0599100000655582"],["Damstraat 2-HL","1012JM Amsterdam","Amsterdam",1,1798,430,7,7,"ACE","b",77,"0363100012179176"],["Hasseltsestraat 35","2587GM 's-Gravenhage","'s-Gravenhage",1,1932,361,3,3,"ACE","b",77,"0518100000238919"],["Bosboom Toussaintstraat 47-2","1054AN Amsterdam","Amsterdam",1,1899,400,5,5,"ABCE","b",77,"0363100012156156"],["Midstraat 106","8501AT Joure · gemeente De Fryske Marren","De Fryske Marren",0,1910,336,3,3,"AE","b",77,"0051100001222642"],["Goudenregenplein 10","2565GJ 's-Gravenhage","'s-Gravenhage",1,1925,692,6,6,"ABCE","b",77,"0518100000280902"],["Willem II-straat 55","5038BD Tilburg","Tilburg",1,1900,635,3,3,"AE","b",77,"0855100000196087"],["Maandereind 32","6711AG Ede","Ede",1,1930,796,7,6,"ABCE","b",77,"0228100000013941"],["Waterstraat 96","4001AR Tiel","Tiel",0,1930,691,4,3,"ABE","b",77,"0281100000014115"],["Koningstraat 59","6811DH Arnhem","Arnhem",1,1901,409,8,8,"ACE","b",77,"0202100000204196"],["Bagijnhof 10","1671CB Medemblik","Medemblik",0,1910,485,3,3,"BE","b",73,"0420100000010526"],["Voortweg 29","5406VG Uden · gemeente Maashorst","Maashorst",0,1840,745,3,2,"BC","bl",73,"0856100000335131"],["Wijnstraat 83","3311BT Dordrecht","Dordrecht",1,1680,521,5,5,"BCE","b",73,"0505100000063600"],["'t Noard 21","8731BB Wommels · gemeente Súdwest-Fryslân","Súdwest-Fryslân",0,1910,607,4,3,"BE","b",73,"0140100000163440"],["Baarsjesweg 246-1","1058AB Amsterdam","Amsterdam",1,1926,473,8,8,"BCE","b",73,"0363100012110174"],["Nieuwe Haven 55A","3116AA Schiedam","Schiedam",0,1914,544,4,4,"BE","b",73,"0606100000016846"],["Westergeest 7","1791LJ Den Burg · gemeente Texel","Texel",0,1742,777,8,6,"BE","b",73,"0448100000013479"],["Lomanstraat 53-1","1075PV Amsterdam","Amsterdam",1,1914,277,5,4,"BCE","b",73,"0363100012122491"],["Lange Wijngaardstraat 14","2011RL Haarlem","Haarlem",1,1880,710,6,6,"BCE","b",73,"0392100000037102"],["Westersingel 27","8601GR Sneek · gemeente Súdwest-Fryslân","Súdwest-Fryslân",0,1908,623,3,3,"BE","b",73,"0091100000014561"],["Treilerweg 22","2583DC 's-Gravenhage","'s-Gravenhage",1,1938,558,5,5,"BCE","b",73,"0518100000334127"],["Rechthuisstraat 38","3072LK Rotterdam","Rotterdam",1,1903,497,9,9,"BCE","b",73,"0599100000666488"],["Molenstraat 202","4881GH Zundert","Zundert",0,1938,475,3,3,"BE","b",73,"0879100000010551"],["Ampèrestraat 85","3553CK Utrecht","Utrecht",1,1900,602,7,6,"BCE","b",73,"0344100000041101"],["Eijerdijk 87","8051MS Hattem","Hattem",0,1907,762,7,6,"BCE","b",73,"0244100000005322"],["Dorpsstraat 12","2712AK Zoetermeer","Zoetermeer",1,1950,361,3,3,"AC","bl",73,"0637100000154254"],["Denneweg 186","2514HH 's-Gravenhage","'s-Gravenhage",1,1883,246,3,3,"BE","b",73,"0518100000326055"],["Baarsjesweg 158-1","1057HM Amsterdam","Amsterdam",1,1922,576,7,6,"BCE","b",73,"0363100012116594"],["Van der Marckstraat 2","3554XK Utrecht","Utrecht",1,1931,287,4,4,"BCE","b",73,"0344100000027930"],["Heutzstraat 49A","5913AJ Venlo","Venlo",0,1920,662,9,9,"BE","b",73,"0983100000005068"],["Makassarstraat 1","3531VJ Utrecht","Utrecht",1,1925,703,4,3,"BE","b",73,"0344100000088995"],["Heemraadstraat 203T","2586SW 's-Gravenhage","'s-Gravenhage",1,1937,769,8,8,"BCE","b",73,"0518100000334669"],["Wolvenplein 25","3512CK Utrecht","Utrecht",1,1853,458,7,7,"BCE","b",73,"0344100000161442"],["Amsterdamsestraatweg 591","3553RG Utrecht","Utrecht",1,1920,712,8,8,"BCE","b",73,"0344100000029287"],["Plantage Muidergracht 113-1","1018TP Amsterdam","Amsterdam",1,1875,767,9,9,"BCE","b",73,"0363100012170830"],["Jacob van Lennepkade 137-1","1054ZK Amsterdam","Amsterdam",1,1899,516,8,8,"BCE","b",73,"0363100012236131"],["Lange Jufferstraat 40","3512EE Utrecht","Utrecht",1,1450,407,3,3,"BE","b",73,"0344100000045371"],["Boerhaaveplein 10","1091AS Amsterdam","Amsterdam",1,1920,414,5,5,"BCE","b",73,"0363100012085060"],["Wolvenplein 25","3512CK Utrecht","Utrecht",1,1853,513,5,5,"BCE","b",73,"0344100000161441"],["Doubletstraat 1","2512CH 's-Gravenhage","'s-Gravenhage",1,1910,684,7,6,"BCE","b",73,"0518100000315510"],["Boothstraat 21","3512BV Utrecht","Utrecht",1,1650,219,3,3,"BE","b",73,"0344100000001415"],["Vinkenburgstraat 18","3512AB Utrecht","Utrecht",1,1695,441,3,3,"BE","b",73,"0344100000005024"],["Keizersgracht 158-1","1015CX Amsterdam","Amsterdam",1,1721,734,8,8,"BCE","b",73,"0363100012176482"],["Calvariestraat 4","6211NJ Maastricht","Maastricht",1,1870,706,6,6,"BCE","b",73,"0935100000015891"],["Sint Nicolaasstraat 27A","1012NJ Amsterdam","Amsterdam",1,1924,591,6,6,"BCE","b",73,"0363100012168120"],["Den Helderstraat 13","2547SB 's-Gravenhage","'s-Gravenhage",1,1935,498,6,6,"BCE","b",73,"0518100000304286"],["Touwslagersstraat 4","1501CB Zaandam · gemeente Zaanstad","Zaanstad",1,1914,387,8,5,"BCE","b",73,"0479100000006206"],["Lange Jansstraat 22","3512BB Utrecht","Utrecht",1,1900,225,4,4,"ABCE","",69,"0344100000059553"],["Burgemeester Reigerstraat 2A","3581KR Utrecht","Utrecht",1,1929,352,5,5,"ABCE","",69,"0344100000022665"],["Van Baerlestraat 22-2","1071AX Amsterdam","Amsterdam",1,1909,702,5,5,"ABCE","",69,"0363100012236146"],["Oostzaanstraat 70","1013WN Amsterdam","Amsterdam",1,1916,598,9,9,"ACE","",69,"0363100012120378"],["Juliana van Stolberglaan 169","2595CD 's-Gravenhage","'s-Gravenhage",1,1923,432,5,5,"AC","b",69,"0518100000273627"],["Twijnstraat 9","3511ZG Utrecht","Utrecht",1,1900,485,3,3,"ABE","",69,"0344100000010499"],["Oudezijds Voorburgwal 272","1012HM Amsterdam","Amsterdam",1,1728,341,5,5,"ABCE","",69,"0363100012180220"],["Hagedoornweg 54","1031BT Amsterdam","Amsterdam",1,1925,420,5,5,"ACE","",69,"0363100012089598"],["Pieter Nieuwlandstraat 26","3514HJ Utrecht","Utrecht",1,1926,637,3,3,"ABE","",69,"0344100000005422"],["Poolmansweg 3","7545LL Enschede","Enschede",1,1928,356,4,4,"AE","",69,"0153100000248969"],["Cypresstraat 3","2565HK 's-Gravenhage","'s-Gravenhage",1,1923,795,6,6,"AC","b",69,"0518100000299070"],["Papengas 3A","6511WS Nijmegen","Nijmegen",1,1881,201,3,3,"AE","",69,"0268100000009949"],["Grote Markt 41","6511KB Nijmegen","Nijmegen",1,1877,687,3,3,"AE","",69,"0268100000047046"],["Voorstraat 48","3512AR Utrecht","Utrecht",1,1450,267,3,3,"ABE","",69,"0344100000041459"],["Dollebegijnensteeg 4","1012HD Amsterdam","Amsterdam",1,1787,519,9,8,"ACE","",69,"0363100012179017"],["Haarlemmerstraat 42","2312GB Leiden","Leiden",1,1850,472,3,3,"AE","",69,"0546100000036846"],["Dautzenbergstraat 100","2523KG 's-Gravenhage","'s-Gravenhage",1,1933,432,7,7,"ACE","",69,"0518100000296783"],["Middenweg 26-1A","1097BN Amsterdam","Amsterdam",1,1898,332,4,4,"AC","b",69,"0363100012164735"],["Bartholomeus Diazstraat 13","5223RH 's-Hertogenbosch","'s-Hertogenbosch",1,1930,491,6,6,"AE","",69,"0796100000211281"],["Kapelstraat 12","4841GH Prinsenbeek · gemeente Breda","Breda",1,1920,454,4,3,"AC","b",69,"0758100000083172"],["Korvelseweg 209","5025JE Tilburg","Tilburg",1,1911,558,8,6,"AC","b",69,"0855100000109543"],["Hasebroekstraat 1","3532GJ Utrecht","Utrecht",1,1930,788,4,4,"ABCE","",69,"0344100000003516"],["Hof 21","3811CA Amersfoort","Amersfoort",1,1800,367,4,4,"AE","",69,"0307100000362964"],["Haarlemmerstraat 35"," Leiden","Leiden",1,1850,704,8,8,"ACE","",69,"0546100000036944"],["Nieuwezijds Voorburgwal 266-1A","1012RS Amsterdam","Amsterdam",1,1773,489,7,7,"ABCE","",69,"0363100012167514"],["Driebergenstraat 339","2546BK 's-Gravenhage","'s-Gravenhage",1,1938,645,8,8,"ABCE","",69,"0518100000277425"],["Loosduinsekade 85","2571BR 's-Gravenhage","'s-Gravenhage",1,1934,709,7,7,"ACE","",69,"0518100000273528"],["Korte Poten 9","2511EB 's-Gravenhage","'s-Gravenhage",1,1919,668,4,4,"ABE","",69,"0518100000218128"],["Overtoom 226-1","1054HZ Amsterdam","Amsterdam",1,1899,510,9,9,"ABCE","",69,"0363100012235886"],["Blaricumseplein 15","2574SN 's-Gravenhage","'s-Gravenhage",1,1928,500,6,6,"ABCE","",69,"0518100000274714"],["Pieter Cornelisz. Hooftstraat 38A","1071BZ Amsterdam","Amsterdam",1,1904,754,5,5,"AC","b",69,"0363100012163825"],["Sint Aagtenstraat 2","2312CB Leiden","Leiden",1,1929,208,3,3,"AE","",69,"0546100000044180"],["Hekelsteeg 5","3511AK Utrecht","Utrecht",1,1600,646,3,3,"ABE","",69,"0344100000015125"],["Wittevrouwenstraat 38","3512CV Utrecht","Utrecht",1,1900,623,10,10,"ABCE","",69,"0344100000059010"],["Nieuwezijds Voorburgwal 72A","1012SE Amsterdam","Amsterdam",1,1905,743,7,7,"ACE","",69,"0363100012170997"],["Amsterdamsestraatweg 52-BS","3513AG Utrecht","Utrecht",1,1920,313,3,3,"AE","",69,"0344100000059390"],["Nachtegaalstraat 73","3581AE Utrecht","Utrecht",1,1928,532,4,4,"ABCE","",69,"0344100000016150"],["De Ruijterweg 9","2014AT Haarlem","Haarlem",1,1935,333,4,3,"ABE","",69,"0392100000022865"],["Torenstraat 146","2513BW 's-Gravenhage","'s-Gravenhage",1,1928,729,6,6,"ACE","",69,"0518100000223496"],["Frederikstraat 50","2514LL 's-Gravenhage","'s-Gravenhage",1,1875,566,5,5,"ACE","",69,"0518100000209981"],["Eerste Helmersstraat 279","1054EA Amsterdam","Amsterdam",1,1912,557,8,8,"ABCE","",69,"0363100012236994"],["Vughterstraat 106","5211GL 's-Hertogenbosch","'s-Hertogenbosch",1,1664,280,3,3,"AE","",69,"0796100000278930"],["Breedstraat 116","2513TT 's-Gravenhage","'s-Gravenhage",1,1928,308,6,6,"ABCE","",69,"0518100000279799"],["Voorstraat 87","3512AL Utrecht","Utrecht",1,1920,451,7,7,"ABCE","",69,"0344100000056506"],["Damstraat 24","3531BV Utrecht","Utrecht",1,1915,205,3,3,"ABE","",69,"0344100000044974"],["Haverstraatpassage 72","7511EX Enschede","Enschede",1,1899,575,9,9,"ACE","",69,"0153100000211596"],["Bilderdijkstraat 116-1","1053KZ Amsterdam","Amsterdam",1,1902,351,4,4,"AC","b",69,"0363100012157154"],["Laan van Nieuw-Guinea 30","3531JK Utrecht","Utrecht",1,1924,340,3,3,"ABE","",69,"0344100000031943"],["Bos en Lommerweg 141","1055DR Amsterdam","Amsterdam",1,1934,614,8,8,"ACE","",69,"0363100012140780"],["Asselsestraat 61","7311ED Apeldoorn","Apeldoorn",1,1905,604,5,5,"ABCE","",69,"0200100000084477"],["Stuyvesantstraat 50","2593GN 's-Gravenhage","'s-Gravenhage",1,1923,519,6,5,"AC","b",69,"0518100000288937"],["Koolemans Beynenstraat 101","6521ET Nijmegen","Nijmegen",1,1927,692,7,7,"ABCE","",69,"0268100000025065"],["Spui 169","2511BM 's-Gravenhage","'s-Gravenhage",1,1600,573,7,5,"AC","b",69,"0518100000232376"],["Nieuwezijds Voorburgwal 314A","1012VR Amsterdam","Amsterdam",1,1720,507,8,8,"ABCE","",69,"0363100012175589"],["Pletterijstraat 168","2515AZ 's-Gravenhage","'s-Gravenhage",1,1910,579,6,6,"AC","b",69,"0518100000270830"],["Breestraat 57","2311CJ Leiden","Leiden",1,1630,310,4,4,"AC","b",69,"0546100000042923"],["Pieter Cornelisz. Hooftstraat 122-1","1071CD Amsterdam","Amsterdam",1,1876,307,3,3,"A","b",69,"0363100012157039"],["Ginnekenweg 55","4818JB Breda","Breda",1,1900,587,3,3,"AE","",69,"0758100000014796"],["Stationsstraat 10a","5038ED Tilburg","Tilburg",1,1912,481,3,3,"AE","",69,"0855100000047152"],["Adriaen van Ostadelaan 12","3583AJ Utrecht","Utrecht",1,1924,449,5,5,"ABCE","",69,"0344100000057502"],["Klein Schavernek 26","8911DC Leeuwarden","Leeuwarden",1,1880,259,3,3,"ABE","",69,"0080100000363275"],["Reitzstraat 203A","2571RM 's-Gravenhage","'s-Gravenhage",1,1905,327,4,4,"AE","",69,"0518100000314985"],["Damstraat 64","3531BW Utrecht","Utrecht",1,1918,335,7,7,"ABCE","",69,"0344100000055332"],["Voorstraat 22","3512AN Utrecht","Utrecht",1,1450,576,4,4,"ABCE","",69,"0344100000019251"],["Hartenstraat 16-1","1016CB Amsterdam","Amsterdam",1,1758,799,5,5,"ABCE","",69,"0363100012177482"],["Rechtstraat 88A","6221EL Maastricht","Maastricht",1,1800,520,5,5,"ACE","",69,"0935100000022431"],["Tweede Hugo de Grootstraat 20","1052LD Amsterdam","Amsterdam",1,1890,335,6,6,"ACE","",69,"0363100012152390"],["Driebergenstraat 371","2546AN 's-Gravenhage","'s-Gravenhage",1,1938,690,7,7,"ACE","",69,"0518100000270323"],["Assendorperstraat 174-3","8012CE Zwolle","Zwolle",1,1899,425,3,3,"AE","",69,"0193100000026435"],["Lange Lauwerstraat 26","3512VJ Utrecht","Utrecht",1,1930,314,4,3,"ABCE","",69,"0344100000083952"],["Zijlweg 57","2013DC Haarlem","Haarlem",1,1890,454,4,4,"ACE","",69,"0392100000029976"],["Nieuwe Binnenweg 309","3021GH Rotterdam","Rotterdam",1,1895,257,3,3,"AE","",69,"0599100000655472"],["Elandstraat 91","2513GM 's-Gravenhage","'s-Gravenhage",1,1900,375,3,3,"ABE","",69,"0518100000268359"],["Ceintuurbaan 400-1","1073EN Amsterdam","Amsterdam",1,1882,315,4,4,"AC","b",69,"0363100012152704"],["Oudegracht 65","3511AD Utrecht","Utrecht",1,1900,514,4,4,"ABCE","",69,"0344100000020034"],["Westzijde 77B","1506ED Zaandam · gemeente Zaanstad","Zaanstad",1,1889,533,4,4,"AE","",69,"0479100000005830"],["Ruysdaelkade 119-1","1072AP Amsterdam","Amsterdam",1,1892,279,4,4,"AC","b",69,"0363100012161177"],["Laan van Nieuw-Guinea 100","3531JN Utrecht","Utrecht",1,1926,589,3,3,"ABCE","",69,"0344100000067099"],["Tollensstraat 73A","3035ND Rotterdam","Rotterdam",1,1884,442,6,6,"ACE","",69,"0599100000757328"],["Prinsestraat 23","2513CA 's-Gravenhage","'s-Gravenhage",1,1913,540,6,6,"ACE","",69,"0518100000355132"],["Van Baerlestraat 3-1","1071AL Amsterdam","Amsterdam",1,1913,466,4,4,"ABE","",69,"0363100012069703"],["Werfpad 3D","5212VJ 's-Hertogenbosch","'s-Hertogenbosch",1,1910,475,5,5,"ACE","",69,"0796100000217108"],["Amsterdamsestraatweg 63","3513AB Utrecht","Utrecht",1,1903,343,3,3,"ABE","",69,"0344100000034782"],["Soestdijksekade 254","2574AW 's-Gravenhage","'s-Gravenhage",1,1927,745,10,10,"ABCE","",69,"0518100000304958"],["Amsterdamsestraatweg 101","3513AC Utrecht","Utrecht",1,1913,508,9,9,"ABCE","",69,"0344100000016511"],["Eerste Constantijn Huygensstraat 5-1","1054BN Amsterdam","Amsterdam",1,1895,345,5,5,"AC","b",69,"0363100012161875"],["Kromme Elleboog 11","3311NE Dordrecht","Dordrecht",1,1900,340,4,4,"ABE","",69,"0505100000015784"],["Rosseelsstraat 105","2524BE 's-Gravenhage","'s-Gravenhage",1,1932,254,4,4,"ACE","",69,"0518100000337427"],["Oude Kijk in 't Jatstraat 1a","9712CK Groningen","Groningen",1,1650,506,4,4,"ABE","",69,"0014100010906505"],["Achtergracht 14","1381BN Weesp · gemeente Amsterdam","Amsterdam",1,1930,477,3,3,"AE","",69,"0457100000058575"],["Overtoom 66-1","1054HL Amsterdam","Amsterdam",1,1903,273,3,3,"AE","",69,"0363100012157517"],["Kinkerstraat 368-1","1053GH Amsterdam","Amsterdam",1,1902,304,6,6,"AC","b",69,"0363100012163986"],["Overtoom 360","1054JG Amsterdam","Amsterdam",1,1904,327,3,3,"AE","",69,"0363100012154204"],["Rotterdamse Rijweg 9","3043BE Rotterdam","Rotterdam",1,1936,734,3,3,"ABE","",69,"0599100000669312"],["De Rijpstraat 134","1055VP Amsterdam","Amsterdam",1,1924,394,8,8,"ACE","",69,"0363100012121980"],["Cornelis Krusemanstraat 25-1","1075NC Amsterdam","Amsterdam",1,1923,279,4,4,"AC","b",69,"0363100012073013"],["Tuinstraat 2A","6828BG Arnhem","Arnhem",1,1890,397,4,4,"ABE","",69,"0202100000206287"],["Rijswijkseweg 536","2516HT 's-Gravenhage","'s-Gravenhage",1,1924,547,6,6,"ACE","",69,"0518100000273281"],["Cabralstraat 51-1","1057CE Amsterdam","Amsterdam",1,1926,469,8,8,"ABCE","",69,"0363100012122587"],["Amsterdamsestraatweg 246","3551CR Utrecht","Utrecht",1,1911,448,4,4,"ABE","",69,"0344100000027536"],["Vlierboomstraat 497","2564JE 's-Gravenhage","'s-Gravenhage",1,1932,694,6,6,"ABCE","",69,"0518100000301549"],["Alexander Boersstraat 33","1071KW Amsterdam","Amsterdam",1,1894,475,5,4,"ABE","",69,"0363100012166023"],["Belcrumweg 40","4815HB Breda","Breda",1,1930,306,3,2,"AB","b",69,"0758100000047374"],["Amsterdamsestraatweg 307","3551CH Utrecht","Utrecht",1,1929,250,3,3,"ABE","",69,"0344100000001513"],["Twijnstraat 21","3511ZG Utrecht","Utrecht",1,1900,492,7,7,"ABCE","",69,"0344100000031294"],["Lindengracht 29-1","1015KB Amsterdam","Amsterdam",1,1932,476,8,8,"ACE","",69,"0363100012176373"],["Nachtegaalstraat 92","3581AP Utrecht","Utrecht",1,1900,299,3,3,"ABCE","",69,"0344100000000337"],["Linnaeusparkweg 142-1","1098EL Amsterdam","Amsterdam",1,1912,404,4,4,"AC","b",69,"0363100012157879"],["Oudegracht 304","3511PK Utrecht","Utrecht",1,1900,430,3,3,"ABCE","",69,"0344100000064036"],["Eerste Bloemdwarsstraat 3-1","1016KR Amsterdam","Amsterdam",1,1919,345,6,6,"ABCE","",69,"0363100012174011"],["Herman Costerstraat 340","2571PL 's-Gravenhage","'s-Gravenhage",1,1928,678,6,6,"ACE","",69,"0518100000334709"],["Nachtegaalstraat 94","3581AP Utrecht","Utrecht",1,1937,565,4,4,"ABCE","",69,"0344100000000338"],["Laan van Meerdervoort 503","2563AT 's-Gravenhage","'s-Gravenhage",1,1916,334,3,3,"AC","b",69,"0518100000343169"],["Burgemeester Reigerstraat 14","3581KS Utrecht","Utrecht",1,1920,460,4,3,"ABCE","",69,"0344100000031160"],["Willemsparkweg 10-1","1071HD Amsterdam","Amsterdam",1,1895,594,6,6,"ABCE","",69,"0363100012236179"],["1e Middellandstraat 110A","3021BH Rotterdam","Rotterdam",1,1903,382,3,3,"AE","",69,"0599100000600664"],["Pieter Cornelisz. Hooftstraat 16-1","1071BX Amsterdam","Amsterdam",1,1885,365,4,4,"AC","b",69,"0363100012162787"],["Oudegracht 340","3511PM Utrecht","Utrecht",1,1450,305,4,4,"ABCE","",69,"0344100000045304"],["Lusthofstraat 96A-01","3061WJ Rotterdam","Rotterdam",1,1929,499,7,7,"ACE","",69,"0599100000648485"],["Balijelaan 12","3521GR Utrecht","Utrecht",1,1919,504,3,3,"AE","",69,"0344100000062098"],["Laing's Nekstraat 32","1092GW Amsterdam","Amsterdam",1,1911,358,4,4,"ABCE","",69,"0363100012150483"],["Reinkenstraat 42"," 's-Gravenhage","'s-Gravenhage",1,1896,568,4,4,"AE","",69,"0518100000337319"],["Hooikade 47","2514BK 's-Gravenhage","'s-Gravenhage",1,1900,482,4,4,"ABE","",69,"0518100000314202"],["Achter de Stadswaag 21","6811CG Arnhem","Arnhem",1,1900,679,3,3,"ABE","",69,"0202100000231273"],["Geervlietstraat 45","3081SC Rotterdam","Rotterdam",1,1928,256,4,4,"ABE","",69,"0599100000630747"],["Rodenbachstraat 55","2524BG 's-Gravenhage","'s-Gravenhage",1,1931,422,7,7,"ACE","",69,"0518100000208021"],["Kempstraat 20","2572GH 's-Gravenhage","'s-Gravenhage",1,1915,540,9,9,"ACE","",69,"0518100000275317"],["Koninginneweg 139","1075CM Amsterdam","Amsterdam",1,1903,404,5,5,"ACE","",69,"0363100012164118"],["Amsterdamsestraatweg 320L","3551CT Utrecht","Utrecht",1,1930,239,3,3,"ABE","",69,"0344100000029031"],["Veemarktstraat 49","4811ZD Breda","Breda",1,1900,537,4,4,"AC","b",69,"0758100000058302"],["Stuyvesantstraat 62","2593GN 's-Gravenhage","'s-Gravenhage",1,1923,438,6,6,"ABCE","",69,"0518100000285279"],["Nachtegaalstraat 84","3581AP Utrecht","Utrecht",1,1900,588,4,4,"ABE","",69,"0344100000034363"],["Soestdijksekade 462","2574BX 's-Gravenhage","'s-Gravenhage",1,1929,358,5,5,"ACE","",69,"0518100000321373"],["Muntstraat 9A","3512EM Utrecht","Utrecht",1,1900,238,3,3,"ABE","",69,"0344100000067030"],["Goeverneurlaan 655","2523CJ 's-Gravenhage","'s-Gravenhage",1,1930,569,6,6,"ACE","",69,"0518100000314557"],["Ipe Brouwerssteeg 2a"," Leeuwarden","Leeuwarden",1,1575,509,9,9,"ACE","",69,"0080100000358660"],["Teilingerstraat 83A-01","3032AV Rotterdam","Rotterdam",1,1923,457,5,4,"AE","",69,"0599100000679682"],["Spuistraat 88A","1012TX Amsterdam","Amsterdam",1,1905,313,3,3,"ABE","",69,"0363100012180357"],["Bagijnestraat 28","8911DR Leeuwarden","Leeuwarden",1,1850,627,3,3,"ABE","",69,"0080100000356712"],["Korte Smeestraat 2","3511NX Utrecht","Utrecht",1,1900,277,4,3,"ABCE","",69,"0344100000039932"],["Voorstraat 42","3512AP Utrecht","Utrecht",1,1913,232,3,3,"ABE","",69,"0344100000062870"],["Berkumstraat 2A","8021BR Zwolle","Zwolle",1,1920,609,3,3,"ABE","",69,"0193100000000671"],["Zaanweg 100","1521DP Wormerveer · gemeente Zaanstad","Zaanstad",1,1910,522,4,4,"ABE","",69,"0479100000001015"],["Amsterdamsestraatweg 441","3553EA Utrecht","Utrecht",1,1919,308,3,3,"ABE","",69,"0344100000031056"],["Houtstraat 75","6511JM Nijmegen","Nijmegen",1,1884,551,3,3,"AE","",69,"0268100000037068"],["Wagenstraat 128","2512BA 's-Gravenhage","'s-Gravenhage",1,1920,330,4,4,"ABE","",69,"0518100000333898"],["Janskerkhof 25","3512BN Utrecht","Utrecht",1,1886,273,4,4,"ABCE","",69,"0344100000072705"],["Voorstraat 276","3311NN Dordrecht","Dordrecht",1,1700,355,3,3,"AE","",69,"0505100000014996"],["Nieuwestad 20","8911CS Leeuwarden","Leeuwarden",1,1650,416,5,3,"AC","b",69,"0080100000337969"],["Vlierboomstraat 548","2564JN 's-Gravenhage","'s-Gravenhage",1,1932,764,6,6,"ACE","",69,"0518100000314928"],["Driekoningendwarsstraat 2","6828EC Arnhem","Arnhem",1,1872,235,3,3,"AE","",69,"0202100000213738"],["Gedempte Gracht 88","1506CJ Zaandam · gemeente Zaanstad","Zaanstad",1,1885,459,5,5,"ACE","",69,"0479100000002732"],["Witte Zwaanhof 50","3035ZJ Rotterdam","Rotterdam",1,1898,343,6,6,"ABCE","",69,"0599100000694881"],["Bergselaan 303-01","3038XW Rotterdam","Rotterdam",1,1933,506,7,7,"ABCE","",69,"0599100000608162"],["Oostzaanstraat 88","1013WN Amsterdam","Amsterdam",1,1915,286,5,5,"ACE","",69,"0363100012071737"],["Pleinweg 3A","3081JB Rotterdam","Rotterdam",1,1938,274,4,4,"ABCE","",69,"0599100000663430"],["Van der Pekstraat 114","1031EH Amsterdam","Amsterdam",1,1922,208,3,3,"AE","",69,"0363100012102784"],["Banstraat 1A","1071ZJ Amsterdam","Amsterdam",1,1901,361,5,5,"ACE","",69,"0363100012158954"],["Willem II-straat 25","5038BA Tilburg","Tilburg",1,1905,219,5,5,"ACE","",69,"0855100000393427"],["Paul Krugerlaan 148","2571HN 's-Gravenhage","'s-Gravenhage",1,1905,467,6,6,"ACE","",69,"0518100000334328"],["Oudegracht 338","3511PM Utrecht","Utrecht",1,1800,752,7,7,"ABCE","",69,"0344100000045305"],["Jacob Catskade 2-1","1052BJ Amsterdam","Amsterdam",1,1893,333,6,6,"ACE","",69,"0363100012158560"],["Rosseelsstraat 62","2524BH 's-Gravenhage","'s-Gravenhage",1,1931,380,7,7,"ACE","",69,"0518100000334268"],["Amsterdamsestraatweg 225","3551CC Utrecht","Utrecht",1,1930,286,3,3,"ABCE","",69,"0344100000000084"],["Groenteweg 2A","2525HK 's-Gravenhage","'s-Gravenhage",1,1935,579,7,7,"ACE","",69,"0518100000315790"],["Hinthamerstraat 36","5211NL 's-Hertogenbosch","'s-Hertogenbosch",1,1450,265,3,3,"A","b",69,"0796100000259127"],["Hoefkade 1248","2525HK 's-Gravenhage","'s-Gravenhage",1,1935,462,6,6,"ABCE","",69,"0518100000268628"],["Heydenrijckstraat 63","6521ME Nijmegen","Nijmegen",1,1928,412,3,3,"ABE","",69,"0268100000001600"],["Achterwater 8","3024SG Rotterdam","Rotterdam",1,1900,203,3,3,"ABE","",69,"0599100000631919"],["Rijswijkseweg 520","2516HT 's-Gravenhage","'s-Gravenhage",1,1923,547,6,6,"ABCE","",69,"0518100000353342"],["Billitonkade 93","3532HV Utrecht","Utrecht",1,1904,343,6,6,"ABCE","",69,"0344100000059594"],["Stadionweg 147-1","1076NM Amsterdam","Amsterdam",1,1930,583,8,8,"AC","b",69,"0363100012086370"],["Pluvierstraat 168","2583KA 's-Gravenhage","'s-Gravenhage",1,1925,392,6,6,"ACE","",69,"0518100000270780"],["Van Musschenbroekstraat 147","2522AL 's-Gravenhage","'s-Gravenhage",1,1932,699,7,7,"ACE","",69,"0518100000353582"],["Van der Goesstraat 88","3521TM Utrecht","Utrecht",1,1930,265,3,3,"ABE","",69,"0344100000046591"],["Nobelstraat 141","3512EM Utrecht","Utrecht",1,1900,327,3,3,"AE","",69,"0344100000001740"],["Herengracht 56","2511EJ 's-Gravenhage","'s-Gravenhage",1,1875,795,6,6,"ABE","",69,"0518100000336915"],["Van Hallstraat 67","1051GZ Amsterdam","Amsterdam",1,1912,330,8,8,"ABCE","",69,"0363100012089420"],["Burgemeester Reigerstraat 21","3581KK Utrecht","Utrecht",1,1920,717,9,9,"ABCE","",69,"0344100000037336"],["Jan Pieterszoon Coenstraat 67A","3531CP Utrecht","Utrecht",1,1900,299,7,7,"ABCE","",69,"0344100000073197"],["Singel 456","1017AW Amsterdam","Amsterdam",1,1607,752,3,3,"ABE","",69,"0363100012171748"],["Breestraat 3","2311CG Leiden","Leiden",1,1775,394,8,8,"ACE","",69,"0546100000042914"],["Atjehstraat 1-BIS","2585EJ 's-Gravenhage","'s-Gravenhage",1,1879,288,4,4,"AE","",69,"0518100000344546"],["Wouwermanstraat 79","2525KP 's-Gravenhage","'s-Gravenhage",1,1926,359,6,6,"AC","b",69,"0518100000235297"],["Maandereind 7","6711AA Ede","Ede",1,1938,264,5,5,"AC","b",69,"0228100000022538"],["2e Carnissestraat 36","3083HK Rotterdam","Rotterdam",1,1908,241,4,4,"AE","",69,"0599100000601135"],["Broekhovenseweg 95","5021LC Tilburg","Tilburg",1,1921,364,4,3,"AC","b",69,"0855100000456384"],["Eerste Van Swindenstraat 32-H","1093GE Amsterdam","Amsterdam",1,1891,724,6,6,"AC","b",69,"0363100012153794"],["Keizersgracht 520-1A","1017EK Amsterdam","Amsterdam",1,1905,592,6,6,"ABCE","",69,"0363100012176343"],["Oudemansstraat 70","2522SN 's-Gravenhage","'s-Gravenhage",1,1932,527,6,6,"ACE","",69,"0518100000353338"],["Makassarstraat 30","3531VN Utrecht","Utrecht",1,1928,250,3,3,"ABE","",69,"0344100000002499"],["Dorpsstraat 46","5241ED Rosmalen · gemeente 's-Hertogenbosch","'s-Hertogenbosch",1,1935,226,3,3,"ABE","",69,"0796100000257636"],["Haarlemmerstraat 146-1","1013EZ Amsterdam","Amsterdam",1,1939,347,8,8,"ACE","",69,"0363100012176176"],["Dordtselaan 73A","3081BG Rotterdam","Rotterdam",1,1934,758,8,8,"ACE","",69,"0599100000622368"],["Droogbak 9-1"," Amsterdam","Amsterdam",1,1790,446,6,6,"ACE","",69,"0363100012179493"],["Lindengracht 158-1","1015JX Amsterdam","Amsterdam",1,1898,307,5,5,"ABCE","",69,"0363100012172089"],["Adriaen van Ostadelaan 15","3583AA Utrecht","Utrecht",1,1910,390,3,3,"ABE","",69,"0344100000063860"],["Groeneweg 107","3531VD Utrecht","Utrecht",1,1924,503,3,3,"ABE","",69,"0344100000028272"],["Rechtstraat 55","6221EG Maastricht","Maastricht",1,1850,764,6,6,"ACE","",69,"0935100000022478"],["Bankastraat 62","2585EP 's-Gravenhage","'s-Gravenhage",1,1938,378,3,3,"A","b",69,"0518100000229335"],["Zuiderparklaan 241","2574HJ 's-Gravenhage","'s-Gravenhage",1,1926,457,6,6,"ACE","",69,"0518100000295937"],["Amstelkade 32-1","1078AE Amsterdam","Amsterdam",1,1922,795,8,8,"ACE","",69,"0363100012080338"],["Hermannus Elconiusstraat 85","3553VC Utrecht","Utrecht",1,1900,562,3,3,"ABE","",69,"0344100000052537"],["Arnhemseweg 5G","3811NN Amersfoort","Amersfoort",1,1937,370,3,3,"ABE","",69,"0307100000350046"],["Arnhemseweg 155","7331BH Apeldoorn","Apeldoorn",1,1930,372,7,7,"AC","b",69,"0200100000700351"],["Nieuwendijk 41-1","1012MA Amsterdam","Amsterdam",1,1893,313,4,4,"AC","b",69,"0363100012170967"],["Willemsparkweg 213-1","1071HC Amsterdam","Amsterdam",1,1897,329,4,4,"AC","b",69,"0363100012233412"],["Rokin 122-2","1012LC Amsterdam","Amsterdam",1,1735,739,4,4,"ABCE","",69,"0363100012168057"],["Choorstraat 2","3511KM Utrecht","Utrecht",1,1900,306,4,4,"AE","",69,"0344100000007871"],["Mariastraat 45","3511LN Utrecht","Utrecht",1,1900,312,5,5,"ABCE","",69,"0344100000048190"],["Polanenstraat 16","3062KD Rotterdam","Rotterdam",1,1914,760,9,9,"ABCE","",69,"0599100000663671"],["Singel 439","1012WP Amsterdam","Amsterdam",1,1687,422,7,7,"ACE","",69,"0363100012167500"],["Zuiderparklaan 246","2574GL 's-Gravenhage","'s-Gravenhage",1,1931,481,6,6,"ACE","",69,"0518100000321417"],["Heelsumstraat 23"," 's-Gravenhage","'s-Gravenhage",1,1928,330,4,4,"AE","",69,"0518100000268076"],["Oudegracht 115","3511AG Utrecht","Utrecht",1,1912,619,3,3,"AE","",69,"0344100000072617"],["Leliestraat 22","2313BG Leiden","Leiden",1,1914,519,7,7,"ACE","",69,"0546100000044619"],["Runstraat 46","3522SC Utrecht","Utrecht",1,1932,232,3,3,"ABCE","",69,"0344100000012995"],["Overtoom 115A","1054HE Amsterdam","Amsterdam",1,1899,239,5,5,"ABCE","",69,"0363100012153351"],["Vrijheidslaan 94-1","1078PS Amsterdam","Amsterdam",1,1924,287,5,5,"AC","b",69,"0363100012130458"],["Geldersekade 126","1012AW Amsterdam","Amsterdam",1,1905,302,8,8,"ACE","",69,"0363100012172008"],["Rijnlaan 1","3522BA Utrecht","Utrecht",1,1930,244,3,3,"ABE","",69,"0344100000063124"],["Marathonweg 16-1","1076TG Amsterdam","Amsterdam",1,1926,517,9,8,"AC","b",69,"0363100012154487"],["Jan Pieterszoon Coenstraat 69","3531EP Utrecht","Utrecht",1,1919,315,3,3,"ABE","",69,"0344100000008881"],["Dordtselaan 153A-02","3081BM Rotterdam","Rotterdam",1,1934,328,4,4,"AE","",69,"0599100000622230"],["Weimarstraat 169A","2562HE 's-Gravenhage","'s-Gravenhage",1,1910,686,6,6,"ABCE","",69,"0518100000315458"],["Biltstraat 24","3572BB Utrecht","Utrecht",1,1930,486,5,5,"ABCE","",69,"0344100000040728"],["Groentemarkt 1","8911JB Leeuwarden","Leeuwarden",1,1550,770,5,3,"AC","b",69,"0080100000336401"],["Heer Vrankestraat 24A","3036LV Rotterdam","Rotterdam",1,1923,296,4,4,"ABE","",69,"0599100000640032"],["De la Reyweg 591","2571EP 's-Gravenhage","'s-Gravenhage",1,1933,541,6,6,"ACE","",69,"0518100000248045"],["Donkerstraat 28A","3511LS Utrecht","Utrecht",1,1450,364,4,4,"ABCE","",69,"0344100000063278"],["Beeklaan 174","2562SE 's-Gravenhage","'s-Gravenhage",1,1906,482,6,6,"ABCE","",69,"0518100000222174"],["Laan van Meerdervoort 485","2563AT 's-Gravenhage","'s-Gravenhage",1,1916,483,3,3,"A","b",69,"0518100000318489"],["Diezerkade 1","8021JD Zwolle","Zwolle",1,1865,759,6,6,"ACE","",69,"0193100000006510"],["Heemstedestraat 1-1","1059CX Amsterdam","Amsterdam",1,1928,238,4,4,"AC","b",69,"0363100012067525"],["Schaarsbergenstraat 58A","2573BW 's-Gravenhage","'s-Gravenhage",1,1936,771,7,6,"ABCE","",69,"0518100000352864"],["Kuipersdijk 94","7512CK Enschede","Enschede",1,1924,640,5,4,"AC","b",69,"0153100000202031"],["Hertzogstraat 48A","2572VZ 's-Gravenhage","'s-Gravenhage",1,1890,202,4,4,"ABCE","",69,"0518100000317816"],["Nieuwe Nieuwstraat 25-1","1012NG Amsterdam","Amsterdam",1,1789,200,3,3,"A","b",69,"0363100012179274"],["Hinthamerstraat 190","5211MX 's-Hertogenbosch","'s-Hertogenbosch",1,1890,469,8,8,"ABCE","",69,"0796100000259177"],["Schenkkade 25","2595AR 's-Gravenhage","'s-Gravenhage",1,1930,780,9,9,"AC","b",69,"0518100000270626"],["Potterstraat 12","3512TA Utrecht","Utrecht",1,1900,444,7,7,"ABCE","",69,"0344100000046030"],["Beeklaan 320"," 's-Gravenhage","'s-Gravenhage",1,1906,330,7,7,"ACE","",69,"0518100000305039"],["Hinthamerstraat 21","5211NT 's-Hertogenbosch","'s-Hertogenbosch",1,1600,493,4,4,"AC","b",69,"0796100000267848"],["Rokin 72","1012KW Amsterdam","Amsterdam",1,1917,600,6,6,"ABCE","",69,"0363100012175309"],["Amsterdamsestraatweg 423-BS","3552HD Utrecht","Utrecht",1,1919,295,4,4,"ABE","",69,"0344100000007272"],["Neude 3","3512AD Utrecht","Utrecht",1,1250,448,4,4,"ABCE","",69,"0344100000011132"],["Kruisstraat 12","5211DV 's-Hertogenbosch","'s-Hertogenbosch",1,1603,278,3,3,"AE","",69,"0796100000229317"],["Rokin 107A","1012KN Amsterdam","Amsterdam",1,1741,322,3,3,"AE","",69,"0363100012175271"],["Westduinweg 52","2583EJ 's-Gravenhage","'s-Gravenhage",1,1934,701,6,6,"AC","b",69,"0518100000242800"],["Lorentzplein 43","2522EE 's-Gravenhage","'s-Gravenhage",1,1931,770,8,8,"ACE","",69,"0518100000345322"],["Velpsestraat 24","2573SN 's-Gravenhage","'s-Gravenhage",1,1934,508,6,6,"AC","b",69,"0518100000297821"],["Mathenesserweg 73A","3027HH Rotterdam","Rotterdam",1,1926,389,4,4,"AC","b",69,"0599100000650698"],["Adriaen van Ostadelaan 6A","3583AJ Utrecht","Utrecht",1,1927,249,3,3,"ABE","",69,"0344100000002708"],["Annastraat 13","2513AT 's-Gravenhage","'s-Gravenhage",1,1900,447,3,3,"AE","",69,"0518100000227730"],["Koninginneweg 271-1","1075CW Amsterdam","Amsterdam",1,1906,314,4,4,"AC","b",69,"0363100012164406"],["Sint Annendwarsstraat 9A","1012HC Amsterdam","Amsterdam",1,1832,283,5,3,"ABCE","",69,"0363100012179026"],["Valkenboslaan 235","2563CW 's-Gravenhage","'s-Gravenhage",1,1913,359,3,3,"ACE","",69,"0518100000287858"],["Driebergenstraat 152","2546BP 's-Gravenhage","'s-Gravenhage",1,1934,277,3,3,"A","b",69,"0518100000220476"],["Schiedamseweg 110A-01","3025AG Rotterdam","Rotterdam",1,1912,403,3,3,"A","b",69,"0599100000671579"],["Groene Hilledijk 201A","3073AD Rotterdam","Rotterdam",1,1925,341,3,3,"A","b",69,"0599100000630233"],["Ahornstraat 1","2565LR 's-Gravenhage","'s-Gravenhage",1,1926,407,3,3,"AC","b",69,"0518100000302768"],["Bisschopsweg 136","3817AB Amersfoort","Amersfoort",1,1905,242,3,3,"AE","",69,"0307100000361245"],["Tweede Nassaustraat 5-1","1052BJ Amsterdam","Amsterdam",1,1893,278,4,4,"AC","b",69,"0363100012064452"],["Grote Gracht 60","6211SX Maastricht","Maastricht",1,1786,494,10,10,"ACE","",69,"0935100000017226"],["Korfmakersstraat 47A","3026XC Rotterdam","Rotterdam",1,1925,467,5,5,"ACE","",69,"0599100000643478"],["Vlierboomstraat 562","2564JN 's-Gravenhage","'s-Gravenhage",1,1932,501,5,5,"AC","b",69,"0518100000318383"],["Grote Markt 29","4811XP Breda","Breda",1,1900,384,4,4,"AE","",69,"0758100000018542"],["Koningstraat 1A","2515JH 's-Gravenhage","'s-Gravenhage",1,1928,750,6,6,"ABCE","",69,"0518100000345992"],["Croeselaan 181","3521BM Utrecht","Utrecht",1,1935,541,5,5,"ACE","",69,"0344100000004188"],["Vrolikstraat 298-1","1092VA Amsterdam","Amsterdam",1,1916,362,6,6,"ABCE","",69,"0363100012134973"],["Raadhuisstraat 44A","1016DG Amsterdam","Amsterdam",1,1897,617,5,5,"ACE","",69,"0363100012176352"],["Louwschepoort 83","5211NE 's-Hertogenbosch","'s-Hertogenbosch",1,1423,731,3,3,"ABE","",69,"0796100000279807"],["Sonsbeeksingel 111","6822BJ Arnhem","Arnhem",1,1880,433,3,3,"AE","",69,"0202100000202240"],["Twijnstraat 51","3511ZH Utrecht","Utrecht",1,1920,215,3,3,"ABCE","",69,"0344100000031646"],["Laan van Nieuw-Guinea 112","3531JN Utrecht","Utrecht",1,1930,327,3,3,"ABCE","",69,"0344100000077398"],["Steentilstraat 28","9711GN Groningen","Groningen",1,1939,570,5,5,"ABCE","",69,"0014100010920597"],["Javastraat 55","2585XJ 's-Gravenhage","'s-Gravenhage",1,1911,387,5,5,"ACE","",69,"0518100000315661"],["Oudezijds Achterburgwal 116A","1012DT Amsterdam","Amsterdam",1,1695,405,4,4,"AE","",69,"0363100012171792"],["Derde Walstraat 2A","6511TB Nijmegen","Nijmegen",1,1887,457,5,5,"AC","b",69,"0268100000006666"],["Harstenhoekstraat 31","2587RE 's-Gravenhage","'s-Gravenhage",1,1924,291,3,3,"AC","b",69,"0518100000225994"],["Ermelostraat 136","2573BH 's-Gravenhage","'s-Gravenhage",1,1935,219,4,4,"AE","",69,"0518100000203352"],["Halstraat 16A","4811HW Breda","Breda",1,1882,362,5,5,"AC","b",69,"0758100000019221"],["Beeklaan 315","2561TZ 's-Gravenhage","'s-Gravenhage",1,1903,637,6,4,"AC","b",69,"0518100000208491"],["Rosmarijnsteeg 6A","1012RP Amsterdam","Amsterdam",1,1785,334,3,3,"ABE","",69,"0363100012175753"],["Stationsweg 91A","2515BK 's-Gravenhage","'s-Gravenhage",1,1850,316,7,7,"AC","b",69,"0518100000336384"],["Spinozaweg 46","3532SG Utrecht","Utrecht",1,1930,282,3,3,"ABCE","",69,"0344100000008659"],["Burgemeester Serrarislaan 1","4835NJ Breda","Breda",1,1906,405,3,3,"A","b",69,"0758100000013993"],["Goeverneurlaan 667","2523CJ 's-Gravenhage","'s-Gravenhage",1,1930,521,6,6,"ABCE","",69,"0518100000300996"],["Koninginneweg 101-1","1075CK Amsterdam","Amsterdam",1,1900,622,5,5,"ABCE","",69,"0363100012154248"],["Krommestraat 10","3811CC Amersfoort","Amersfoort",1,1800,305,5,5,"ACE","",69,"0307100000323012"],["Julianaweg 95","3525VC Utrecht","Utrecht",1,1936,327,3,3,"ABE","",69,"0344100000029504"],["Vlasakkersstraat 139","2574SG 's-Gravenhage","'s-Gravenhage",1,1926,489,6,6,"AC","b",69,"0518100000314929"],["Dorpsstraat 85","2712AE Zoetermeer","Zoetermeer",1,1850,399,4,4,"ABCE","",69,"0637100000134879"],["Beethovenstraat 12-1","1077JG Amsterdam","Amsterdam",1,1928,400,3,3,"A","b",69,"0363100012132517"],["Minrebroederstraat 10","3512GT Utrecht","Utrecht",1,1881,247,4,4,"ABCE","",69,"0344100000019345"],["Ambyerstraat Noord 102","6225EH Maastricht","Maastricht",1,1930,213,3,3,"AE","",69,"0935100000040615"],["Spuistraat 54","1012TV Amsterdam","Amsterdam",1,1774,344,6,6,"ACE","",69,"0363100012175189"],["Oosterstraat 29","9711NP Groningen","Groningen",1,1650,644,3,3,"ABE","",69,"0014100010923271"],["Varkensmarkt 9","3811LD Amersfoort","Amersfoort",1,1900,479,3,3,"AE","",69,"0307100000353701"],["Oudedijk 155A-01","3061AB Rotterdam","Rotterdam",1,1925,387,5,4,"AC","b",69,"0599100000659662"],["Elandstraat 31","2518CJ 's-Gravenhage","'s-Gravenhage",1,1900,432,7,7,"ABCE","",69,"0518100000284539"],["Kelders 19","8911JD Leeuwarden","Leeuwarden",1,1911,357,4,4,"ACE","",69,"0080100000337500"],["Jan Hanzenstraat 13-1","1053SJ Amsterdam","Amsterdam",1,1937,422,9,9,"ABCE","",69,"0363100012236819"],["Haarlemmerstraat 7-1","1013EH Amsterdam","Amsterdam",1,1743,750,5,5,"ACE","",69,"0363100012171114"],["Amandelstraat 25","2564EV 's-Gravenhage","'s-Gravenhage",1,1933,565,6,6,"AC","b",69,"0518100000215519"],["Peperstraat 1a","8911CB Leeuwarden","Leeuwarden",1,1878,678,5,5,"ACE","",69,"0080100000338441"],["Oudezijds Achterburgwal 117-1","1012DD Amsterdam","Amsterdam",1,1635,775,8,8,"ACE","",69,"0363100012178718"],["Rombout Hogerbeetsstraat 136-1","1052XM Amsterdam","Amsterdam",1,1898,240,4,4,"ACE","",69,"0363100012155772"],["Beukelsdijk 153A","3022DD Rotterdam","Rotterdam",1,1921,588,8,8,"ABCE","",69,"0599100000609222"],["Kepplerstraat 272","2562VW 's-Gravenhage","'s-Gravenhage",1,1908,590,7,7,"ACE","",69,"0518100000353033"],["Prinsengracht 190-1"," Amsterdam","Amsterdam",1,1932,611,7,7,"ACE","",69,"0363100012173990"],["Korreweg 190","9715AL Groningen","Groningen",1,1935,296,3,3,"A","b",69,"0014100010917663"],["Bakkerstraat 21","3511JV Utrecht","Utrecht",1,1900,682,4,3,"ABCE","",69,"0344100000046314"],["Albert Cuypstraat 184-1","1073BL Amsterdam","Amsterdam",1,1886,331,4,4,"AC","b",69,"0363100012141454"],["Tweede Tuindwarsstraat 7-1","1015RX Amsterdam","Amsterdam",1,1928,256,5,5,"ACE","",69,"0363100012172670"],["Twijnstraat 26","3511ZL Utrecht","Utrecht",1,1900,310,3,3,"ABE","",69,"0344100000056419"],["Westzijde 130B","1506EJ Zaandam · gemeente Zaanstad","Zaanstad",1,1890,345,4,4,"AC","b",69,"0479100000005372"],["Dorpsstraat 51","6732AB Harskamp · gemeente Ede","Ede",1,1939,286,4,4,"AC","b",69,"0228100000024900"],["Beukelsdijk 149A","3022DC Rotterdam","Rotterdam",1,1921,681,8,8,"ABCE","",69,"0599100000609217"],["Baffinstraat 2","1057SX Amsterdam","Amsterdam",1,1928,442,8,8,"ABCE","",69,"0363100012072374"],["Piet Heinstraat 36","2518CH 's-Gravenhage","'s-Gravenhage",1,1890,450,4,3,"AE","",69,"0518100000321921"],["Kalverstraat 9","3512TR Utrecht","Utrecht",1,1913,210,3,3,"ABE","",69,"0344100000056736"],["Pasteurplein 13","2522RC 's-Gravenhage","'s-Gravenhage",1,1930,477,7,7,"ACE","",69,"0518100000268732"],["Polanenstraat 34A","3062KE Rotterdam","Rotterdam",1,1914,265,3,3,"A","b",69,"0599100000663680"],["Minderbroedersberg 12","6211LN Maastricht","Maastricht",1,1700,706,6,6,"ABCE","",69,"0935100000017136"],["Oudegracht 266","3511NV Utrecht","Utrecht",1,1930,306,5,5,"ABCE","",69,"0344100000075713"],["Kortekade 94A-02","3062GX Rotterdam","Rotterdam",1,1925,572,5,5,"AC","b",69,"0599100000700170"],["Bisschop Zwijsenstraat 19","5038VJ Tilburg","Tilburg",1,1905,654,7,6,"AC","b",69,"0855100000108018"],["Markt 21","6211CJ Maastricht","Maastricht",1,1721,216,4,4,"AC","b",69,"0935100000018731"],["Stoofstraat 13","5211ER 's-Hertogenbosch","'s-Hertogenbosch",1,1920,432,3,3,"AE","",69,"0796100000239665"],["Van Hallstraat 222","1051HL Amsterdam","Amsterdam",1,1936,484,8,8,"ACE","",69,"0363100012084426"],["Amsterdamsestraatweg 312","3551CT Utrecht","Utrecht",1,1903,306,3,3,"ABE","",69,"0344100000050550"],["Amsterdamse Veerkade 2","2512AZ 's-Gravenhage","'s-Gravenhage",1,1909,500,9,9,"ABCE","",69,"0518100000300113"],["Roostenlaan 67","5644GB Eindhoven","Eindhoven",1,1930,354,4,3,"AC","b",69,"0772100000265776"],["Haverstraat 1","3511NG Utrecht","Utrecht",1,1800,297,4,4,"ABCE","",69,"0344100000055441"],["Oudegracht 209","3511NH Utrecht","Utrecht",1,1900,450,4,4,"ABE","",69,"0344100000024332"],["Oudegracht 78","3511AT Utrecht","Utrecht",1,1900,303,3,3,"ABCE","",69,"0344100000038902"],["Molenstraat 25Q","2513BH 's-Gravenhage","'s-Gravenhage",1,1700,596,8,8,"ACE","",69,"0518100000352755"],["Walstraat 41","7511GJ Enschede","Enschede",1,1899,560,3,3,"AE","",69,"0153100000239870"],["Jan van der Heijdenstraat 72","2522ES 's-Gravenhage","'s-Gravenhage",1,1930,529,7,7,"ABCE","",69,"0518100000337824"],["Twijnstraat 41","3511ZH Utrecht","Utrecht",1,1900,233,3,3,"ABE","",69,"0344100000004413"],["Gasthuissteeg 14","1381BB Weesp · gemeente Amsterdam","Amsterdam",1,1660,400,3,3,"A","b",69,"0457100000063154"],["Edisonstraat 131","2561BD 's-Gravenhage","'s-Gravenhage",1,1909,546,5,5,"ACE","",69,"0518100000295863"],["Jacob Obrechtstraat 19-1","1071KD Amsterdam","Amsterdam",1,1898,272,3,3,"AE","",69,"0363100012163914"],["Laan van Nieuw-Guinea 47","3531JC Utrecht","Utrecht",1,1926,488,4,4,"ABCE","",69,"0344100000064553"],["Vlietsend 11","1561AA Krommenie · gemeente Zaanstad","Zaanstad",1,1930,252,4,4,"ABCE","",69,"0479100000004022"],["Zeilstraat 37-1","1075SB Amsterdam","Amsterdam",1,1913,286,4,4,"AC","b",69,"0363100012111088"],["Ceintuurbaan 35-1","1072ES Amsterdam","Amsterdam",1,1899,222,5,5,"AC","b",69,"0363100012162247"],["Loosduinseweg 895","2571AW 's-Gravenhage","'s-Gravenhage",1,1910,464,6,6,"ACE","",69,"0518100000354127"],["Schuitendiep 57","9711RB Groningen","Groningen",1,1650,339,4,4,"AC","b",69,"0014100010913543"],["Schotersingel 113-0101","2023AB Haarlem","Haarlem",1,1900,259,4,4,"ACE","",69,"0392100000049651"],["Voorstraat 41","3512AJ Utrecht","Utrecht",1,1900,219,4,4,"ABCE","",69,"0344100000013949"],["Rijksstraatweg 350","2025DR Haarlem","Haarlem",1,1932,383,4,4,"ACE","",69,"0392100000054861"],["Beethovenstraat 59-1","1077HN Amsterdam","Amsterdam",1,1930,429,4,4,"ABE","",69,"0363100012095937"]];
+const CATS = [["A","Winkel + wonen"],["B","Bedrijf/kantoor + wonen"],["C","Klein wooncomplex"],["D","Groot oud pand"],["E","Afwijkende combinatie"]];
+const KLEUR = {A:"var(--s1)",B:"var(--s2)",C:"var(--s3)",D:"var(--s4)",E:"var(--s5)"};
+const GROOT = 25;
+const P = DATA.map((x,i)=>({a:x[0],r:x[1],g:x[2],gg:x[3],bj:x[4],m2:x[5],vbo:x[6],adr:x[7],cat:x[8],sig:x[9],s:x[10],id:x[11],i}));
+const TOTAAL = P.length;
+const nl = n => n.toLocaleString("nl-NL");
+const BAG = "https://bagviewer.kadaster.nl/lvbag/bag-viewer/index.html#?searchQuery=";
+
+const T = {
+  knop:"Filters", actief:n=>` (${n} actief)`,
+  alle:t=>`Alle ${nl(t)} panden`, telling:(n,t)=>`${nl(n)} van ${nl(t)} panden`,
+  toon:n=> n===0 ? "Sluit filters" : n===1 ? "Toon 1 pand" : `Toon ${nl(n)} panden`,
+  wis:"Wis alle filters", verwijder:c=>`Verwijder filter: ${c}`,
+  gemAlle:n=>`Alle gemeenten (${nl(n)})`, gemOpt:(g,n)=>`${g} (${nl(n)})`,
+  groot:`De ${GROOT} grootste gemeenten`, elders:"Elders in Nederland",
+  leeg:"Leegstaand", verbouwing:"In verbouwing",
+  hint:(a,b)=>`Op de werklijst: ${a}–${b}`, uit:" Dit filter telt nu niet mee.",
+  omgekeerd:"Van is hoger dan tot en met.",
+  leegZin:"Geen enkel pand op de werklijst van deze maand past bij deze filters. Verwijder hierboven een filter, of wis ze allemaal.",
+  leegGemeente:g=>`Er staan geen panden uit ${g} op de werklijst van deze maand.`,
+  bron:"Luchtfoto's: Beeldmateriaal.nl, via PDOK · open data (CC BY 4.0).",
+  alt:a=>`Luchtfoto van ${a}`, mislukt:"Luchtfoto kon niet laden", geen:"Locatie onbekend",
+};
+const SORTEN = {
+  score:{label:"Score-index", veld:"s", std:"af", af:"Hoogste eerst", op:"Laagste eerst"},
+  bouwjaar:{label:"Bouwjaar", veld:"bj", std:"op", op:"Oudste eerst", af:"Nieuwste eerst"},
+  oppervlakte:{label:"Oppervlakte", veld:"m2", std:"af", af:"Grootste eerst", op:"Kleinste eerst"},
+};
+const BEREIK = [
+  {k:"score", veld:"s", legend:"Score-index (/100)", enkel:true, url:["min_score"], max:100, fout:"Vul een score van 0 tot en met 100 in."},
+  {k:"bj", veld:"bj", legend:"Bouwjaar", jaar:true, url:["bouwjaar_van","bouwjaar_tm"], naam:"Bouwjaar", fout:"Vul een jaartal in, bijvoorbeeld 1939."},
+  {k:"m2", veld:"m2", legend:"Oppervlakte (m²)", url:["m2_van","m2_tm"], naam:"Oppervlakte", eenheid:" m²", fout:"Vul een heel getal in, bijvoorbeeld 250."},
+  {k:"vbo", veld:"vbo", legend:"Aantal VBO's", url:["vbo_van","vbo_tm"], naam:"Aantal VBO's", fout:"Vul een heel getal in, bijvoorbeeld 4."},
+  {k:"adr", veld:"adr", legend:"Aantal adressen", url:["adressen_van","adressen_tm"], naam:"Aantal adressen", fout:"Vul een heel getal in, bijvoorbeeld 4."},
+];
+const fmt = (b,v) => b.jaar ? String(v) : nl(v);       // een jaartal nooit door nl(): 1939, niet 1.939
+const GRENS = Object.fromEntries(BEREIK.map(b=>{ const v=P.map(r=>r[b.veld]).filter(x=>x!=null); return [b.k,[Math.min(...v),Math.max(...v)]]; }));
+const GEMEENTEN = [...new Set(P.map(r=>r.g))].sort((a,b)=>a.localeCompare(b,"nl"));
+const GG = Object.fromEntries(P.map(r=>[r.g,r.gg]));
+
+/* ---------------- stand, regels, adres ---------------- */
+const leegRuw = () => Object.fromEntries(BEREIK.map(b=>[b.k,{van:"",tm:""}]));
+const nieuweStand = () => ({gemeente:"", cat:new Set(), sig:new Set(), geb:new Set(), ruw:leegRuw(), sort:"score", dir:"af"});
+function getal(s){ s=String(s).trim(); if(!s) return null; const t=s.replace(/[.\s]/g,""); return /^\d{1,6}$/.test(t) ? Number(t) : NaN; }
+function bereik(b, ruw){
+  const v=getal(ruw.van), t=b.enkel ? null : getal(ruw.tm);
+  if(Number.isNaN(v) || (b.enkel && v!==null && v>b.max)) return {aan:false, fout:b.fout+T.uit, veld:"van"};
+  if(Number.isNaN(t)) return {aan:false, fout:b.fout+T.uit, veld:"tm"};
+  if(v===null && t===null) return {aan:false};
+  if(v!==null && t!==null && v>t) return {aan:false, fout:T.omgekeerd+T.uit, veld:"beide"};
+  return {aan:true, van:v, tm:t};
+}
+function past(r, st, B, skip){
+  if(st.gemeente && skip!=="gemeente" && r.g!==st.gemeente) return false;
+  if(st.geb.size===1 && skip!=="geb" && (st.geb.has("groot") ? r.gg!==1 : r.gg!==0)) return false;
+  if(st.cat.size && skip!=="cat" && ![...r.cat].some(c=>st.cat.has(c))) return false;
+  if(st.sig.size && skip!=="sig" && !((st.sig.has("leeg") && r.sig.includes("l")) || (st.sig.has("verbouwing") && r.sig.includes("b")))) return false;
+  for(const b of BEREIK){ const x=B[b.k]; if(!x.aan) continue; const v=r[b.veld];
+    if(v==null) return false; if(x.van!=null && v<x.van) return false; if(x.tm!=null && v>x.tm) return false; }
+  return true;
+}
+function sorteer(lijst, st){
+  const k=SORTEN[st.sort].veld, op=st.dir==="op";
+  return lijst.slice().sort((a,b)=>{ const x=a[k], y=b[k];
+    if(x==null || y==null) return (x==null && y==null) ? a.i-b.i : (x==null ? 1 : -1);   // zonder waarde altijd achteraan
+    return x===y ? a.i-b.i : (op ? x-y : y-x); });                                         // gelijk: werklijstvolgorde (VA-32)
+}
+function chips(st, B){
+  const c=[];
+  if(st.gemeente) c.push({t:`Gemeente ${st.gemeente}`, weg:s=>{s.gemeente="";}});
+  if(st.geb.size===1){ const g=[...st.geb][0]; c.push({t:g==="groot"?T.groot:T.elders, weg:s=>s.geb.clear()}); }
+  CATS.forEach(([L])=>{ if(st.cat.has(L)) c.push({t:`Categorie ${L}`, weg:s=>s.cat.delete(L)}); });
+  if(st.sig.has("leeg")) c.push({t:T.leeg, weg:s=>s.sig.delete("leeg")});
+  if(st.sig.has("verbouwing")) c.push({t:T.verbouwing, weg:s=>s.sig.delete("verbouwing")});
+  BEREIK.forEach(b=>{ const x=B[b.k]; if(!x.aan) return; const e=b.eenheid||""; let t;
+    if(b.enkel) t=`Score vanaf ${x.van}`;
+    else if(x.van!=null && x.tm!=null) t=`${b.naam} ${fmt(b,x.van)}–${fmt(b,x.tm)}${e}`;
+    else if(x.van!=null) t=`${b.naam} vanaf ${fmt(b,x.van)}${e}`;
+    else t=`${b.naam} tot en met ${fmt(b,x.tm)}${e}`;
+    c.push({t, weg:s=>{s.ruw[b.k]={van:"",tm:""};}}); });
+  return c;
+}
+const EIGEN = ["gemeente","categorie","signaal","gebied",...BEREIK.flatMap(b=>b.url),"sorteer","richting"];
+function leesAdres(zoek){
+  const q=new URLSearchParams(zoek), st=nieuweStand();
+  st.gemeente=(q.get("gemeente")||"").trim();
+  const lijst=k=>(q.get(k)||"").split(",").map(x=>x.trim()).filter(Boolean);
+  lijst("categorie").map(x=>x.toUpperCase()).filter(x=>CATS.some(c=>c[0]===x)).forEach(x=>st.cat.add(x));
+  lijst("signaal").map(x=>x.toLowerCase()).filter(x=>x==="leeg"||x==="verbouwing").forEach(x=>st.sig.add(x));
+  const geb=[...new Set(lijst("gebied").map(x=>x.toLowerCase()).filter(x=>x==="groot"||x==="elders"))];
+  if(geb.length===1) st.geb.add(geb[0]);
+  BEREIK.forEach(b=>b.url.forEach((k,j)=>{ const v=(q.get(k)||"").trim(); if(/^\d{1,6}$/.test(v)) st.ruw[b.k][j?"tm":"van"]=v; }));
+  const s=(q.get("sorteer")||"").toLowerCase(); if(SORTEN[s]) st.sort=s;
+  const r=(q.get("richting")||"").toLowerCase(); st.dir=(r==="op"||r==="af") ? r : SORTEN[st.sort].std;
+  return st;
+}
+function schrijfAdres(st, B){
+  const q=new URLSearchParams(location.search); EIGEN.forEach(k=>q.delete(k));
+  const d=[], zet=(k,v)=>d.push(k+"="+encodeURIComponent(v).replace(/%2C/gi,","));
+  if(st.gemeente) zet("gemeente", st.gemeente);
+  if(st.cat.size) zet("categorie", CATS.map(c=>c[0]).filter(c=>st.cat.has(c)).join(","));
+  if(st.sig.size) zet("signaal", ["leeg","verbouwing"].filter(x=>st.sig.has(x)).join(","));
+  if(st.geb.size===1) zet("gebied", [...st.geb][0]);
+  BEREIK.forEach(b=>{ const x=B[b.k]; if(!x.aan) return; if(x.van!=null) zet(b.url[0], x.van); if(!b.enkel && x.tm!=null) zet(b.url[1], x.tm); });
+  if(st.sort!=="score") zet("sorteer", st.sort);
+  if(st.dir!==SORTEN[st.sort].std) zet("richting", st.dir);
+  const rest=q.toString(), s=d.concat(rest?[rest]:[]).join("&");
+  history.replaceState(null, "", location.pathname+(s?"?"+s:"")+location.hash);
+}
+
+/* ---------------- plaatsvervanger voor de luchtfoto (op de pagina: PLEK.mini van PDOK) ---------------- */
+const KAPOT = "data:image/jpeg;base64,AAAA";   // laat de echte foutroute zien zonder netwerk
+function beeld(id){
+  let h=0; for(const ch of id) h=(h*31+ch.charCodeAt(0))>>>0;
+  const rnd=()=>{ h=(Math.imul(h,1103515245)+12345)>>>0; return h/4294967296; };
+  const daken=["#9b5a43","#7d6e66","#a8805f","#5f5b58","#8a4b3a","#b39b84"];
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#6f7560"/>`;
+  s += rnd()<.5 ? `<rect x="0" y="${(14+rnd()*14)|0}" width="100" height="10" fill="#8f8d86"/>` : `<rect x="${(14+rnd()*14)|0}" y="0" width="10" height="100" fill="#8f8d86"/>`;
+  for(let k=0;k<9;k++) s+=`<rect x="${(rnd()*84)|0}" y="${(rnd()*80)|0}" width="${(10+rnd()*16)|0}" height="${(8+rnd()*14)|0}" fill="${daken[(rnd()*daken.length)|0]}"/>`;
+  for(let k=0;k<4;k++) s+=`<circle cx="${(rnd()*100)|0}" cy="${(rnd()*86)|0}" r="${(3+rnd()*4)|0}" fill="#4d6a3c"/>`;
+  s+=`<rect x="40" y="40" width="20" height="18" fill="${daken[(rnd()*daken.length)|0]}"/>`;
+  s+=`<rect x="0" y="88" width="100" height="12" fill="rgba(0,0,0,.5)"/><text x="50" y="97" font-size="8" text-anchor="middle" fill="#fff" font-family="system-ui,sans-serif">voorbeeld</text></svg>`;
+  return "data:image/svg+xml;charset=utf-8,"+encodeURIComponent(s);
+}
+function foto(w, r, modus){
+  const m=w.querySelector(".melding");
+  if(modus==="geen"){ w.classList.add("geen"); m.textContent=T.geen; return; }
+  if(modus==="mislukt"){ w.classList.add("mislukt"); m.textContent=T.mislukt; return; }
+  w.classList.add("laadt");
+  if(modus==="laadt") return;
+  const img=document.createElement("img");
+  img.alt=T.alt(r.a); img.width=100; img.height=100; img.decoding="async";
+  if(modus==="lui") img.loading="lazy";
+  img.addEventListener("load", ()=>w.classList.replace("laadt","geladen"), {once:true});
+  img.addEventListener("error", ()=>{ img.remove(); w.classList.replace("laadt","mislukt"); m.textContent=T.mislukt; }, {once:true});
+  w.prepend(img);
+  img.src = (modus==="kapot") ? KAPOT : beeld(r.id);
+}
+function kaart(r, modus){
+  const c=document.createElement("div"); c.className="card";
+  const cat=[...r.cat].map(x=>`<span class="chip c${x}">${x}</span>`).join("");
+  const sig=(r.sig.includes("l")?`<span class="sigtag leeg">leegstaand</span>`:"")+(r.sig.includes("b")?`<span class="sigtag">in verbouwing</span>`:"");
+  c.innerHTML=`<div class="card-top">
+      <div class="card-foto"><span class="merk" aria-hidden="true"></span><span class="melding"></span></div>
+      <div class="card-kern"><div class="addr"></div><div class="lid"></div><div class="chips">${cat}</div>${sig?`<div class="sigtags">${sig}</div>`:""}</div>
+      <div class="score"><b>${r.s}</b><small>/100</small></div></div>
+    <div class="meter"><i style="width:${r.s}%"></i></div>
+    <div class="meta"><div><div class="mv">${r.bj}</div><div class="ml">BOUWJAAR</div></div><div><div class="mv">${nl(r.m2)}</div><div class="ml">M²</div></div><div><div class="mv">${r.vbo}</div><div class="ml">VBO</div></div><div><div class="mv">${r.adr}</div><div class="ml">ADRESSEN</div></div></div>
+    <p class="weggelaten">Functiebalk, legenda en score-opbouw: ongewijzigd, hier weggelaten.</p>
+    <div class="foot"><a class="baglink" href="${BAG}${r.id}" target="_blank" rel="noopener">Open in BAG-viewer <span aria-hidden="true">↗</span></a><button class="pand-open" type="button">Open pand</button><span class="status">te controleren</span></div>`;
+  c.querySelector(".addr").textContent=r.a;
+  c.querySelector(".lid").textContent=r.r;
+  c.querySelector(".pand-open").setAttribute("aria-label", `Open pand: alle gegevens van ${r.a}`);
+  foto(c.querySelector(".card-foto"), r, modus);
+  return c;
+}
+
+/* ---------------- het blok ---------------- */
+const esc = s => String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function optie(p, groep, waarde, naam, kleur){
+  return `<label class="wl-optie" data-groep="${groep}" data-waarde="${waarde}"><input type="checkbox" name="${p}-${groep}" value="${waarde}">`+
+    (kleur?`<i class="wl-kleur" style="background:${kleur}" aria-hidden="true"></i><b class="wl-letter">${waarde}</b>`:"")+
+    `<span class="wl-naam">${esc(naam)}</span><span class="wl-n"><span class="wl-getal">0</span><span class="vh"> panden</span></span></label>`;
+}
+function bereikHTML(p, b){
+  const id=`${p}-${b.k}`, [lo,hi]=GRENS[b.k];
+  const veld=(x,label)=>`<div><label for="${id}-${x}">${label}</label><input id="${id}-${x}" data-k="${b.k}" data-x="${x}" type="text" inputmode="numeric" autocomplete="off" enterkeyhint="done" maxlength="7" aria-describedby="${id}-hint ${id}-fout"></div>`;
+  return `<fieldset class="wl-bereik${b.enkel?" enkel":""}" data-k="${b.k}"><legend>${esc(b.legend)}</legend>
+    <p class="wl-hint" id="${id}-hint">${T.hint(fmt(b,lo),fmt(b,hi))}</p>
+    <div class="wl-invoer">${veld("van", b.enkel?"vanaf":"van")}${b.enkel?"":veld("tm","tot en met")}</div>
+    <p class="wl-fout" id="${id}-fout" hidden></p></fieldset>`;
+}
+function skelet(p){
+  return `<div class="wl">
+  <div class="wl-balk">
+    <button type="button" class="wl-knop" id="${p}-knop" aria-expanded="false" aria-controls="${p}-paneel"><span class="wl-ico" aria-hidden="true"></span><span>${T.knop}</span><span class="wl-aantal" aria-hidden="true" hidden></span><span class="vh wl-actief"></span><span class="wl-pijl" aria-hidden="true"></span></button>
+    <p class="wl-telling" aria-live="polite"></p>
+    <div class="wl-sorteer">
+      <div class="wl-veld"><label for="${p}-sorteer">Sorteer op</label><select id="${p}-sorteer">${Object.entries(SORTEN).map(([k,s])=>`<option value="${k}">${s.label}</option>`).join("")}</select></div>
+      <div class="wl-veld"><label for="${p}-volgorde">Volgorde</label><select id="${p}-volgorde"></select></div>
+    </div>
+  </div>
+  <div class="wl-paneel" id="${p}-paneel" role="group" aria-labelledby="${p}-knop" hidden>
+    <div class="wl-keuzes">
+      <fieldset class="wl-groep wl-heel"><legend>Categorie</legend><div class="wl-opties">${CATS.map(([L,n])=>optie(p,"cat",L,n,KLEUR[L])).join("")}</div></fieldset>
+      <fieldset class="wl-groep"><legend>Signaal</legend><div class="wl-opties">${optie(p,"sig","leeg",T.leeg)}${optie(p,"sig","verbouwing",T.verbouwing)}</div></fieldset>
+      <div class="wl-veld wl-gem"><label for="${p}-gemeente">Gemeente</label><select id="${p}-gemeente"></select></div>
+      <fieldset class="wl-groep"><legend>Gebied</legend><div class="wl-opties">${optie(p,"geb","groot",T.groot)}${optie(p,"geb","elders",T.elders)}</div></fieldset>
+    </div>
+    <div class="wl-bereiken">${BEREIK.map(b=>bereikHTML(p,b)).join("")}</div>
+    <div class="wl-paneelvoet"><button type="button" class="wl-toon"></button></div>
+  </div>
+  <div class="wl-chips" role="group" aria-label="Actieve filters" hidden></div>
+  <p class="wl-bron">${T.bron}</p>
+  <div class="wl-leeg" hidden><p></p><button type="button" class="wl-wis">${T.wis}</button></div>
+  <div class="grid"></div>
+  <div class="schildwacht" aria-hidden="true"></div>
+</div>`;
+}
+
+function maakWerklijst(host, p, st, opt){
+  host.innerHTML=skelet(p);
+  const $=s=>host.querySelector(s);
+  const el={knop:$(".wl-knop"), aantal:$(".wl-aantal"), actief:$(".wl-actief"), telling:$(".wl-telling"), paneel:$(".wl-paneel"),
+    gem:$(`#${p}-gemeente`), sort:$(`#${p}-sorteer`), dir:$(`#${p}-volgorde`), chips:$(".wl-chips"), leeg:$(".wl-leeg"),
+    grid:$(".grid"), toon:$(".wl-toon"), wacht:$(".schildwacht")};
+  let B={}, rij=[], getoond=0, chipLijst=[];
+  const kaarten=new Map();   // op de pagina: kaart per id hergebruiken, dus geen tweede PDOK-verzoek
+  const io = opt.live && "IntersectionObserver" in window ? new IntersectionObserver(e=>{ if(e.some(x=>x.isIntersecting)){ meer(); kijk(); } }, {rootMargin:"0px 0px 1200px 0px"}) : null;
+
+  function zetOpen(open){ el.knop.setAttribute("aria-expanded", String(open)); el.paneel.hidden=!open; }
+  function vulVolgorde(){ const s=SORTEN[st.sort], k=s.std==="af"?["af","op"]:["op","af"];
+    el.dir.innerHTML=k.map(x=>`<option value="${x}">${s[x]}</option>`).join(""); el.dir.value=st.dir; }
+  function vulGemeente(tel, alle){
+    const bekend=!st.gemeente || GEMEENTEN.includes(st.gemeente);
+    const groep=(lab,g)=>`<optgroup label="${esc(lab)}">${GEMEENTEN.filter(n=>GG[n]===g).map(n=>`<option value="${esc(n)}">${esc(T.gemOpt(n, tel[n]||0))}</option>`).join("")}</optgroup>`;
+    el.gem.innerHTML=`<option value="">${esc(T.gemAlle(alle))}</option>`+(bekend?"":`<option value="${esc(st.gemeente)}">${esc(T.gemOpt(st.gemeente,0))}</option>`)+groep(T.groot,1)+groep(T.elders,0);
+    el.gem.value=st.gemeente;
+  }
+
+  function werk(schrijf){
+    B=Object.fromEntries(BEREIK.map(b=>[b.k, bereik(b, st.ruw[b.k])]));
+    const treffers=P.filter(r=>past(r,st,B,null)), n=treffers.length;
+    const basis=k=>P.filter(r=>past(r,st,B,k));
+    const bCat=basis("cat"), bSig=basis("sig"), bGeb=basis("geb"), bGem=basis("gemeente");
+    const tel={cat:{}, sig:{}, geb:{}};
+    CATS.forEach(([L])=>tel.cat[L]=bCat.filter(r=>r.cat.includes(L)).length);
+    tel.sig.leeg=bSig.filter(r=>r.sig.includes("l")).length; tel.sig.verbouwing=bSig.filter(r=>r.sig.includes("b")).length;
+    tel.geb.groot=bGeb.filter(r=>r.gg===1).length; tel.geb.elders=bGeb.filter(r=>r.gg===0).length;
+    const gemTel={}; bGem.forEach(r=>gemTel[r.g]=(gemTel[r.g]||0)+1);
+    host.querySelectorAll(".wl-optie").forEach(o=>{
+      const g=o.dataset.groep, w=o.dataset.waarde, set=st[g], c=tel[g][w], inp=o.querySelector("input");
+      inp.checked=set.has(w); o.querySelector(".wl-getal").textContent=nl(c); o.classList.toggle("nul", c===0);
+    });
+    vulGemeente(gemTel, bGem.length);
+    BEREIK.forEach(b=>{
+      const x=B[b.k], fout=host.querySelector(`#${p}-${b.k}-fout`);
+      ["van","tm"].forEach(k=>{ const inp=host.querySelector(`#${p}-${b.k}-${k}`); if(!inp) return;
+        if(inp.value!==st.ruw[b.k][k]) inp.value=st.ruw[b.k][k];
+        const fout_hier = x.fout && (x.veld==="beide" || x.veld===k);
+        if(fout_hier) inp.setAttribute("aria-invalid","true"); else inp.removeAttribute("aria-invalid"); });
+      fout.textContent=x.fout||""; fout.hidden=!x.fout;
+    });
+    el.sort.value=st.sort; vulVolgorde();
+    chipLijst=chips(st,B);
+    const a=chipLijst.length;
+    el.aantal.hidden=!a; el.aantal.textContent=a; el.actief.textContent=a?T.actief(a):"";
+    el.telling.textContent = a ? T.telling(n,TOTAAL) : T.alle(TOTAAL);
+    el.toon.textContent=T.toon(n);
+    el.chips.hidden=!a;
+    el.chips.innerHTML=chipLijst.map((c,i)=>`<button type="button" class="wl-chip" data-i="${i}" aria-label="${esc(T.verwijder(c.t))}">${esc(c.t)}<span class="x" aria-hidden="true">×</span></button>`).join("")+(a?`<button type="button" class="wl-wis">${T.wis}</button>`:"");
+    el.leeg.hidden=n>0; el.grid.hidden=n===0;
+    el.leeg.querySelector("p").textContent = (st.gemeente && !GEMEENTEN.includes(st.gemeente)) ? T.leegGemeente(st.gemeente) : T.leegZin;
+    rij=sorteer(treffers, st);
+    if(opt.live){ getoond=0; el.grid.textContent=""; meer(); kijk(); if(schrijf) schrijfAdres(st,B); }
+    else { el.grid.textContent=""; rij.slice(0, opt.kaarten||0).forEach((r,i)=>el.grid.appendChild(kaart(r, (opt.foto||[])[i]||"geladen"))); }
+  }
+  function meer(){
+    const tot=io ? Math.min(rij.length, getoond+40) : rij.length, deel=document.createDocumentFragment();
+    for(; getoond<tot; getoond++){ const r=rij[getoond]; let c=kaarten.get(r.id); if(!c){ c=kaart(r, opt.pdokWeg?"kapot":"lui"); kaarten.set(r.id,c); } deel.appendChild(c); }
+    el.grid.appendChild(deel);
+  }
+  function kijk(){ if(!io) return; io.unobserve(el.wacht); if(getoond<rij.length) io.observe(el.wacht); }
+
+  zetOpen(!!opt.open);
+  werk(false);
+  if(!opt.live){ if(opt.focus){ const f=host.querySelector(opt.focus); if(f) f.classList.add("nep-focus"); } host.inert=true; return null; }
+
+  /* ---- bediening (alleen het werkende voorbeeld) ---- */
+  const smal=()=>host.querySelector(".wl").clientWidth<600;
+  el.knop.addEventListener("click", ()=>zetOpen(el.paneel.hidden));
+  el.toon.addEventListener("click", ()=>{ zetOpen(false); el.knop.focus(); });
+  el.paneel.addEventListener("keydown", e=>{ if(e.key==="Escape" && smal()){ zetOpen(false); el.knop.focus(); } });
+  host.addEventListener("change", e=>{
+    const t=e.target;
+    if(t.type==="checkbox"){ const o=t.closest(".wl-optie"), set=st[o.dataset.groep]; t.checked?set.add(o.dataset.waarde):set.delete(o.dataset.waarde); werk(true); }
+    else if(t===el.gem){ st.gemeente=t.value; werk(true); }
+    else if(t===el.sort){ st.sort=t.value; st.dir=SORTEN[st.sort].std; werk(true); }
+    else if(t===el.dir){ st.dir=t.value; werk(true); }
+    else if(t.dataset.k){ clearTimeout(t._w); st.ruw[t.dataset.k][t.dataset.x]=t.value; werk(true); }
+  });
+  host.addEventListener("input", e=>{ const t=e.target; if(!t.dataset.k) return;
+    st.ruw[t.dataset.k][t.dataset.x]=t.value; clearTimeout(t._w); t._w=setTimeout(()=>werk(true), 400); });
+  const wisAlles=()=>{ const s=st.sort, d=st.dir; Object.assign(st, nieuweStand(), {sort:s, dir:d}); werk(true); el.knop.focus(); };
+  el.leeg.querySelector(".wl-wis").addEventListener("click", wisAlles);
+  el.chips.addEventListener("click", e=>{
+    const b=e.target.closest("button"); if(!b) return;
+    if(b.classList.contains("wl-wis")) return wisAlles();
+    const i=Number(b.dataset.i); chipLijst[i].weg(st); werk(true);
+    const rest=el.chips.querySelectorAll(".wl-chip");
+    (rest[i] || rest[i-1] || el.knop).focus();
+  });
+  return {herteken(pdokWeg){ opt.pdokWeg=pdokWeg; kaarten.clear(); werk(false); }};
+}
+
+/* ---------------- bord opbouwen ---------------- */
+let nr=0;
+document.querySelectorAll("[data-raam]").forEach(raam=>{
+  const o=JSON.parse(raam.dataset.raam), p="r"+(++nr);
+  const st=leesAdres(o.stand||"");
+  if(o.ruw) Object.entries(o.ruw).forEach(([k,[v,t]])=>st.ruw[k]={van:v,tm:t});
+  const kop=`<header class="kop"><div class="kop-rij"><p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>Werklijst</b></p>${o.breed?`<span class="kop-meta">500 panden · 450 uit de 25 grootste gemeenten · 50 elders</span>`:""}</div><h2 class="titel">Werklijst november 2026</h2></header>`;
+  raam.innerHTML = o.breed
+    ? `<div class="r-vg"><div class="r-side"><div class="r-merk">LEVRAI<small>VASTGOED</small></div><div class="r-nav"><span>Kantoor</span><span>Kerncijfers</span><span>Voorraad</span><span class="actief">Werklijst</span></div></div><div class="r-inhoud">${kop}<div class="host"></div></div></div>`
+    : `<div class="r-top"><div class="r-merk">LEVRAI<small>VASTGOED</small></div><span class="r-menuknop">Menu</span></div><div class="r-inhoud">${kop}<div class="host"></div></div>`;
+  maakWerklijst(raam.querySelector(".host"), p, st, o);
+});
+[["fotorij-licht"],["fotorij-donker"]].forEach(([id])=>{
+  const rij=document.getElementById(id), voorbeeld=P[0];
+  [["geladen","Geladen, met merkteken in het midden"],["laadt","Laadt nog: neutraal gestreept vlak, geen tekst"],["mislukt","PDOK onbereikbaar"],["geen","Pand zonder x/y: geen verzoek"]].forEach(([m,uitleg])=>{
+    const f=document.createElement("figure"), w=document.createElement("div");
+    w.className="card-foto"; w.innerHTML=`<span class="merk" aria-hidden="true"></span><span class="melding"></span>`;
+    foto(w, voorbeeld, m==="geladen"?"direct":m);
+    if(m==="geladen") w.classList.replace("laadt","geladen");
+    f.append(w); const c=document.createElement("figcaption"); c.textContent=uitleg; f.append(c); rij.append(f);
+  });
+});
+
+/* ---------------- het werkende voorbeeld ---------------- */
+const live=maakWerklijst(document.getElementById("live"), "live", leesAdres(location.search), {live:true, open:matchMedia("(min-width: 801px)").matches});
+document.querySelectorAll("[data-breedte]").forEach(b=>b.addEventListener("click", ()=>{
+  document.getElementById("proef").style.width=b.dataset.breedte+"px";
+  document.querySelectorAll("[data-breedte]").forEach(x=>x.setAttribute("aria-pressed", String(x===b)));
+}));
+document.getElementById("themaKnop").addEventListener("click", e=>{
+  const donker=document.documentElement.dataset.theme!=="dark";
+  document.documentElement.dataset.theme=donker?"dark":"light";
+  e.currentTarget.setAttribute("aria-pressed", String(donker));
+  e.currentTarget.textContent = donker ? "Thema: licht" : "Thema: donker";
+});
+document.getElementById("pdokWeg").addEventListener("change", e=>live.herteken(e.target.checked));
+</script>
+</body>
+</html>

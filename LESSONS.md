@@ -172,6 +172,13 @@ struck through with the reason, never deleted.
   errors included.** On Railway the client address is the last `X-Real-IP` line, never
   `X-Forwarded-For`, and only five wrong logins after the first deploy prove it. *(2026-11-13, Vera,
   VA-50)*
+- **The dashboard has `html{scroll-behavior:smooth}`, so a script that keeps the page in place with `scrollBy`
+  must pass `behavior: "instant"`, or it glides and a second redraw measures mid-glide.** And Playwright's
+  `click()` scrolls its target into view first: measure a layout shift from a click done in `page.evaluate`, or
+  per element, not from the section's position. *(2026-11-16, Ada, VA-91)*
+- **Testing "no uncaught error" with a script blocked: check `pageerror` is empty, not that the
+  console is empty.** Chrome always logs `Failed to load resource` for the blocked request.
+  *(2026-11-08, Vera, VA-48; landed on `main` with VA-106)*
 - **Key a per-snapshot side file on the snapshot's full file name, not its stem.** `vbo_delft_2026-11-01.json`
   and `vbo_delft_2026-11-01.sqlite` share a stem, so `energielabel_<stem>.sqlite` let one overwrite-guard
   block the other. *(2026-11-17, Rex, VA-58)*
