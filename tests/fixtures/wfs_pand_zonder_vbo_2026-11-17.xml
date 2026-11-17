@@ -1,0 +1,22 @@
+<?xml version='1.0' encoding="UTF-8" ?>
+<wfs:FeatureCollection
+   xmlns:bag="http://bag.geonovum.nl"
+   xmlns:gml="http://www.opengis.net/gml/3.2"
+   xmlns:wfs="http://www.opengis.net/wfs/2.0"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://bag.geonovum.nl https://service.pdok.nl/kadaster/bag/wfs/v2_0?SERVICE=WFS&amp;VERSION=2.0.0&amp;REQUEST=DescribeFeatureType&amp;TYPENAME=bag:pand,bag:verblijfsobject&amp;OUTPUTFORMAT=application%2Fgml%2Bxml%3B%20version%3D3.2 http://www.opengis.net/wfs/2.0 http://schemas.opengis.net/wfs/2.0/wfs.xsd http://www.opengis.net/gml/3.2 http://schemas.opengis.net/gml/3.2.1/gml.xsd"
+   timeStamp="2026-11-17T10:35:10" numberMatched="1" numberReturned="1">
+      <wfs:boundedBy>
+      	<gml:Envelope srsName="urn:ogc:def:crs:EPSG::28992">
+      		<gml:lowerCorner>84264.568000 447511.340000</gml:lowerCorner>
+      		<gml:upperCorner>84296.501000 447536.845000</gml:upperCorner>
+      	</gml:Envelope>
+      </wfs:boundedBy>
+    <wfs:member>
+      <bag:pand gml:id="pand.ce86d19e-da02-4f02-aad2-329ef02274f1">
+        <bag:identificatie>0503100000026198</bag:identificatie>
+        <bag:status>Pand in gebruik</bag:status>
+      </bag:pand>
+    </wfs:member>
+</wfs:FeatureCollection>
+

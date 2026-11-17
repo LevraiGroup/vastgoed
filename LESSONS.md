@@ -182,3 +182,7 @@ struck through with the reason, never deleted.
 - **A CDP `Input.dispatchKeyEvent` Enter does not press a focused `<button>` unless the keyDown carries
   `text: "\r"` (Space needs `text: " "`).** Without it the key test reads "Enter does nothing" on a
   page that works. *(2026-11-17, Ada, VA-99)*
+- **The BAG WFS holds no "Pand gesloopt" and no ingetrokken VBO's (0 hits each, 2026-11-17): a demolished pand
+  simply disappears, so "niet gevonden" is the gesloopt signal. One GetFeature with `typeNames=bag:pand,bag:verblijfsobject`
+  and `filter=(…)(…)` returns the pand and its VBO's in one request, but only as GML: its JSON output is two
+  concatenated collections, and `count` caps the total of both queries (`numberMatched="unknown"` when cut).** *(2026-11-17, Rex, VA-75)*
