@@ -752,21 +752,46 @@
     background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18)}
   @media (hover:hover){ .bwp-terug:hover{background:rgba(255,255,255,.16)} }
   .bwp-terug:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .bwp-pagina .card.bwp-rij{flex-direction:column;flex-wrap:nowrap;align-items:stretch;gap:0;padding:0}
+  .bwp-foto{position:relative;height:168px;overflow:hidden;background:var(--grid)}
+  .bwp-foto.laadt{background:repeating-linear-gradient(135deg,var(--grid) 0 7px,color-mix(in srgb,var(--grid) 55%,var(--surface)) 7px 14px)}
+  .bwp-foto img{display:block;width:100%;height:100%;object-fit:cover;opacity:0;transform:scale(1.02)}
+  .bwp-foto.geladen img{opacity:1;transform:none}
+  @media (prefers-reduced-motion: no-preference){ .bwp-foto img{transition:opacity .3s ease,transform .6s ease} }
+  .bwp-foto::after{content:"";position:absolute;inset:auto 0 0 0;height:60%;pointer-events:none;
+    background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--brand) 55%,transparent))}
+  .bwp-foto .melding{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    font-size:12px;font-weight:600;color:var(--ink-2)}
+  .bwp-foto.mislukt .melding,.bwp-foto.geen .melding{display:flex}
+  .bwp-pagina .bwp-foto .score{position:absolute;z-index:1;right:12px;bottom:12px;
+    box-shadow:0 0 0 3px rgba(255,255,255,.85),0 8px 18px -6px rgba(0,0,0,.5)}
+  .bwp-pagina .bwp-kern{flex:none;padding:14px 16px;gap:6px}
+  .bwp-pagina .bwp-kern .addr{font-size:15.5px;line-height:1.3}
+  .bwp-pagina .bwp-rij > .bw-rij{flex:none;display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:center;
+    gap:10px;margin-top:auto;padding:12px 14px;border-top:1px solid var(--ring);
+    background:color-mix(in srgb,var(--grid) 35%,transparent)}
+  .bwp-pagina .bwp-rij .pand-open{display:inline-flex;align-items:center;gap:6px;min-height:42px;padding:0 16px;
+    border-radius:11px;border:1px solid color-mix(in srgb,var(--s1) 45%,var(--ring));background:var(--surface-2);
+    color:var(--s1);font-weight:700;font-size:13.5px;text-decoration:none;cursor:pointer;flex:none;white-space:nowrap}
+  .bwp-pagina .bwp-rij .pand-open::after{content:"→";transition:transform .15s ease}
+  @media (hover:hover){ .bwp-pagina .bwp-rij .pand-open:hover{background:var(--s1);color:#fff;border-color:var(--s1)}
+    .bwp-pagina .bwp-rij .pand-open:hover::after{transform:translateX(2px)} }
+  .bwp-pagina .bwp-rij .baglink{padding:10px 4px}
+  .bwp-pagina .bwp-rij > .bw-rij > .bw-knop{margin-left:auto}
   .bwp-pagina .bwp-lijst{grid-template-columns:repeat(auto-fill,minmax(min(100%,400px),1fr));gap:12px}
-  .bwp-pagina .card.bwp-rij{position:relative;overflow:hidden;padding:16px;align-items:flex-start;
+  .bwp-pagina .card.bwp-rij{position:relative;overflow:hidden;
     transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
-  .bwp-pagina .card.bwp-rij::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;
+  .bwp-pagina .card.bwp-rij::before{content:"";position:absolute;z-index:2;left:0;right:0;top:0;height:3px;
     background:linear-gradient(90deg,var(--s1),var(--s3) 60%,transparent)}
   .bwp-pagina .card.bwp-rij.weg::before{background:repeating-linear-gradient(90deg,var(--baseline) 0 8px,transparent 8px 14px)}
   @media (hover:hover){ .bwp-pagina .card.bwp-rij:hover{transform:translateY(-2px);box-shadow:var(--schaduw-hoog);
     border-color:color-mix(in srgb,var(--s1) 35%,var(--ring))} }
-  .bwp-pagina .bwp-rij .score{width:54px;height:54px;border-radius:50%;position:relative;
+  .bwp-pagina .bwp-rij .score{width:58px;height:58px;border-radius:50%;
     background:conic-gradient(var(--s1) calc(var(--p,0) * 1%),color-mix(in srgb,var(--brand) 18%,var(--grid)) 0)}
   .bwp-pagina .bwp-rij .score::before{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--brand)}
   .bwp-pagina .bwp-rij .score > *{position:relative}
   .bwp-pagina .bwp-rij .score b{font-family:var(--mono);font-size:17px}
   .bwp-pagina .bwp-rij .score small{font-size:7.5px}
-  .bwp-pagina .bwp-rij > .bw-rij{flex-basis:100%;padding-top:12px;border-top:1px solid var(--ring)}
   .bwp-pagina .bwp-rij .lid{font-family:var(--mono);font-size:11px}
   @media (max-width:800px){
     .kop.bwp-held{padding:20px 18px 18px;border-radius:18px}
@@ -1683,7 +1708,19 @@ const BWP = (() => {
     const ico = BW.icoon("ster_vol", "bw-ico");   // VA-105: de volle ster van de knop, niet voorgelezen
     const tk = maak("span", "bw-tk"); tk.append(maak("span", "bw-nm", T["label.bewaard"]), maak("span", "bw-terug", T["terug.bewaard"]));
     b.append(ico, tk); b.addEventListener("click", () => haalWeg(id));
-    knoppen.append(b); li.append(sc, kern, knoppen);
+    knoppen.append(b);
+    // Ayman 11-17 ("geen foto, de knop raar in het midden"): bovenaan de luchtfoto (PDOK, VA-62's grote foto,
+    // pas geladen als de kaart in beeld komt) met de score erop, onderaan de knoppen als één balk.
+    const fv = maak("div", "bwp-foto"), fm = maak("span", "melding"), plek = d && d.detail && d.detail.loc;
+    if (plek && PLEK.foto) {
+      fv.classList.add("laadt");
+      const img = new Image(); img.alt = FOTO.alt.replace("{adres}", () => R.adres(v)); img.loading = "lazy"; img.decoding = "async";
+      img.addEventListener("load", () => fv.classList.replace("laadt", "geladen"), {once: true});
+      img.addEventListener("error", () => { img.remove(); fv.classList.replace("laadt", "mislukt"); fm.textContent = FOTO.mislukt; }, {once: true});
+      img.src = PLEK.foto.replace("{b}", plek.b); fv.append(img);
+    } else { fv.classList.add("geen"); fm.textContent = FOTO.geen; }
+    fv.append(fm, sc);
+    li.append(fv, kern, knoppen);
     return li;
   }
   function haalWeg(id) {
