@@ -1110,7 +1110,7 @@ SLOT_TEKST = {
     "titel": "De rest van je werklijst staat achter het slot",
     "sr": "{n} panden staan achter het slot",
     "sr.een": "1 pand staat achter het slot",
-    "regel": "Zet de datakoppeling aan om alle panden van de werklijst te zien.",
+    "regel": "Ik zal het openzetten, volgt na betaling.",
     "telling.alle": "De {n} zichtbare panden",
     "telling": "{n} van de {totaal} zichtbare panden",
 }
