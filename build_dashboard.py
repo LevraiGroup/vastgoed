@@ -856,10 +856,24 @@ def lees_verberg_dagen(cfg: dict) -> tuple[int, list[str]]:
     return n, []
 
 
+# Ayman 11-17: "het moet wel productieready zijn". Bewaren en verbergen staan op de server (serve.py,
+# /api/panden), gedeeld door iedereen met de Levrai-inlog. Deze zinnen vervangen die over "alleen op dit
+# apparaat" zodra de server antwoordt; zonder server (een los bestand) blijven die van Lumi staan.
+# Woorden van de main session; wachten op Lumi.
+BEWAAR_SERVER_TEKST = {
+    "apparaat": "Wat je bewaart of verbergt, staat op de server: iedereen met de Levrai-inlog ziet het, op elk apparaat.",
+    "apparaat.kort": "Op de server, voor iedereen met de Levrai-inlog.",
+    "pagina.apparaat": "Deze lijst staat op de server. Iedereen met de Levrai-inlog ziet hem, op elk apparaat.",
+    "waar": "gedeeld via de server",
+    "waar.lokaal": "alleen op dit apparaat",
+    "fout": "Dat is niet opgeslagen: de server gaf geen antwoord. Probeer het zo nog eens.",
+}
+
+
 def bewaar_blok(top: list[dict], dagen: int = VERBERG_DAGEN) -> dict:
     """PAYLOAD.bewaar: de teksten, de peildatum die een lead zonder eigen 'dp' heeft, en de verbergduur (VA-97)."""
-    return {"tekst": BEWAAR_TEKST, "dp": gangbare_peildatum(top), "dagen": dagen, "duur": VERBERG_DUUR_TEKST,
-            "maanden": list(MAANDEN), "nbsp": NBSP}
+    return {"tekst": BEWAAR_TEKST, "server": BEWAAR_SERVER_TEKST, "dp": gangbare_peildatum(top), "dagen": dagen,
+            "duur": VERBERG_DUUR_TEKST, "maanden": list(MAANDEN), "nbsp": NBSP}
 
 
 def met_duur_verborgen(payload: dict, cfg: dict) -> dict:
@@ -868,7 +882,7 @@ def met_duur_verborgen(payload: dict, cfg: dict) -> dict:
     if let:   # de build drukt het af, net als de waarschuwingen van de planning
         payload = {**payload, "planning_waarschuwingen": (payload.get("planning_waarschuwingen") or []) + let}
     bw = payload.get("bewaar") or bewaar_blok([])
-    return {**payload, "bewaar": {**bw, "dagen": dagen, "duur": VERBERG_DUUR_TEKST,
+    return {**payload, "bewaar": {**bw, "server": BEWAAR_SERVER_TEKST, "dagen": dagen, "duur": VERBERG_DUUR_TEKST,
                                   "maanden": list(MAANDEN), "nbsp": NBSP}}
 
 
@@ -876,23 +890,53 @@ def met_duur_verborgen(payload: dict, cfg: dict) -> dict:
 # die bouw geschreven; de stadsbouw krijgt het deel pas met haar woorden ervoor (copy-va91.md §9).
 BEWAARD = ("bewaard", BEWAAR_TEKST["pagina.titel"])
 BEWAARD_EERST = 10   # zoveel nieuwste bewaarde panden staan er eerst; de rest achter 'Toon alle' (Lumi §6)
+# Ayman 11-17: "bewaarde panden op een aparte speciale, coole, hightech pagina". De kop van die pagina is een
+# navy paneel met de tellingen; de woorden hieronder zijn van de main session en wachten op Lumi.
+BEWAARD_HELD_TEKST = {
+    "sys": "Jouw selectie",
+    "tel.n": "Bewaard",
+    "tel.in": "In de werklijst",
+    "tel.weg": "Niet meer in de werklijst",
+    "tel.score": "Gemiddelde score",
+    "cat": "Verdeling over categorie A–E",
+    "terug": "Terug naar de werklijst",
+}
+STER_SVG = ('<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2.6l2.9 '
+            '5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.4l-5.8 3.1 1.1-6.5L2.6 9.4l6.5-.9z"/></svg>')
 
 
 def bewaard_html(lijst: str) -> str:
-    """Het deel #bewaard, tussen Voorraad en de werklijst; leeg voor een bouw zonder dit deel."""
+    """De eigen pagina #bewaard (geen deel van de lange scroll); leeg voor een bouw zonder deze pagina."""
     if lijst != LIJST_LANDELIJK[0]:
         return ""
     t = {k: escape(v) for k, v in BEWAAR_TEKST.items()}
+    h = {k: escape(v) for k, v in BEWAARD_HELD_TEKST.items()}
+    tegels = "".join(f'<div class="bwp-tegel{" eerste" if i == 0 else ""}"><b id="bwpTel{k}">–</b><span>{h["tel." + s]}</span></div>'
+                     for i, (k, s) in enumerate((("N", "n"), ("In", "in"), ("Weg", "weg"), ("Score", "score"))))
     return f'''
     <!-- BEWAARDE PANDEN (VA-91) -->
-    <section class="deel" id="bewaard" aria-labelledby="t-bewaard" tabindex="-1">
-      <header class="kop">
+    <section class="deel pagina bwp-pagina" id="bewaard" aria-labelledby="t-bewaard" tabindex="-1">
+      <header class="kop bwp-held">
+        <span class="bwp-scan" aria-hidden="true"></span>
         <div class="kop-rij">
           <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>{t["pagina.titel"]}</b></p>
           <span class="kop-meta" id="bwpMeta"></span>
         </div>
-        <h2 class="titel" id="t-bewaard">{t["pagina.titel"]}</h2>
-        <p class="kop-zin">{t["pagina.zin"]}</p>
+        <p class="bwp-sys"><i class="bwp-puls" aria-hidden="true"></i>{h["sys"]} · <span id="bwpWaar">{escape(BEWAAR_SERVER_TEKST["waar.lokaal"])}</span></p>
+        <div class="bwp-kopkern">
+          <div class="bwp-embleem" aria-hidden="true"><span class="bwp-ring"></span>{STER_SVG}</div>
+          <div>
+            <h2 class="titel" id="t-bewaard">{t["pagina.titel"]}</h2>
+            <p class="kop-zin">{t["pagina.zin"]}</p>
+          </div>
+        </div>
+        <div class="bwp-tel">{tegels}</div>
+        <div class="bwp-cat" id="bwpCat" hidden>
+          <p>{h["cat"]}</p>
+          <div class="bwp-staaf" id="bwpStaaf" aria-hidden="true"></div>
+          <ul class="bwp-leg" id="bwpLeg"></ul>
+        </div>
+        <a class="bwp-terug" href="#{LIJST_LANDELIJK[0]}"><span aria-hidden="true">←</span>{h["terug"]}</a>
       </header>
       <div class="bwp" data-eerst="{BEWAARD_EERST}">
         <div class="bw-balk">
@@ -1066,7 +1110,7 @@ SLOT_TEKST = {
     "titel": "De rest van je werklijst staat achter het slot",
     "sr": "{n} panden staan achter het slot",
     "sr.een": "1 pand staat achter het slot",
-    "regel": "Zet de datakoppeling aan om alle panden van de werklijst te zien.",
+    "regel": "Ik zal het openzetten, volgt na betaling.",
     "telling.alle": "De {n} zichtbare panden",
     "telling": "{n} van de {totaal} zichtbare panden",
 }
@@ -1624,11 +1668,10 @@ def menu_voor(lijst: str) -> list[dict]:
     """MENU, met voor heel Nederland 'Werklijst' op de plek van 'Proefresultaat'."""
     if lijst != LIJST_LANDELIJK[0]:
         return MENU
-    # VA-91: Bewaarde panden tussen Voorraad en Werklijst, in dezelfde volgorde als de delen op de pagina.
-    return [dict(g, items=[x for doel, naam in g["items"]
-                           for x in ([LIJST_LANDELIJK] if doel == "proefresultaat" else
-                                     [(doel, naam), BEWAARD] if doel == "voorraad" else [(doel, naam)])])
-            for g in MENU]
+    # Bewaarde panden is een eigen pagina (Ayman 11-17), dus een eigen groep onder Panden, niet tussen de delen
+    # van de lange scroll. Op de pagina staat het deel ook als laatste, zodat menu en delen dezelfde volgorde houden.
+    return [dict(g, items=[LIJST_LANDELIJK if doel == "proefresultaat" else (doel, naam) for doel, naam in g["items"]])
+            for g in MENU] + [{"groep": "Mijn selectie", "id": "g-selectie", "items": [BEWAARD]}]
 
 
 def menu_html(lijst: str = "proefresultaat") -> str:
@@ -2570,6 +2613,133 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   .bwp .wl-leeg{margin-bottom:0}
   .bwp .bw-toon{margin-top:12px}
   @container kaart (max-width:520px){ .bwp-rij > .bw-rij{flex-basis:100%} }
+
+  /* ---- Een eigen pagina (Ayman 11-17: "op een aparte speciale, coole, hightech pagina") ----
+     Een deel met .pagina staat niet in de lange scroll: het menu zet .op-pagina op .vg en .nu op dat deel,
+     en dan is alleen dat deel te zien. Zonder .op-pagina is het er niet. */
+  .vg:not(.op-pagina) .inhoud > .deel.pagina{display:none}
+  .vg.op-pagina .inhoud > .deel:not(.nu){display:none}
+  .vg.op-pagina .inhoud > .deel.nu{margin-top:0}
+  .bwp-pagina{--mono:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace}
+  .kop.bwp-held{position:relative;isolation:isolate;overflow:hidden;margin:0 0 22px;padding:26px 28px 24px;gap:8px;
+    border-radius:22px;background:var(--held);color:#fff;box-shadow:var(--schaduw-hoog);
+    border:1px solid color-mix(in srgb,var(--s1) 30%,transparent)}
+  .bwp-held::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+    background-image:linear-gradient(rgba(255,255,255,.07) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.07) 1px,transparent 1px);
+    background-size:30px 30px;background-position:-1px -1px;
+    -webkit-mask-image:radial-gradient(120% 90% at 85% 0%,#000 25%,transparent 80%);
+            mask-image:radial-gradient(120% 90% at 85% 0%,#000 25%,transparent 80%)}
+  .bwp-held::after{content:"";position:absolute;z-index:-1;pointer-events:none;width:520px;height:520px;right:-160px;top:-260px;
+    border-radius:50%;background:radial-gradient(closest-side,var(--gloed),transparent)}
+  .bwp-scan{position:absolute;left:0;right:0;top:0;height:90px;z-index:-1;pointer-events:none;opacity:0;
+    background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--s1) 22%,transparent) 85%,
+               color-mix(in srgb,#9fd0ff 70%,transparent) 99%,transparent)}
+  @media (prefers-reduced-motion: no-preference){
+    .bwp-scan{animation:bwp-scan 7s cubic-bezier(.45,0,.55,1) infinite}
+    .bwp-ring{animation:bwp-draai 14s linear infinite}
+    .bwp-puls{animation:bwp-puls 2.4s ease-in-out infinite}
+  }
+  @keyframes bwp-scan{0%{transform:translateY(-100%);opacity:0}12%{opacity:1}70%{opacity:.8}100%{transform:translateY(420%);opacity:0}}
+  @keyframes bwp-draai{to{transform:rotate(1turn)}}
+  @keyframes bwp-puls{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
+  .bwp-held .kop-rij{position:relative}
+  .bwp-held .kruimel{color:var(--nav-label)}
+  .bwp-held .kruimel b{color:#fff}
+  .bwp-held .kop-meta{color:var(--nav-tekst);font-family:var(--mono);font-size:11.5px;letter-spacing:.04em}
+  .bwp-sys{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;
+    text-transform:uppercase;color:#9fd0ff}
+  .bwp-sys i{width:7px;height:7px;border-radius:50%;background:#5fe3b0;box-shadow:0 0 0 3px rgba(95,227,176,.18),0 0 12px #5fe3b0}
+  .bwp-kopkern{display:flex;align-items:center;gap:20px;margin-top:6px}
+  .bwp-embleem{position:relative;flex:none;width:84px;height:84px;display:grid;place-items:center}
+  .bwp-ring{position:absolute;inset:0;border-radius:50%;
+    background:conic-gradient(from 0deg,transparent 0 55%,color-mix(in srgb,var(--s1) 80%,#fff) 80%,#fff 86%,transparent 87%);
+    -webkit-mask:radial-gradient(closest-side,transparent calc(100% - 3px),#000 calc(100% - 2px));
+            mask:radial-gradient(closest-side,transparent calc(100% - 3px),#000 calc(100% - 2px))}
+  .bwp-embleem::before{content:"";position:absolute;inset:9px;border-radius:50%;border:1px dashed rgba(255,255,255,.22)}
+  .bwp-embleem::after{content:"";position:absolute;inset:18px;border-radius:50%;
+    background:radial-gradient(closest-side,color-mix(in srgb,var(--s4) 45%,transparent),transparent)}
+  .bwp-embleem svg{position:relative;z-index:1;width:34px;height:34px;color:var(--s4);filter:drop-shadow(0 0 10px color-mix(in srgb,var(--s4) 70%,transparent))}
+  .bwp-held .titel{color:#fff;font-size:34px;letter-spacing:-.03em}
+  .bwp-held .kop-zin{color:var(--nav-tekst);max-width:70ch}
+  .bwp-tel{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:18px}
+  .bwp-tegel{position:relative;padding:13px 14px 12px;border-radius:14px;min-width:0;
+    background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.13);
+    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  .bwp-tegel::before{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(159,208,255,.8),transparent)}
+  .bwp-tegel b{display:block;font-family:var(--mono);font-size:28px;font-weight:700;line-height:1.05;letter-spacing:-.02em;
+    font-variant-numeric:tabular-nums;color:#fff}
+  .bwp-tegel b small{font-size:13px;font-weight:600;color:var(--nav-label);margin-left:2px}
+  .bwp-tegel span{display:block;margin-top:5px;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--nav-label);overflow-wrap:anywhere}
+  .bwp-tegel.eerste b{color:#ffd46b;text-shadow:0 0 18px color-mix(in srgb,var(--s4) 60%,transparent)}
+  .bwp-cat{position:relative;margin-top:14px}
+  .bwp-cat > p{margin:0 0 7px;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--nav-label)}
+  .bwp-staaf{display:flex;height:10px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.08);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  .bwp-staaf i{display:block;height:100%;transition:flex-grow .5s cubic-bezier(.2,.7,.2,1)}
+  .bwp-staaf i + i{box-shadow:-2px 0 0 #0b1a2e}
+  .bwp-leg{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 0;padding:0;list-style:none;font-family:var(--mono);
+    font-size:11.5px;color:var(--nav-tekst)}
+  .bwp-leg li{display:inline-flex;align-items:center;gap:6px}
+  .bwp-leg li i{width:9px;height:9px;border-radius:3px}
+  .bwp-terug{position:relative;align-self:flex-start;display:inline-flex;align-items:center;gap:8px;margin-top:16px;
+    padding:9px 14px;border-radius:999px;font-size:13px;font-weight:700;color:#fff;text-decoration:none;
+    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18)}
+  @media (hover:hover){ .bwp-terug:hover{background:rgba(255,255,255,.16)} }
+  .bwp-terug:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  /* de lijst op de pagina: kaarten met een luchtfoto bovenaan, de score erop, en een knoppenbalk onderaan */
+  .bwp-pagina .card.bwp-rij{flex-direction:column;flex-wrap:nowrap;align-items:stretch;gap:0;padding:0}
+  .bwp-foto{position:relative;height:168px;overflow:hidden;background:var(--grid)}
+  .bwp-foto.laadt{background:repeating-linear-gradient(135deg,var(--grid) 0 7px,color-mix(in srgb,var(--grid) 55%,var(--surface)) 7px 14px)}
+  .bwp-foto img{display:block;width:100%;height:100%;object-fit:cover;opacity:0;transform:scale(1.02)}
+  .bwp-foto.geladen img{opacity:1;transform:none}
+  @media (prefers-reduced-motion: no-preference){ .bwp-foto img{transition:opacity .3s ease,transform .6s ease} }
+  .bwp-foto::after{content:"";position:absolute;inset:auto 0 0 0;height:60%;pointer-events:none;
+    background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--brand) 55%,transparent))}
+  .bwp-foto .melding{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    font-size:12px;font-weight:600;color:var(--ink-2)}
+  .bwp-foto.mislukt .melding,.bwp-foto.geen .melding{display:flex}
+  .bwp-pagina .bwp-foto .score{position:absolute;z-index:1;right:12px;bottom:12px;
+    box-shadow:0 0 0 3px rgba(255,255,255,.85),0 8px 18px -6px rgba(0,0,0,.5)}
+  .bwp-pagina .bwp-kern{flex:none;padding:14px 16px;gap:6px}
+  .bwp-pagina .bwp-kern .addr{font-size:15.5px;line-height:1.3}
+  .bwp-pagina .bwp-rij > .bw-rij{flex:none;display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:center;
+    gap:10px;margin-top:auto;padding:12px 14px;border-top:1px solid var(--ring);
+    background:color-mix(in srgb,var(--grid) 35%,transparent)}
+  .bwp-pagina .bwp-rij .pand-open{display:inline-flex;align-items:center;gap:6px;min-height:42px;padding:0 16px;
+    border-radius:11px;border:1px solid color-mix(in srgb,var(--s1) 45%,var(--ring));background:var(--surface-2);
+    color:var(--s1);font-weight:700;font-size:13.5px;text-decoration:none;cursor:pointer;flex:none;white-space:nowrap}
+  .bwp-pagina .bwp-rij .pand-open::after{content:"→";transition:transform .15s ease}
+  @media (hover:hover){ .bwp-pagina .bwp-rij .pand-open:hover{background:var(--s1);color:#fff;border-color:var(--s1)}
+    .bwp-pagina .bwp-rij .pand-open:hover::after{transform:translateX(2px)} }
+  .bwp-pagina .bwp-rij .baglink{padding:10px 4px}
+  .bwp-pagina .bwp-rij > .bw-rij > .bw-knop{margin-left:auto}
+  .bwp-pagina .bwp-lijst{grid-template-columns:repeat(auto-fill,minmax(min(100%,400px),1fr));gap:12px}
+  .bwp-pagina .card.bwp-rij{position:relative;overflow:hidden;
+    transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+  .bwp-pagina .card.bwp-rij::before{content:"";position:absolute;z-index:2;left:0;right:0;top:0;height:3px;
+    background:linear-gradient(90deg,var(--s1),var(--s3) 60%,transparent)}
+  .bwp-pagina .card.bwp-rij.weg::before{background:repeating-linear-gradient(90deg,var(--baseline) 0 8px,transparent 8px 14px)}
+  @media (hover:hover){ .bwp-pagina .card.bwp-rij:hover{transform:translateY(-2px);box-shadow:var(--schaduw-hoog);
+    border-color:color-mix(in srgb,var(--s1) 35%,var(--ring))} }
+  .bwp-pagina .bwp-rij .score{width:58px;height:58px;border-radius:50%;
+    background:conic-gradient(var(--s1) calc(var(--p,0) * 1%),color-mix(in srgb,var(--brand) 18%,var(--grid)) 0)}
+  .bwp-pagina .bwp-rij .score::before{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--brand)}
+  .bwp-pagina .bwp-rij .score > *{position:relative}
+  .bwp-pagina .bwp-rij .score b{font-family:var(--mono);font-size:17px}
+  .bwp-pagina .bwp-rij .score small{font-size:7.5px}
+  .bwp-pagina .bwp-rij .lid{font-family:var(--mono);font-size:11px}
+  @media (max-width:800px){
+    .kop.bwp-held{padding:20px 18px 18px;border-radius:18px}
+    .bwp-held .titel{font-size:27px}
+    .bwp-embleem{width:62px;height:62px}
+    .bwp-embleem svg{width:26px;height:26px}
+    .bwp-kopkern{gap:14px}
+    .bwp-tel{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .bwp-tegel b{font-size:24px}
+  }
   /* ===================== einde BEWAARDE PANDEN ===================== */
   /* ===================== SLOT (VA-96): de panden na de eerste n, achter één blok ===================== */
   .slot-blok{position:relative;margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid var(--ring);
@@ -2680,7 +2850,6 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
         </div>
       </div>
     </section>
-__BEWAARD__
     <section class="deel" id="__LIJST__" aria-labelledby="t-__LIJST__" tabindex="-1">
       <header class="kop">
         <div class="kop-rij">
@@ -2709,6 +2878,7 @@ __BEWAARD__
         grijze criteria wachten op een extra databron (energielabel, verkoophistorie, leegstand).
       </p>
     </section>
+__BEWAARD__
   </main>
 </div>
 <div id="tt"></div>
@@ -3131,7 +3301,8 @@ const BW = (() => {
   const PER_ID = new Map(LEADS.map(d => [d.id, d]));
   const D = PAYLOAD.bewaar.duur, DAG = 864e5, DAGEN = PAYLOAD.bewaar.dagen || 30;   // VA-97
   const MND = PAYLOAD.bewaar.maanden, SP = PAYLOAD.bewaar.nbsp;   // het datumformaat van _nl() in Python
-  let stand = {}, werkt = false, tonen = false, dlg = null;
+  let stand = {}, werkt = false, tonen = false, dlg = null, server = false;
+  const S = PAYLOAD.bewaar.server || {}, API = "/api/panden";
   const luisteraars = [], alleLuisteraars = [], rijen = new Map();   // per pand-ID de knoppenrij van zijn kaart
   function lees() {
     try { const r = JSON.parse(localStorage.getItem(SLEUTEL) || "null");
@@ -3142,18 +3313,50 @@ const BW = (() => {
   const tot = r => Date.parse(r.sinds) + DAGEN * DAG;
   // De korte datum van _nl(): dag, maand en jaar met harde spaties, in de eigen tijdzone. Geen tweede notatie (VA-31).
   const datum = r => { const t = new Date(tot(r)); return t.getDate() + SP + MND[t.getMonth()] + SP + t.getFullYear(); };
-  function verlopen() {   // true als er iets veranderde (dan is het ook opgeslagen)
-    const nu = Date.now(); let anders = false;
+  function verlopen() {   // true als er iets veranderde (dan is het ook opgeslagen, ook op de server)
+    const nu = Date.now(), gewijzigd = [];
     for (const id of Object.keys(stand)) { const r = stand[id];
       if (!r || r.stand !== "verborgen") continue;
       const t = Date.parse(r.sinds);
-      if (!Number.isFinite(t) || t > nu) { r.sinds = new Date(nu).toISOString(); anders = true; }   // van vóór VA-97 of scheef
-      else if (tot(r) <= nu) { delete stand[id]; anders = true; } }
-    if (anders) schrijf();
-    return anders;
+      if (!Number.isFinite(t) || t > nu) { r.sinds = new Date(nu).toISOString(); gewijzigd.push(id); }   // van vóór VA-97 of scheef
+      else if (tot(r) <= nu) { delete stand[id]; gewijzigd.push(id); } }
+    if (gewijzigd.length) { schrijf(); stuur(gewijzigd.map(id => ({id, waarde: stand[id] || null}))); }
+    return gewijzigd.length > 0;
   }
+  // Op de server is localStorage alleen een kopie, zodat de pagina meteen staat; de server is de bron.
   function schrijf() {
-    try { localStorage.setItem(SLEUTEL, JSON.stringify({v: VORM, panden: stand})); return true; } catch (e) { return false; }
+    try { localStorage.setItem(SLEUTEL, JSON.stringify({v: VORM, panden: stand})); return true; } catch (e) { return server; }
+  }
+  // Ayman 11-17, "productieready": bewaren en verbergen op de server (serve.py, /api/panden), gedeeld door
+  // iedereen met de Levrai-inlog. Antwoordt de server niet (een los bestand, geen opslag), dan blijft het
+  // in deze browser zoals VA-90 het deed, en zeggen de zinnen dat.
+  function stuur(wijzigingen) {
+    if (!server || !wijzigingen.length || typeof fetch !== "function") return Promise.resolve(true);
+    return fetch(API, {method: "POST", credentials: "same-origin", cache: "no-store",
+      headers: {"Content-Type": "application/json"}, body: JSON.stringify({wijzigingen})})
+      .then(r => r.ok).catch(() => false);
+  }
+  // Na een mislukte schrijfactie: terug naar wat er stond, en zeggen dat het niet gelukt is.
+  function mislukt(id, oud) {
+    if (oud) stand[id] = oud; else delete stand[id];
+    schrijf(); overal(true);
+    [el("bwStatus"), el("bwBewaardStatus"), dlg && dlg.s].forEach(r => { if (r && r.isConnected) r.textContent = S.fout; });
+  }
+  function bewaarOpServer(id, oud) { stuur([{id, waarde: stand[id] || null}]).then(ok => { if (!ok) mislukt(id, oud); }); }
+  function haal() {
+    if (typeof fetch !== "function") return Promise.resolve(null);
+    return fetch(API, {credentials: "same-origin", cache: "no-store"})
+      .then(r => r.ok ? r.json() : null).then(j => j && j.panden && typeof j.panden === "object" ? j.panden : null)
+      .catch(() => null);
+  }
+  function vanServer(panden) {
+    const eerst = !server; server = true; werkt = true;
+    // De eerste keer: wat alleen nog in deze browser stond, gaat mee naar de server (niets raakt kwijt).
+    const alleenHier = eerst ? Object.keys(stand).filter(id => !(id in panden) && /^[0-9]{16}$/.test(id)) : [];
+    alleenHier.forEach(id => { panden[id] = stand[id]; });
+    stand = panden; schrijf();
+    if (alleenHier.length) stuur(alleenHier.map(id => ({id, waarde: stand[id]})));
+    verlopen(); overal(true);
   }
   try { const k = SLEUTEL + "-proef"; localStorage.setItem(k, "1"); localStorage.removeItem(k); werkt = true; } catch (e) { werkt = false; }
   if (werkt) lees();
@@ -3167,17 +3370,21 @@ const BW = (() => {
     const oud = stand[d.id] || null, nu = van(d.id) === s ? "" : s;
     if (nu) stand[d.id] = gegevens(d, nu); else delete stand[d.id];
     if (!schrijf()) { if (oud) stand[d.id] = oud; else delete stand[d.id]; werkt = false; overal(false); return null; }
+    bewaarOpServer(d.id, oud);
     overal(nu === "verborgen" || (oud && oud.stand === "verborgen")); return {oud, nu};   // alleen verbergen raakt de lijst
   }
   function herstel(d, oud) {   // Ongedaan maken: precies de stand van daarvoor, ook als die 'bewaard' was
+    const was = stand[d.id] || null;
     if (oud) stand[d.id] = oud; else delete stand[d.id];
-    if (!schrijf()) { werkt = false; } overal(true);
+    if (!schrijf()) { werkt = false; } else bewaarOpServer(d.id, was);
+    overal(true);
   }
   function nietMeerBewaard(id) {   // VA-91: niet meer bewaren vanaf Bewaarde panden, ook voor een pand dat niet meer in de data staat
     const oud = stand[id] || null;
     if (!oud) return null;
     delete stand[id];
     if (!schrijf()) { stand[id] = oud; werkt = false; overal(false); return null; }
+    bewaarOpServer(id, oud);
     overal(false); return oud;
   }
   const adres = d => d.detail ? d.detail.titel : d.a;
@@ -3210,7 +3417,7 @@ const BW = (() => {
     const r = maak("div", inPand ? "bw-rij-pand" : "bw-rij"), k = maak("div", "bw-rij");
     k.append(knop(d, "bewaard"), knop(d, "verborgen"));
     if (!inPand) { rijen.set(d.id, k); werkRij(d); return k; }
-    r.className = "pand-bw"; r.append(k, maak("p", "bw-apparaat", werkt ? T["apparaat.kort"] : T.geen_opslag));
+    r.className = "pand-bw"; r.append(k, maak("p", "bw-apparaat", server ? S["apparaat.kort"] : werkt ? T["apparaat.kort"] : T.geen_opslag));
     const s = maak("div", "bw-status"); s.id = "pandBwStatus"; s.setAttribute("role", "status"); r.append(s);
     dlg = {d, r: k, s}; werkRij(d); return r;
   }
@@ -3276,7 +3483,7 @@ const BW = (() => {
     if (!balk) return;
     const n = aantalWeg(), aantal = el("bwAantal"), toon = el("bwToon");
     if (n === 0) tonen = false;   // niets verborgen: geen telling en geen knop
-    el("bwApparaat").textContent = werkt ? T.apparaat : T.geen_opslag;
+    el("bwApparaat").textContent = server ? S.apparaat : werkt ? T.apparaat : T.geen_opslag;
     aantal.hidden = toon.hidden = n === 0;
     aantal.textContent = n === 1 ? T["aantal.een"] : T.aantal.replace("{n}", nl(n));
     // Geen aria-pressed: het label zegt al wat de knop doet (Lumi §4); de rand via de klasse.
@@ -3311,14 +3518,18 @@ const BW = (() => {
   function overal(lijst) { rijen.forEach((k, id) => { const d = PER_ID.get(id); if (d) werkRij(d); }); if (dlg) werkRij(dlg.d); werkBalk(); if (lijst) luisteraars.forEach(f => f());
     alleLuisteraars.forEach(f => f()); }   // VA-91: Bewaarde panden en de telling in het menu volgen elke verandering
   if (balk) el("bwToon").addEventListener("click", () => { tonen = !tonen; overal(true); });
-  addEventListener("storage", e => { if (e.key === SLEUTEL) { lees(); overal(true); } });   // een ander tabblad van dit dashboard
+  addEventListener("storage", e => { if (e.key === SLEUTEL && !server) { lees(); overal(true); } });   // een ander tabblad van dit dashboard
   // VA-97: een tabblad dat dagen openstaat, laat een verlopen pand terugkomen zodra je er weer naar kijkt.
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && werkt && verlopen()) overal(true); });
+  // Op de server: terug in beeld haalt de lijst opnieuw op, zodat wat op een ander apparaat bewaard is er ook staat.
+  document.addEventListener("visibilitychange", () => { if (document.hidden) return;
+    if (server) haal().then(p => { if (p) { stand = p; schrijf(); verlopen(); overal(true); } });
+    else if (werkt && verlopen()) overal(true); });
+  haal().then(p => { if (p) vanServer(p); });
   werkBalk();
   // VA-91: wat de pagina Bewaarde panden nodig heeft. bewaarde(): [id, opgeslagen object] van elk bewaard pand.
   const bewaarde = () => Object.keys(stand).filter(id => stand[id] && stand[id].stand === "bewaard").map(id => [id, stand[id]]);
   return {rij, ververs: werkRij, zichtbaar, aantalWeg, op: f => luisteraars.push(f), van, leeg, ongedaanVoor, lijstDeel,
-    naSluiten, bewaarde, weg: nietMeerBewaard, herstelId: (id, oud) => herstel({id}, oud), status, werkt: () => werkt, opAlles: f => alleLuisteraars.push(f),
+    naSluiten, bewaarde, weg: nietMeerBewaard, opServer: () => server, herstelId: (id, oud) => herstel({id}, oud), status, werkt: () => werkt, opAlles: f => alleLuisteraars.push(f),
     icoon};   // VA-105: dezelfde SVG-iconen op de pagina Bewaarde panden
 })();
 /* ============================ einde BEWAREN EN VERBERGEN ============================ */
@@ -3354,11 +3565,14 @@ const BWP_REKEN = (() => {
 const BWP = (() => {
   const sec = document.getElementById("bewaard");
   if (!sec) return null;   // een bouw zonder dit deel (een stad)
-  const T = PAYLOAD.bewaar.tekst, R = BWP_REKEN, $ = id => document.getElementById(id);
+  const T = PAYLOAD.bewaar.tekst, S = PAYLOAD.bewaar.server || {}, R = BWP_REKEN, $ = id => document.getElementById(id);
+  const waar = $("bwpWaar");
   const lijst = $("bwpLijst"), leeg = $("bwpLeeg"), meer = $("bwpMeer"), meta = $("bwpMeta"), app = $("bwpApparaat");
   const regel = $("bwBewaardStatus"), menuN = $("bwpMenuN"), menuSr = $("bwpMenuSr"), wl = $("werklijst");
   const EERST = +sec.querySelector(".bwp").dataset.eerst || 10;
-  const PER = new Map(LEADS.map(d => [String(d.id), d]));   // wat in de huidige werklijst te zien is (met het slot: de eerste n)
+  // Elk pand van de werklijst van deze maand, ook achter het slot (VA-96): een pand dat al bewaard is, opent
+  // hier gewoon (Ayman 11-17, "waarom kan ik niet klikken"). Bewaren kan alleen wat zichtbaar is.
+  const PER = new Map(ALLE_LEADS.map(d => [String(d.id), d]));
   const gebouwd = new Map();   // per pand-ID {k: de opgeslagen gegevens als tekst, li}: een rij die niet verandert, blijft hangen
   let alles = false;
   const vul = (t, w) => t.replace(/\{(\w+)\}/g, (x, k) => k in w ? w[k] : x);
@@ -3367,6 +3581,7 @@ const BWP = (() => {
     const d = PER.get(id), li = maak("li", "card bwp-rij" + (d ? "" : " weg")); li.dataset.pand = id;
     const s = R.score(v.score100), sc = maak("div", "score" + (s === null ? " onb" : ""));
     if (s === null) sc.append(maak("b", null, "onbekend")); else sc.append(maak("b", null, String(s)), maak("small", null, "/100"));
+    if (s !== null) sc.style.setProperty("--p", Math.max(0, Math.min(100, s)));   // de ring om de score (eigen pagina)
     const kern = maak("div", "bwp-kern");
     kern.append(maak("div", "addr", R.adres(v)));
     if (!d) kern.append(maak("span", "bw-label weg", T["pagina.weg.label"]));
@@ -3392,7 +3607,19 @@ const BWP = (() => {
     const ico = BW.icoon("ster_vol", "bw-ico");   // VA-105: de volle ster van de knop, niet voorgelezen
     const tk = maak("span", "bw-tk"); tk.append(maak("span", "bw-nm", T["label.bewaard"]), maak("span", "bw-terug", T["terug.bewaard"]));
     b.append(ico, tk); b.addEventListener("click", () => haalWeg(id));
-    knoppen.append(b); li.append(sc, kern, knoppen);
+    knoppen.append(b);
+    // Ayman 11-17 ("geen foto, de knop raar in het midden"): bovenaan de luchtfoto (PDOK, VA-62's grote foto,
+    // pas geladen als de kaart in beeld komt) met de score erop, onderaan de knoppen als één balk.
+    const fv = maak("div", "bwp-foto"), fm = maak("span", "melding"), plek = d && d.detail && d.detail.loc;
+    if (plek && PLEK.foto) {
+      fv.classList.add("laadt");
+      const img = new Image(); img.alt = FOTO.alt.replace("{adres}", () => R.adres(v)); img.loading = "lazy"; img.decoding = "async";
+      img.addEventListener("load", () => fv.classList.replace("laadt", "geladen"), {once: true});
+      img.addEventListener("error", () => { img.remove(); fv.classList.replace("laadt", "mislukt"); fm.textContent = FOTO.mislukt; }, {once: true});
+      img.src = PLEK.foto.replace("{b}", plek.b); fv.append(img);
+    } else { fv.classList.add("geen"); fm.textContent = FOTO.geen; }
+    fv.append(fm, sc);
+    li.append(fv, kern, knoppen);
     return li;
   }
   function haalWeg(id) {
@@ -3412,7 +3639,8 @@ const BWP = (() => {
     menuSr.textContent = n ? vul(T["pagina.menu.n.sr"], {n: nl(n)}) : "";
     meta.textContent = !n ? "" : m ? (n === 1 ? T["pagina.meta.weg.een"] : vul(T["pagina.meta.weg"], {n: nl(n), m: nl(m)}))
       : n === 1 ? T["pagina.meta.een"] : vul(T["pagina.meta"], {n: nl(n)});
-    app.hidden = !werkt;
+    app.hidden = !werkt; app.textContent = BW.opServer() ? S["pagina.apparaat"] : T["pagina.apparaat"];
+    if (waar) waar.textContent = BW.opServer() ? S.waar : S["waar.lokaal"];
     leeg.hidden = werkt && n > 0;
     leeg.querySelector("p").textContent = werkt ? T["pagina.leeg"] : T["pagina.geen_opslag"];
     if (n <= EERST) alles = false;
@@ -3426,6 +3654,25 @@ const BWP = (() => {
     lijst.hidden = !wil.length;
     meer.hidden = n <= EERST;
     meer.textContent = alles ? T["pagina.minder"] : vul(T["pagina.meer"], {n: nl(n)});
+    held(werkt, r, n, m);
+  }
+  // De kop van de eigen pagina: vier tellingen en de verdeling over A–E, uit dezelfde opgeslagen gegevens.
+  const tel = {n: $("bwpTelN"), in: $("bwpTelIn"), weg: $("bwpTelWeg"), score: $("bwpTelScore")};
+  const cat = $("bwpCat"), staaf = $("bwpStaaf"), leg = $("bwpLeg");
+  function held(werkt, r, n, m) {
+    if (!tel.n) return;
+    const streep = "–";
+    tel.n.textContent = werkt ? nl(n) : streep;
+    tel.in.textContent = werkt ? nl(n - m) : streep;
+    tel.weg.textContent = werkt ? nl(m) : streep;
+    const sc = r.map(([, v]) => R.score(v.score100)).filter(x => x !== null);
+    tel.score.textContent = sc.length ? nl(Math.round(sc.reduce((a, b) => a + b, 0) / sc.length)) : streep;
+    if (sc.length) tel.score.append(maak("small", null, "/100"));
+    const per = {}; r.forEach(([, v]) => { const c = R.categorie(v.pandcategorie); if (c) per[c] = (per[c] || 0) + 1; });
+    const cs = "ABCDE".split("").filter(c => per[c]);
+    cat.hidden = !cs.length; staaf.replaceChildren(); leg.replaceChildren();
+    cs.forEach(c => { const i = maak("i", "c" + c); i.style.flexGrow = per[c]; staaf.append(i);
+      const li = maak("li"), k = maak("i", "c" + c); k.setAttribute("aria-hidden", "true"); li.append(k, c + " · " + nl(per[c])); leg.append(li); });
   }
   // Niet verspringen (Lumi §9): ligt dit deel helemaal boven het scherm, dan blijft de werklijst staan waar hij
   // stond. Safari kent geen scroll-anchoring, dus het script doet het zelf. In Chrome heeft scroll-anchoring het al
@@ -3736,6 +3983,25 @@ document.getElementById("themeBtn").addEventListener("click",()=>{
     e.preventDefault(); e.stopPropagation(); sluitMenu(true);
   }, true);
 
+  // Een deel met .pagina (Bewaarde panden) is een eigen pagina: dan staat alleen dat deel er (.op-pagina op
+  // .vg, .nu op het deel; de CSS doet de rest). De andere delen zijn samen de lange scroll.
+  const PAGINAS = delen.filter(d => d.classList.contains("pagina")).map(d => d.id);
+  const scroll = delen.filter(d => !PAGINAS.includes(d.id));
+  const opPagina = () => vg.classList.contains("op-pagina");
+  function toon(id) {   // geeft true als de keuze tussen pagina en lange scroll veranderde
+    const p = PAGINAS.includes(id), was = opPagina();
+    vg.classList.toggle("op-pagina", p);
+    delen.forEach(d => d.classList.toggle("nu", p && d.id === id));
+    return p !== was;
+  }
+  function ga(id, glijd) {   // naar een deel of pagina; het adres zet de aanroeper
+    const anders = toon(id);
+    zet(id, false); slot = Date.now() + 900;
+    const d = document.getElementById(id);
+    if (PAGINAS.includes(id)) { scrollTo({top: 0, behavior: "instant"}); d.focus({preventScroll: true}); }
+    else d.scrollIntoView({behavior: glijd && !anders && !rustig.matches ? "smooth" : "instant"});
+  }
+
   let actief = null, slot = 0;
   function zet(id, adres) {
     if (id === actief) return;
@@ -3746,31 +4012,33 @@ document.getElementById("themeBtn").addEventListener("click",()=>{
   // Actief is het laatste deel waarvan de bovenkant boven 30% van het scherm staat (smal: plus de
   // bovenbalk van 56 px); helemaal onderaan is het laatste deel actief.
   function bepaal() {
-    if (Date.now() < slot) return;
+    if (Date.now() < slot || opPagina()) return;   // op een eigen pagina blijft die pagina actief
     const lijn = (mqSmal.matches ? 56 : 0) + innerHeight * 0.3;
-    let id = DELEN[0];
-    delen.forEach(d => { if (d.getBoundingClientRect().top <= lijn) id = d.id; });
-    if (vg.getBoundingClientRect().bottom <= innerHeight + 2) id = DELEN[DELEN.length - 1];
+    let id = scroll[0].id;
+    scroll.forEach(d => { if (d.getBoundingClientRect().top <= lijn) id = d.id; });
+    if (vg.getBoundingClientRect().bottom <= innerHeight + 2) id = scroll[scroll.length - 1].id;
     zet(id, true);
   }
   let wacht = false;
   addEventListener("scroll", () => { if (!wacht) { wacht = true; requestAnimationFrame(() => { wacht = false; bepaal(); }); } }, {passive: true});
   addEventListener("scrollend", () => { slot = 0; bepaal(); });
 
-  links.forEach(a => a.addEventListener("click", e => {
-    const id = a.dataset.doel;
-    zet(id, false); slot = Date.now() + 900;   // geen flikkering over de delen ertussen
-    if (isOpen()) {
-      e.preventDefault();
-      sluitMenu(true);
-      document.getElementById(id).scrollIntoView({behavior: rustig.matches ? "auto" : "smooth"});
-      history.pushState(null, "", "#" + id);
-    }
-  }));
+  // Elke link naar een deel (het menu, en 'Terug naar de werklijst' op een pagina) gaat via ga(): het
+  // adres komt in de geschiedenis, dus de terugknop van de browser brengt je terug.
+  document.addEventListener("click", e => {
+    const a = e.target.closest && e.target.closest('a[href^="#"]');
+    const id = a && a.getAttribute("href").slice(1);
+    if (!DELEN.includes(id) || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    if (isOpen()) sluitMenu(!PAGINAS.includes(id));
+    if (location.hash !== "#" + id) history.pushState(null, "", "#" + id);
+    ga(id, true);
+  });
+  addEventListener("popstate", () => { const id = location.hash.slice(1); ga(DELEN.includes(id) ? id : scroll[0].id, false); });
 
   // Openen met een adres: de cijfers en kaarten staan er nu, dus één keer naar het deel.
   const start = location.hash.slice(1);
-  if (DELEN.includes(start)) { zet(start, false); document.getElementById(start).scrollIntoView({behavior: "instant"}); }
+  if (DELEN.includes(start)) ga(start, false);
   else zet(DELEN[0], false);
 })();
 /* ============================ einde MENU ============================ */
@@ -5076,7 +5344,8 @@ def render(payload: dict) -> str:
         html = html.replace("__KOP_" + plek.upper().replace(".", "_") + "__", escape(tekst))
     # De waarschuwingen van de planning zijn voor wie bouwt, niet voor de pagina.
     payload = {k: v for k, v in payload.items() if k != "planning_waarschuwingen"}
-    return html.replace("__PAYLOAD__", json.dumps(payload, ensure_ascii=False))
+    # Compact (geen spaties na , en :): 68 KB minder bij 500 panden, zodat de pagina onder 1 MB blijft (VA-39 crit. 5).
+    return html.replace("__PAYLOAD__", json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
 
 
 def main() -> int:

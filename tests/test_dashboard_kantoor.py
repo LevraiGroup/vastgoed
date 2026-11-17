@@ -229,7 +229,7 @@ class Landelijk(unittest.TestCase):
                    "peildatum_tip": "", "kantoor": k}
         html = bd.render(payload)
         # Ruwe getallen: de punten zet het script, met dezelfde regel als de KPI's.
-        self.assertIn('"werklijst": 1234567', html)
+        self.assertIn('"werklijst":1234567', html)
         # De bron staat twee keer in de pagina: PAYLOAD.bron en PAYLOAD.kantoor.ingest.bron.
         self.assertEqual(html.count('"ophaaldatum"'), 2 * 2500)
 
