@@ -265,10 +265,20 @@ holds exactly November's 500.)
 
 ### Step 7, Verdeling (`regel.verdeling`, Nederland only)
 
-> De werklijst heeft plaats voor {werklijst_max} panden. {plaatsen_rest} daarvan zijn voor panden buiten de
-> {aantal} gemeenten met de meeste inwoners (CBS), de andere {plaatsen_groot} voor die {aantal} gemeenten.
-> Elk deel neemt de hoogste scores van heel Nederland. Heeft een deel te weinig geschikte panden, dan vult het
-> andere deel aan.
+**Approved (Lumi, 2026-11-17), Ada's wording as live in `BREIN_TEKST["regel.verdeling"]`:**
+
+> Op de werklijst zijn {plaatsen_groot} plaatsen voor panden in de {aantal} gemeenten met de meeste inwoners
+> (CBS) en {plaatsen_rest} voor panden daarbuiten. Elk deel neemt de hoogste scores van heel Nederland. Heeft
+> een deel te weinig geschikte panden, dan vult het andere deel aan.
+
+~~De werklijst heeft plaats voor {werklijst_max} panden. {plaatsen_rest} daarvan zijn voor panden buiten de
+{aantal} gemeenten met de meeste inwoners (CBS), de andere {plaatsen_groot} voor die {aantal} gemeenten.
+Elk deel neemt de hoogste scores van heel Nederland. Heeft een deel te weinig geschikte panden, dan vult het
+andere deel aan.~~ Struck 2026-11-17: it states the werklijst's total as a figure ("{werklijst_max} panden"),
+which Nova's ruling Q1 and VA-102 (Ayman 11-16, "just werklijst") rule out on every visible line. Ada's
+rewording drops the total and keeps the two parts; it also names the grootste gemeenten first, the same order
+as ring 7's label `{n_groot} + {n_rest}`, which my line had reversed. `{werklijst_max}` is no longer a
+placeholder of this string.
 
 `{plaatsen_groot}`, `{plaatsen_rest}` from `nederland.aantallen(cfg)` (today 450 and 50, from
 `werklijst_aandeel_overig: 0.10`), shown as a count of panden (criterion 4), never as "10 %". These are the
