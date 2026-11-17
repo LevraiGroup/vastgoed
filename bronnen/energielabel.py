@@ -12,17 +12,14 @@ Geverifieerd API-contract (v5):
   Velden  : Energieklasse, Registratiedatum, Soort_opname, Berekeningstype, BAGVerblijfsobjectID
   Ping    : GET /Ping  (zonder key, gaf 200 'Pong' bij de verkenning)
 
-Bulk-alternatief (aanrader bij grote steden): op https://www.ep-online.nl/PublicData
-staat een maandbestand (XML/CSV/XLSX, ~220 MB CSV, elke 1e van de maand). Ook dat
-vereist dezelfde API-key. Zet dan 'bulk_csv' in config.yaml naar het CSV-pad.
+Bulk (VA-58): het maandbestand (CSV in een zip, ~230 MB, elke 1e van de maand) haalt en koppelt
+ep_online.py, met de sleutel uit EP_ONLINE_API_KEY en een vaste kolomcontrole. Deze module doet
+alleen nog de bevraging per adres voor verrijk.py.
 
 Signaal: een pand telt mee (+2) als het label E/F/G is OF als er geen label is
 geregistreerd (ontbrekend label = vaak niet-verduurzaamd, ouder bezit).
 """
 from __future__ import annotations
-
-import csv
-from pathlib import Path
 
 import requests
 
@@ -38,12 +35,9 @@ def beschikbaar(cfg: dict) -> tuple[bool, str]:
     c = _cfg(cfg)
     if not c.get("actief"):
         return False, "uitgeschakeld (bronnen.energielabel.actief = false)"
-    if c.get("bulk_csv"):
-        return (True, f"bulk-CSV: {c['bulk_csv']}") if Path(c["bulk_csv"]).exists() \
-            else (False, f"bulk_csv niet gevonden: {c['bulk_csv']}")
     if c.get("api_key"):
         return True, "API-modus (public.ep-online.nl v5)"
-    return False, "geen api_key en geen bulk_csv ingesteld"
+    return False, "geen api_key ingesteld (het maandbestand gaat via ep_online.py)"
 
 
 def _veld(obj: dict, *namen: str):
@@ -64,35 +58,6 @@ def _slechter(a: str | None, b: str | None) -> str | None:
     if b is None:
         return a
     return a if rang(a) >= rang(b) else b
-
-
-# ---------------------------------------------------------------- bulk-CSV modus
-def _uit_bulk(kandidaten: list[dict], csv_pad: str) -> dict[str, str | None]:
-    """Bouw een index BAG-vbo-id -> label uit het EP-online maandbestand.
-
-    De exacte kolomnamen van het bestand kunnen per release verschillen; we zoeken
-    daarom flexibel naar een BAG-id-kolom en een labelkolom. Controleer bij de eerste
-    run de header van je downloadbestand als er niets matcht.
-    """
-    gezocht = {vid for p in kandidaten for vid in p["vbo_ids"]}
-    label_per_vbo: dict[str, str | None] = {}
-    with open(csv_pad, encoding="utf-8-sig", newline="") as fh:
-        sample = fh.read(4096)
-        fh.seek(0)
-        dialect = csv.Sniffer().sniff(sample, delimiters=";,")
-        reader = csv.DictReader(fh, dialect=dialect)
-        bag_kol = next((k for k in reader.fieldnames or []
-                        if "bag" in k.lower() and "verblijf" in k.lower()), None) \
-            or next((k for k in reader.fieldnames or [] if "adresseerbaar" in k.lower()), None)
-        lab_kol = next((k for k in reader.fieldnames or [] if "energieklasse" in k.lower()
-                        or k.lower() in ("labelletter", "label")), None)
-        if not bag_kol or not lab_kol:
-            raise RuntimeError(f"EP-online CSV: kolommen niet herkend ({reader.fieldnames})")
-        for rij in reader:
-            vid = (rij.get(bag_kol) or "").strip()
-            if vid in gezocht:
-                label_per_vbo[vid] = (rij.get(lab_kol) or "").strip() or None
-    return label_per_vbo
 
 
 # ---------------------------------------------------------------- API modus
@@ -128,11 +93,7 @@ def _uit_api(kandidaten: list[dict], c: dict) -> dict[str, str | None]:
 
 
 def verrijk(kandidaten: list[dict], cfg: dict) -> dict[str, dict]:
-    c = _cfg(cfg)
-    if c.get("bulk_csv"):
-        label_per_vbo = _uit_bulk(kandidaten, c["bulk_csv"])
-    else:
-        label_per_vbo = _uit_api(kandidaten, c)
+    label_per_vbo = _uit_api(kandidaten, _cfg(cfg))
 
     uit: dict[str, dict] = {}
     for pand in kandidaten:

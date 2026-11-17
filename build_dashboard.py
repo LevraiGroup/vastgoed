@@ -180,7 +180,7 @@ def werklijst_aantal(act: list[dict], drempel: int) -> int:
 
 
 # Per verrijkingsbron het veld dat verrijk.py aan een pand toevoegt (bronnen/*.py).
-VERRIJKT_VELD = {"energielabel": "energielabel_status"}
+VERRIJKT_VELD = {"energielabel": "energielabel"}  # VA-58: elk gekoppeld pand heeft dit veld (None = geen label)
 
 
 def actieve_bronnen(cfg: dict) -> list[str]:
@@ -515,9 +515,15 @@ PAND_VELDEN = [  # (veld, label, soort)
     ("beoordeling", "Beoordeling", "invul"),
     ("eerder_geselecteerd", "Eerder geselecteerd", "janee"),
     ("laatst_beoordeeld", "Laatst beoordeeld", "invuldatum"),
+    # VA-58: alleen als het energielabel aan staat. Labels: concept van Rex, ter goedkeuring bij Lumi.
+    ("energielabel", "Energielabel (EP-online)", "geen_tekst"),
+    ("energielabel_registratiedatum", "Energielabel geregistreerd op", "geen_datum"),
 ]
 # Velden die een Delfts record niet heeft: daar geen rij, in plaats van drie keer 'onbekend'.
 ALLEEN_LANDELIJK = {"gemeente", "gemeentecode", "grote_gemeente"}
+# Velden die een record alleen heeft als het energielabel aan staat (VA-58): zonder geen rij.
+ALLEEN_MET_ENERGIELABEL = {"energielabel", "energielabel_registratiedatum"}
+ALLEEN_ALS_AANWEZIG = ALLEEN_LANDELIJK | ALLEEN_MET_ENERGIELABEL
 # De rijen van de detailweergave: alles behalve de score-opbouw, die de pagina apart toont.
 DETAIL_VELDEN = [(v, label, soort) for v, label, soort in PAND_VELDEN if soort != "opbouw"]
 
@@ -552,6 +558,8 @@ def pand_waarde(soort: str, v):
         return NIET_INGEVULD if _leeg(v) else str(v)
     if soort == "invuldatum":
         return NIET_INGEVULD if _leeg(v) else (nl_datum(v) if lees_datum(v) else str(v))
+    if soort == "geen_datum":
+        return GEEN if _leeg(v) else (nl_datum(v) if lees_datum(v) else str(v))
     if _leeg(v):
         return LEEG
     if soort == "janee":
@@ -642,7 +650,7 @@ def detail_labels(aantal_groot: int | None = None) -> list[str]:
 
 def pand_waarden(p: dict) -> list:
     """Per DETAIL_VELDEN de waarde als Nederlandse tekst; None = geen rij voor dit pand."""
-    return [None if veld in ALLEEN_LANDELIJK and veld not in p else pand_waarde(soort, p.get(veld))
+    return [None if veld in ALLEEN_ALS_AANWEZIG and veld not in p else pand_waarde(soort, p.get(veld))
             for veld, _, soort in DETAIL_VELDEN]
 
 

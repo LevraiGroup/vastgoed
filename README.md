@@ -280,7 +280,7 @@ scoresignaal. Draai `python verrijk.py` om ze op te halen (schrijft
 |---|---|---|---|---|
 | Buiten gebruik / leegstaand | +4 | BAG-status | **gratis, in data** | **actief** — 2 panden in Delft |
 | In verbouwing | +2 | BAG-status | **gratis, in data** | **actief** — 328 panden in Delft |
-| Slecht/ontbrekend energielabel | +2 | RVO EP-online v5 | gratis, persoonlijke API-key | module klaar, key nodig |
+| Slecht/ontbrekend energielabel | +2 | RVO EP-online (maandbestand) | gratis, sleutel in Railway | label wordt gekoppeld (VA-58); telt nog niet mee (VA-101) |
 
 Belangrijke ontwerpkeuze: **leegstand is een kans, geen uitsluiting.** Een pand "buiten
 gebruik" wordt daarom niet meer uitgesloten maar krijgt juist punten. Buiten gebruik
@@ -291,6 +291,40 @@ EP-online-contract (zie module-docstring): `https://public.ep-online.nl/api/v5`,
 `Authorization`, endpoints `/PandEnergielabel/Adres` en `/AdresseerbaarObject/{bag-id}`.
 De module staat standaard **uit** (`bronnen.energielabel.actief: false`); zonder sleutel
 blijft het signaal inactief en verandert de score niet.
+
+### Energielabel per pand (VA-58)
+
+Twee stappen, beide met `ep_online.py`, en een map die een instelling is
+(`bronnen.energielabel.map`, standaard `data/energielabel`, of `--map`):
+
+    python ep_online.py ophalen      # het CSV-totaalbestand van de maand -> <map>/v<JJJJMMDD>_v4_csv.zip
+    python ep_online.py koppel       # labels voor de snapshot van het doelgebied -> <map>/energielabel_<snapshot>.sqlite
+
+- **De sleutel** komt alleen uit de omgevingsvariabele `EP_ONLINE_API_KEY` (op Railway), gaat alleen
+  mee in de `Authorization`-header van `GET <api_url>/Mutatiebestand/DownloadInfo?fileType=csv`, en
+  wordt nergens geschreven of getoond. De tijdelijke downloadlink uit het antwoord ook niet. Zonder de
+  variabele stopt `ophalen` met exitcode 1.
+- **Compleet of niet:** de zip komt binnen als `.deel` en krijgt pas zijn naam na de bytecontrole, de
+  zipcontrole en de kolomcontrole. Een bestaand bestand wordt nooit overschreven.
+- **Kolomcontrole (fail closed):** de kopregel moet precies de kolommen hebben uit RVO's *Handleiding
+  EP-online.nl Opvragen van bestanden* (januari 2025, bijlage 2), `KOLOMMEN` in `ep_online.py`.
+  Hoofdletters en spaties tellen niet. Een ontbrekende of onbekende kolom stopt het commando met een
+  melding die haar noemt; er wordt dan niets gepubliceerd. Het echte bestand is nog niet gezien: het
+  eerste wordt op Railway gelezen (criterium 7).
+- **De regel per pand:** het **beste** label van zijn verblijfsobjecten (A+++++ het best, G het
+  slechtst), met de registratiedatum van dat label; heeft een verblijfsobject twee registraties, dan
+  telt de nieuwste. Een pand zonder verblijfsobject met een labelklasse heeft **geen label**. Regels
+  zonder verblijfsobject-ID (ligplaats, standplaats, alleen een pand) en EI-certificaten zonder klasse
+  koppelen niet; ze worden geteld. Een misvormde regel (verkeerd aantal velden, geen 16 cijfers,
+  onbekende klasse, onleesbare datum) wordt geteld en met regelnummer gemeld. *Keuze van Rex:* het
+  verhaal zegt "best known label"; dat is gelezen als het gunstigste label. Daarmee krijgt een pand
+  de +2 van VA-101 alleen als geen enkel verblijfsobject beter dan E scoort.
+- **Per snapshot:** elke snapshot krijgt een eigen `energielabel_<bestandsnaam van de snapshot>.sqlite`,
+  dus een oudere maand houdt de labels die hij had.
+- **In de run:** met `actief: true` krijgt elk pandrecord `energielabel` (letter, of leeg = geen label)
+  en `energielabel_registratiedatum`; ontbreekt het labelbestand van de snapshot, dan stopt de run.
+  Met `actief: false` heeft het record die velden niet. **`telt_mee: false`** houdt de score gelijk:
+  de regel in de score-opbouw zegt dan "telt nog niet mee in de score". VA-101 zet hem aan.
 
 **Geparkeerd in [TOEKOMSTVERBETERINGEN.md](TOEKOMSTVERBETERINGEN.md):** leegstand via KVK
 (koppeling getest en werkend, wacht op productiesleutel) en verkoophistorie via Kadaster

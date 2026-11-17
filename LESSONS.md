@@ -172,3 +172,6 @@ struck through with the reason, never deleted.
   errors included.** On Railway the client address is the last `X-Real-IP` line, never
   `X-Forwarded-For`, and only five wrong logins after the first deploy prove it. *(2026-11-13, Vera,
   VA-50)*
+- **Key a per-snapshot side file on the snapshot's full file name, not its stem.** `vbo_delft_2026-11-01.json`
+  and `vbo_delft_2026-11-01.sqlite` share a stem, so `energielabel_<stem>.sqlite` let one overwrite-guard
+  block the other. *(2026-11-17, Rex, VA-58)*

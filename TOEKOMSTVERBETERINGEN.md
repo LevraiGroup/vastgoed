@@ -67,8 +67,9 @@ Uitgezet omdat de opdrachtgever de Kadaster-prijs/-kosten wil vermijden.
 
 De actieve module `bronnen/energielabel.py` werkt per adres via de EP-online v5 API. Voor
 grote steden (Rotterdam, Amsterdam) is het maandbestand efficiënter: één download i.p.v.
-tienduizenden calls. Zet `bronnen.energielabel.bulk_csv` naar het CSV-pad. Kolomnamen van
-het bestand bij eerste gebruik verifiëren (de loader detecteert flexibel).
+tienduizenden calls. **Gebouwd in VA-58:** `python ep_online.py ophalen` en `koppel` (README,
+"Energielabel per pand"). De kolomnamen worden niet meer flexibel geraden maar vast gecontroleerd
+(fail closed); bij het eerste echte bestand, op Railway, blijkt of de lijst klopt.
 
 ---
 

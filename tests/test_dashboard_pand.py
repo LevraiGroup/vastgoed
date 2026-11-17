@@ -16,6 +16,7 @@ import build_dashboard as bd  # noqa: E402
 DELFT_PANDEN = bd.DATA / "panden_delft.json"
 NL_PANDEN = bd.DATA / "panden_nederland.json"
 LANDELIJK = {"gemeentecode": "0503", "gemeente": "Delft", "grote_gemeente": "nee"}  # VA-37 crit. 2
+MET_LABEL = {"energielabel": "F", "energielabel_registratiedatum": "2021-03-04"}  # VA-58, alleen als het aan staat
 VERBODEN = re.compile(r"\b(None|null|undefined|NaN|nan|True|False|true|false)\b|^\[\]$|^\{\}$")
 
 
@@ -74,11 +75,24 @@ def waarden(det):
 class ElkVeld(unittest.TestCase):
     def test_velden_dekken_het_record(self):
         # Een veld dat erbij komt zonder label laat deze test falen (VA-61 crit. 2).
-        self.assertEqual({v for v, _, _ in bd.PAND_VELDEN}, set(pand()))
+        self.assertEqual({v for v, _, _ in bd.PAND_VELDEN}, set(pand(**MET_LABEL)))
         self.assertEqual(bd.ALLEEN_LANDELIJK, set(LANDELIJK))
+        self.assertEqual(bd.ALLEEN_MET_ENERGIELABEL, set(MET_LABEL))
+
+    def test_energielabel_rijen(self):
+        # VA-58 crit. 5: het label en de registratiedatum staan onder een Nederlands label.
+        rij = {r["k"]: r["v"] for r in bd.pand_detail(pand(**MET_LABEL), 25)["rijen"]}
+        self.assertEqual(rij["Energielabel (EP-online)"], "F")
+        self.assertEqual(rij["Energielabel geregistreerd op"], bd.nl_datum("2021-03-04"))
+        rij = {r["k"]: r["v"] for r in bd.pand_detail(
+            pand(energielabel=None, energielabel_registratiedatum=None), 25)["rijen"]}
+        self.assertEqual((rij["Energielabel (EP-online)"], rij["Energielabel geregistreerd op"]), ("geen", "geen"))
+        # Signaal uit: het record heeft de velden niet, en dan is er geen rij (geen 'onbekend').
+        labels = [r["k"] for r in bd.pand_detail(pand(), 25)["rijen"]]
+        self.assertNotIn("Energielabel (EP-online)", labels)
 
     def test_elke_rij_heeft_label_en_waarde(self):
-        det = bd.pand_detail(pand(), 25)
+        det = bd.pand_detail(pand(**MET_LABEL), 25)
         labels = [r["k"] for r in det["rijen"]]
         self.assertEqual(len(labels), len(bd.PAND_VELDEN) - 1)  # score-opbouw toont de pagina apart
         self.assertEqual(len(labels), len(set(labels)))
@@ -98,7 +112,7 @@ class ElkVeld(unittest.TestCase):
 
     def test_delfts_record_zonder_landelijke_rijen(self):
         # Geen drie keer 'onbekend' bij een Delfts pand: die velden heeft het record niet.
-        labels = [r["k"] for r in bd.pand_detail(delfts(), 25)["rijen"]]
+        labels = [r["k"] for r in bd.pand_detail(delfts(**MET_LABEL), 25)["rijen"]]
         self.assertEqual(len(labels), len(bd.PAND_VELDEN) - 1 - len(LANDELIJK))
         self.assertNotIn("Gemeente", labels)
 
@@ -130,8 +144,11 @@ class ElkVeld(unittest.TestCase):
         lijst = json.loads(NL_PANDEN.read_text(encoding="utf-8"))["werklijst"]
         records = {p["bag_pand_id"]: p for p in lijst}
         self.assertEqual(len(payload["leads"]), len(lijst))
+        velden = {v for v, _, _ in bd.PAND_VELDEN}
         for record in lijst:
-            self.assertEqual(set(record), {v for v, _, _ in bd.PAND_VELDEN}, record["bag_pand_id"])
+            # De labelvelden alleen als het energielabel aan stond bij de run (VA-58).
+            self.assertLessEqual(velden - bd.ALLEEN_MET_ENERGIELABEL, set(record), record["bag_pand_id"])
+            self.assertLessEqual(set(record), velden, record["bag_pand_id"])
         self.echte_leads(payload, records)
 
 

@@ -22,6 +22,7 @@ from pathlib import Path
 
 import yaml
 
+import energielabels
 import snapshots
 from gebieden import slug
 
@@ -244,13 +245,22 @@ def _sig_verbouwing(pand: dict, cfg: dict) -> tuple[str, bool, str, int]:
 
 
 def _sig_energielabel(pand: dict, cfg: dict) -> tuple[str, bool, str, int]:
-    """RVO EP-online: label E/F/G of ontbrekend = slechte/verouderde staat."""
+    """RVO EP-online: label E/F/G of ontbrekend = slechte/verouderde staat.
+
+    Telt alleen mee als bronnen.energielabel.telt_mee true is (VA-101). Tot dan staat een gekoppeld
+    label wel in het record (VA-58), maar verschuift het geen score.
+    """
     punten = cfg["score"]["slecht_of_ontbrekend_energielabel"]
-    st = pand.get("energielabel_status", "onbekend")
+    # Bekend via de koppeling van VA-58 (het veld energielabel staat in het record, None = geen label)
+    # of via verrijk.py (energielabel_status).
+    st = pand.get("energielabel_status") or (
+        ("gevonden" if pand["energielabel"] else "geen") if "energielabel" in pand else "onbekend")
     if st == "onbekend":
         return "inactief", False, "bron nodig: RVO EP-online", punten
-    slecht = {str(x).upper() for x in cfg["bronnen"]["energielabel"].get("slechte_labels", ["E", "F", "G"])}
     label = pand.get("energielabel")
+    if not cfg["bronnen"]["energielabel"]["telt_mee"]:
+        return "inactief", False, f"energielabel {label or 'geen'}; telt nog niet mee in de score", punten
+    slecht = {str(x).upper() for x in cfg["bronnen"]["energielabel"]["slechte_labels"]}
     if st == "geen":
         return "behaald", True, "geen energielabel geregistreerd", punten
     if label and label.upper() in slecht:
@@ -481,9 +491,25 @@ def verwerk(
     panden = aggregeer(rows)
     verrijking = laad_verrijking(label)
     kort = lead_kort(label)
-    for pand in panden:
-        verwerk_pand(pand, cfg, verrijking, kort, peildatum[pand["bag_pand_id"]])
+    labels = labels_voor(gekozen, cfg)
+    try:
+        for pand in panden:
+            verwerk_pand(pand, cfg, verrijking, kort, peildatum[pand["bag_pand_id"]], labels)
+    finally:
+        if labels:
+            labels.sluit()
     return panden
+
+
+def labels_voor(gekozen: list[snapshots.Snapshot], cfg: dict) -> energielabels.Labels | None:
+    """De energielabels van deze snapshots (VA-58), of None als het signaal uit staat.
+
+    Staat het aan en ontbreekt het labelbestand van een snapshot, dan stopt de run (fail closed).
+    """
+    try:
+        return energielabels.voor_snapshots([s.pad for s in gekozen], cfg)
+    except energielabels.LabelFout as fout:
+        raise snapshots.SnapshotFout(str(fout)) from None
 
 
 def lead_kort(label: str) -> str:
@@ -491,11 +517,14 @@ def lead_kort(label: str) -> str:
     return ("".join(c for c in label if c.isalnum())[:2] or "NL").upper()
 
 
-def verwerk_pand(pand: dict, cfg: dict, verrijking: dict, kort: str, datapeildatum: str) -> dict:
+def verwerk_pand(pand: dict, cfg: dict, verrijking: dict, kort: str, datapeildatum: str,
+                 labels: energielabels.Labels | None = None) -> dict:
     """Uitsluiten, categoriseren en scoren van één geaggregeerd pand (beide routes, VA-36)."""
     v = verrijking.get(pand["bag_pand_id"])
     if v:
         pand.update(v)  # energielabel/koopsom/kvk-velden voor scoring
+    if labels is not None:
+        pand.update(labels.voor(pand["bag_pand_id"]))  # VA-58: label en registratiedatum van de snapshot
     pand["uitsluitredenen"] = uitsluiten(pand, cfg)
     pand["uitgesloten"] = bool(pand["uitsluitredenen"])
     pand["categorieen"] = categoriseer(pand, cfg)
@@ -535,7 +564,15 @@ def stroom_panden(
     eis_ophaaldatum(gekozen)
     verrijking = laad_verrijking(label)
     kort = kort or lead_kort(label)
+    labels = labels_voor(gekozen, cfg)
+    try:
+        yield from _stroom(gekozen, cfg, verrijking, kort, woonplaats_id, labels)
+    finally:
+        if labels:
+            labels.sluit()
 
+
+def _stroom(gekozen, cfg, verrijking, kort, woonplaats_id, labels):
     def per_snapshot(i: int, snap: snapshots.Snapshot):
         for vbos in snapshots.stroom_per_pand(snap, woonplaats_id=woonplaats_id):
             yield vbos[0]["pandidentificatie"], i, vbos
@@ -545,13 +582,13 @@ def stroom_panden(
     # Gesorteerd op (pand-ID, snapshotnummer): gelijke panden komen achter elkaar, eerste snapshot eerst.
     for pand_id, i, rijen in heapq.merge(*stromen, key=lambda x: (x[0], x[1])):
         if pand_id != huidig and vbos:
-            yield verwerk_pand(aggregeer(vbos)[0], cfg, verrijking, kort, gekozen[eerste_i].ophaaldatum)
+            yield verwerk_pand(aggregeer(vbos)[0], cfg, verrijking, kort, gekozen[eerste_i].ophaaldatum, labels)
             vbos = []
         if pand_id != huidig:
             huidig, eerste_i = pand_id, i
         vbos.extend(rijen)
     if vbos:
-        yield verwerk_pand(aggregeer(vbos)[0], cfg, verrijking, kort, gekozen[eerste_i].ophaaldatum)
+        yield verwerk_pand(aggregeer(vbos)[0], cfg, verrijking, kort, gekozen[eerste_i].ophaaldatum, labels)
 
 
 def mastervolgorde(pand: dict) -> tuple[int, str]:
