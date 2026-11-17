@@ -293,7 +293,7 @@ class EchtePagina(unittest.TestCase):
     def test_gebouwde_pagina_nederland(self):
         with mock.patch.object(bd, "load_config", gekozen(True)):
             html = bd.render(bd.bouw_payload())
-        self.controleer(html, "bewaard")   # Mijn selectie is de laatste groep (Ayman 11-17)
+        self.controleer(html, "bewaard")   # Bewaarde panden is een eigen pagina, als laatste (Ayman 11-17)
         self.assertIn("<title>Levrai · Pandenselectie — Nederland</title>", html)
         self.assertIn('<p class="merk-sub">Pandenselectie&nbsp;·&nbsp;Nederland</p>', html)
         self.assertIn('<div class="pill">Bron: PDOK BAG GeoPackage</div>', html)

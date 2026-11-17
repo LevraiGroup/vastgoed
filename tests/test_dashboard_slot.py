@@ -86,7 +86,7 @@ class Gebouwd(unittest.TestCase):
         self.assertEqual(len(re.findall(r"<p\b", blok)), 1)   # één tekst voor een schermlezer
         self.assertIn('<b><span aria-hidden="true">De rest van je werklijst staat achter het slot.</span>'
                       '<span class="vh">3 panden staan achter het slot.</span></b> '
-                      "Zet de datakoppeling aan om alle panden van de werklijst te zien.", blok)
+                      "Ik zal het openzetten, volgt na betaling.", blok)
         zichtbaar = re.sub(r'<span class="vh">[^<]*</span>', "", blok)
         self.assertNotRegex(re.sub(r"<[^>]+>", "", zichtbaar), r"\d")   # geen aantal in beeld
 
@@ -98,7 +98,9 @@ class Gebouwd(unittest.TestCase):
         # ALLE_LEADS komt alleen voor op de twee regels die LEADS maken; niets anders leest de panden achter het slot.
         regels = [r.strip() for r in t.splitlines() if "ALLE_LEADS" in r]
         self.assertEqual(regels, ["const {kpi:KPI, cats:CATS, facts:FACTS, leads:ALLE_LEADS, budget:BUDGET} = PAYLOAD;",
-                                  "const LEADS = PAYLOAD.slot ? ALLE_LEADS.slice(0, PAYLOAD.slot.n) : ALLE_LEADS;"])
+                                  "const LEADS = PAYLOAD.slot ? ALLE_LEADS.slice(0, PAYLOAD.slot.n) : ALLE_LEADS;",
+                                  # Ayman 11-17: een pand dat al bewaard is, opent op Bewaarde panden, ook achter het slot.
+                                  "const PER = new Map(ALLE_LEADS.map(d => [String(d.id), d]));"])
         self.assertIn("if (DELEN.includes(start)) ga(start, false);", t)   # een adres opent een deel, nooit een pand
 
     def test_filters_tellen_de_vijf(self):
@@ -143,7 +145,7 @@ class Vastgelegd(unittest.TestCase):
     def test_kopij_nederlands(self):
         for t in bd.SLOT_TEKST.values():
             self.assertNotRegex(t.lower(), r"snapshot|\block\b|\bunlock\b|\blive\b|\bonline\b|\bpay")
-        self.assertIn("datakoppeling", bd.SLOT_TEKST["regel"])
+        self.assertIn("volgt na betaling", bd.SLOT_TEKST["regel"])
 
 
 if __name__ == "__main__":
