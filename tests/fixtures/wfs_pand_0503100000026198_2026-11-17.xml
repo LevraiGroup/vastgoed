@@ -1,0 +1,98 @@
+<?xml version='1.0' encoding="UTF-8" ?>
+<wfs:FeatureCollection
+   xmlns:bag="http://bag.geonovum.nl"
+   xmlns:gml="http://www.opengis.net/gml/3.2"
+   xmlns:wfs="http://www.opengis.net/wfs/2.0"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://bag.geonovum.nl https://service.pdok.nl/kadaster/bag/wfs/v2_0?SERVICE=WFS&amp;VERSION=2.0.0&amp;REQUEST=DescribeFeatureType&amp;TYPENAME=bag:pand,bag:verblijfsobject&amp;OUTPUTFORMAT=application%2Fgml%2Bxml%3B%20version%3D3.2 http://www.opengis.net/wfs/2.0 http://schemas.opengis.net/wfs/2.0/wfs.xsd http://www.opengis.net/gml/3.2 http://schemas.opengis.net/gml/3.2.1/gml.xsd"
+   timeStamp="2026-11-17T10:35:10" numberMatched="9" numberReturned="9">
+  <wfs:boundedBy>
+  	<gml:Envelope srsName="urn:ogc:def:crs:EPSG::28992">
+  		<gml:lowerCorner>84264.568000 447511.340000</gml:lowerCorner>
+  		<gml:upperCorner>84296.501000 447536.845000</gml:upperCorner>
+  	</gml:Envelope>
+  </wfs:boundedBy>
+  <wfs:member>
+   <wfs:FeatureCollection timeStamp="2026-11-17T10:35:10" numberMatched="1" numberReturned="1">
+      <wfs:boundedBy>
+      	<gml:Envelope srsName="urn:ogc:def:crs:EPSG::28992">
+      		<gml:lowerCorner>84264.568000 447511.340000</gml:lowerCorner>
+      		<gml:upperCorner>84296.501000 447536.845000</gml:upperCorner>
+      	</gml:Envelope>
+      </wfs:boundedBy>
+    <wfs:member>
+      <bag:pand gml:id="pand.ce86d19e-da02-4f02-aad2-329ef02274f1">
+        <bag:identificatie>0503100000026198</bag:identificatie>
+        <bag:status>Pand in gebruik</bag:status>
+      </bag:pand>
+    </wfs:member>
+   </wfs:FeatureCollection>
+  </wfs:member>
+  <wfs:member>
+   <wfs:FeatureCollection timeStamp="2026-11-17T10:35:10" numberMatched="8" numberReturned="8">
+      <wfs:boundedBy>
+      	<gml:Envelope srsName="urn:ogc:def:crs:EPSG::28992">
+      		<gml:lowerCorner>84276.100000 447515.800000</gml:lowerCorner>
+      		<gml:upperCorner>84293.762000 447525.119000</gml:upperCorner>
+      	</gml:Envelope>
+      </wfs:boundedBy>
+    <wfs:member>
+      <bag:verblijfsobject gml:id="verblijfsobject.6f11fdd8-302a-4f78-8100-59f630524ab2">
+        <bag:identificatie>0503010000065779</bag:identificatie>
+        <bag:status>Verblijfsobject buiten gebruik</bag:status>
+        <bag:pandidentificatie>0503100000026198</bag:pandidentificatie>
+      </bag:verblijfsobject>
+    </wfs:member>
+    <wfs:member>
+      <bag:verblijfsobject gml:id="verblijfsobject.a610e7dd-946e-4ed4-b7bb-09dd85192ad7">
+        <bag:identificatie>0503010000065777</bag:identificatie>
+        <bag:status>Verblijfsobject in gebruik</bag:status>
+        <bag:pandidentificatie>0503100000026198</bag:pandidentificatie>
+      </bag:verblijfsobject>
+    </wfs:member>
+    <wfs:member>
+      <bag:verblijfsobject gml:id="verblijfsobject.82fb38a8-3b66-4a5e-b774-3964d7623d9f">
+        <bag:identificatie>0503010000014138</bag:identificatie>
+        <bag:status>Verbouwing verblijfsobject</bag:status>
+        <bag:pandidentificatie>0503100000026198</bag:pandidentificatie>
+      </bag:verblijfsobject>
+    </wfs:member>
+    <wfs:member>
+      <bag:verblijfsobject gml:id="verblijfsobject.d668571f-69ae-4914-8d96-475be4fe26d0">
+        <bag:identificatie>0503010000014139</bag:identificatie>
+        <bag:status>Verbouwing verblijfsobject</bag:status>
+        <bag:pandidentificatie>0503100000026198</bag:pandidentificatie>
+      </bag:verblijfsobject>
+    </wfs:member>
+    <wfs:member>
+      <bag:verblijfsobject gml:id="verblijfsobject.fcc19e3b-b12c-4426-be74-46606c5010e9">
+        <bag:identificatie>0503010000003207</bag:identificatie>
+        <bag:status>Verbouwing verblijfsobject</bag:status>
+        <bag:pandidentificatie>0503100000026198</bag:pandidentificatie>
+      </bag:verblijfsobject>
+    </wfs:member>
+    <wfs:member>
+      <bag:verblijfsobject gml:id="verblijfsobject.7c9c3b81-ebf5-4193-90fd-b47bc2101f0d">
+        <bag:identificatie>0503010000003208</bag:identificatie>
+        <bag:status>Verbouwing verblijfsobject</bag:status>
+        <bag:pandidentificatie>0503100000026198</bag:pandidentificatie>
+      </bag:verblijfsobject>
+    </wfs:member>
+    <wfs:member>
+      <bag:verblijfsobject gml:id="verblijfsobject.c58f7676-99bb-4b3d-b1b3-606fce7b47a4">
+        <bag:identificatie>0503010000003209</bag:identificatie>
+        <bag:status>Verbouwing verblijfsobject</bag:status>
+        <bag:pandidentificatie>0503100000026198</bag:pandidentificatie>
+      </bag:verblijfsobject>
+    </wfs:member>
+    <wfs:member>
+      <bag:verblijfsobject gml:id="verblijfsobject.2c2ac4ef-0f0a-49bc-9f11-aef56d869d52">
+        <bag:identificatie>0503010000003210</bag:identificatie>
+        <bag:status>Verbouwing verblijfsobject</bag:status>
+        <bag:pandidentificatie>0503100000026198</bag:pandidentificatie>
+      </bag:verblijfsobject>
+    </wfs:member>
+   </wfs:FeatureCollection>
+  </wfs:member>
+</wfs:FeatureCollection>
+

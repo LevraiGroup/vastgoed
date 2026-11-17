@@ -18,6 +18,19 @@ geopackage:
   resultaat: "data/bron/controle_geopackage.json"     # uitkomst van de laatste controle (VA-74)
   min_vrij_gb: 25                                     # GeoPackage (7,8 GB) + snapshot (2,9 GB) + marge
 
+# === NACHTELIJKE CONTROLE VAN DE WERKLIJST (VA-75) ================================
+# python werklijst_controle.py vraagt voor elk pand van de nieuwste werklijst_nederland_<JJJJ-MM>.csv
+# de huidige pandstatus en verblijfsobjecten op bij de WFS hierboven (bron.wfs_url), één verzoek per
+# pand, en schrijft de verschillen. Hij toont alleen; hij wijzigt geen score en geen werklijst.
+# Paden zijn relatief aan deze map, of absoluut.
+nachtcontrole:
+  uitvoer_map: "output/controle"                      # wijzigingen_nederland_<JJJJ-MM>.csv (gecommit)
+  resultaat: "data/controle_werklijst.json"           # uitkomst van de laatste controle (VA-74)
+  basis_map: "data/controle"                          # VBO-statussen uit de snapshot, één keer per maand bewaard
+  snapshot_map: "data"                                # waar bag_nl_<datum>.sqlite staat
+  stop_na_mislukt: 10                                 # zoveel panden achter elkaar mislukt: de rest niet meer vragen
+  timeout_s: 60                                       # seconden per verzoek, vóór de herhaling van ingest.py
+
 # === DOELGEBIED — KIES HIER je stad of provincie ===================================
 # Vul 'steden' met woonplaatsnamen, OF 'provincies' met provincienamen. Bij een
 # provincie worden automatisch alle woonplaatsen opgehaald (PDOK Locatieserver).
