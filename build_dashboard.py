@@ -1927,6 +1927,7 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     color:#fff;font:inherit;font-size:12px;padding:7px 12px;border-radius:999px;min-height:32px}
   @media (hover:hover){ .toggle:hover{background:rgba(255,255,255,.18)} }
   .toggle:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .uitlog{margin:0}   /* VA-106: het formulier om de knop neemt geen eigen ruimte */
 
   .sluit-menu{display:none;align-items:center;gap:6px;cursor:pointer;flex:none;
     background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#fff;
@@ -2608,6 +2609,8 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     <nav class="nav" aria-label="Onderdelen van het dashboard">__MENU__</nav>
     <div class="side-voet">
       <button class="toggle" id="themeBtn" type="button">◐ Thema</button>
+      <!-- VA-106: uitloggen via serve.py (VA-50), alleen met POST; een gewoon formulier, werkt zonder JavaScript -->
+      <form class="uitlog" method="post" action="/uitloggen"><button class="toggle" type="submit">Uitloggen</button></form>
     </div>
   </aside>
 

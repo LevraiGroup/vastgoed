@@ -97,7 +97,7 @@
     color:#fff;font:inherit;font-size:12px;padding:7px 12px;border-radius:999px;min-height:32px}
   @media (hover:hover){ .toggle:hover{background:rgba(255,255,255,.18)} }
   .toggle:focus-visible{outline:2px solid #fff;outline-offset:2px}
-
+  .uitlog{margin:0}
   .sluit-menu{display:none;align-items:center;gap:6px;cursor:pointer;flex:none;
     background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#fff;
     font:inherit;font-size:13px;font-weight:650;min-height:40px;padding:0 12px;border-radius:10px}
@@ -719,6 +719,8 @@
     <nav class="nav" aria-label="Onderdelen van het dashboard"><p class="groep" id="g-overzicht">Overzicht</p><ul aria-labelledby="g-overzicht"><li><a href="#kantoor" data-doel="kantoor" aria-current="location">Kantoor</a></li><li><a href="#kerncijfers" data-doel="kerncijfers">Kerncijfers</a></li></ul><p class="groep" id="g-panden">Panden</p><ul aria-labelledby="g-panden"><li><a href="#voorraad" data-doel="voorraad">Voorraad</a></li><li><a href="#bewaard" data-doel="bewaard">Bewaarde panden<span class="vh" id="bwpMenuSr"></span><span class="nav-n" id="bwpMenuN" aria-hidden="true" hidden></span></a></li><li><a href="#werklijst" data-doel="werklijst">Werklijst</a></li></ul></nav>
     <div class="side-voet">
       <button class="toggle" id="themeBtn" type="button">◐ Thema</button>
+      <!-- VA-106: uitloggen via serve.py (VA-50), alleen met POST; een gewoon formulier, werkt zonder JavaScript -->
+      <form class="uitlog" method="post" action="/uitloggen"><button class="toggle" type="submit">Uitloggen</button></form>
     </div>
   </aside>
 
