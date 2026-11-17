@@ -241,6 +241,10 @@ class Toegankelijk(unittest.TestCase):
         self.assertIn('s.setAttribute("focusable", "false");', js)
         for teken in ("★", "☆", "◌", "⊘"):
             self.assertNotIn(teken, js)
+        # VA-91's pagina Bewaarde panden gebruikt dezelfde volle ster (VA-105), geen teken.
+        self.assertIn('const ico = BW.icoon("ster_vol", "bw-ico");', bd.TEMPLATE)
+        for teken in ("★", "☆", "◌", "⊘"):
+            self.assertNotIn(teken, bd.TEMPLATE)
 
     def test_toon_knop_zonder_aria_pressed(self):
         js = blok()
@@ -343,6 +347,24 @@ class GlazenDuo(unittest.TestCase):
             self.assertIn(naam, js)
         self.assertEqual(re.findall(r"https?://[^\s\"']+", js), ["http://www.w3.org/2000/svg"])   # alleen de naamruimte
         self.assertNotRegex(js, r"<use|xlink|url\(")
+
+
+    def test_pagina_zonder_css_uitleg(self):
+        # Het 1 MB-budget (VA-39 crit. 5): de /* uitleg */ in <style> gaat niet mee naar de pagina. Veilig omdat
+        # geen tekst tussen aanhalingstekens in het CSS '/*' bevat, en elke uitleg na { } ; of een andere uitleg staat.
+        t = bd.TEMPLATE
+        css = t[t.index("<style>"):t.index("</style>")]
+        self.assertEqual(re.findall(r"[\"'][^\"'\n]*/\*[^\"'\n]*[\"']", css), [])
+        for m in re.finditer(r"/\*.*?\*/", css, re.S):
+            self.assertIn(css[:m.start()].rstrip()[-1:], "{};>/", css[m.start() - 60:m.start()])
+        k = bd.zonder_css_uitleg(t)
+        kc = k[k.index("<style>"):k.index("</style>")]
+        self.assertNotIn("/*", kc)
+        self.assertEqual(k[k.index("</style>"):], t[t.index("</style>"):])   # het script blijft precies gelijk
+        self.assertIn(".bw-rij{display:flex;gap:0;", kc)
+        html = bd.render({"gebied": "Delft", "peildatum": "Peildatum onbekend", "peildatum_tip": "",
+                          "kpi": [], "cats": [], "facts": [], "leads": [], "bron": None})
+        self.assertNotIn("/* =====", html[:html.index("</style>")])
 
 
 class Kopij(unittest.TestCase):

@@ -2555,6 +2555,9 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   .bwp-kern .addr{max-width:100%}
   .bwp-kern .lid{max-width:62ch}
   .bwp-rij > .bw-rij{flex:0 1 auto;margin-top:0;align-items:center;gap:8px 12px}
+  /* VA-105: hier geen glazen strook (er staat een link naast één knop); de knop zelf is het glas van Bewaard. */
+  .bwp-rij > .bw-rij{padding:0;background:none;border:0;box-shadow:none;border-radius:0}
+  .bwp-rij > .bw-rij > .bw-knop{flex:0 1 auto}
   .bwp-rij .pand-open{display:inline-flex;align-items:center;min-height:38px}
   .bwp-rij .baglink{display:inline-block;padding:10px 0;line-height:18px}
   .bwp-rij .baglink:focus-visible{outline:2px solid var(--s1);outline-offset:2px;border-radius:4px}
@@ -3305,7 +3308,8 @@ const BW = (() => {
   // VA-91: wat de pagina Bewaarde panden nodig heeft. bewaarde(): [id, opgeslagen object] van elk bewaard pand.
   const bewaarde = () => Object.keys(stand).filter(id => stand[id] && stand[id].stand === "bewaard").map(id => [id, stand[id]]);
   return {rij, ververs: werkRij, zichtbaar, aantalWeg, op: f => luisteraars.push(f), van, leeg, ongedaanVoor, lijstDeel,
-    naSluiten, bewaarde, weg: nietMeerBewaard, herstelId: (id, oud) => herstel({id}, oud), status, werkt: () => werkt, opAlles: f => alleLuisteraars.push(f)};
+    naSluiten, bewaarde, weg: nietMeerBewaard, herstelId: (id, oud) => herstel({id}, oud), status, werkt: () => werkt, opAlles: f => alleLuisteraars.push(f),
+    icoon};   // VA-105: dezelfde SVG-iconen op de pagina Bewaarde panden
 })();
 /* ============================ einde BEWAREN EN VERBERGEN ============================ */
 
@@ -3375,7 +3379,7 @@ const BWP = (() => {
     // De Bewaar-knop van VA-90, in de ingedrukte stand; nog eens drukken is niet meer bewaren.
     const b = maak("button", "bw-knop bw-bewaar"); b.type = "button"; b.setAttribute("aria-pressed", "true");
     b.setAttribute("aria-label", vul(T["naam.bewaard"], {adres: naamVan(v)}));
-    const ico = maak("span", "bw-ico", "★"); ico.setAttribute("aria-hidden", "true");
+    const ico = BW.icoon("ster_vol", "bw-ico");   // VA-105: de volle ster van de knop, niet voorgelezen
     const tk = maak("span", "bw-tk"); tk.append(maak("span", "bw-nm", T["label.bewaard"]), maak("span", "bw-terug", T["terug.bewaard"]));
     b.append(ico, tk); b.addEventListener("click", () => haalWeg(id));
     knoppen.append(b); li.append(sc, kern, knoppen);
@@ -5016,6 +5020,16 @@ function kantoorStart(root, data, opties = {}) {
 """
 
 
+def zonder_css_uitleg(t: str) -> str:
+    """
+    Het sjabloon zonder de /* uitleg */ in zijn <style> (VA-105). De uitleg blijft in de bron staan; de pagina
+    blijft zo onder 1 MB (VA-39 crit. 5), en er verandert niets wat de browser toont. Het CSS heeft geen tekst
+    tussen aanhalingstekens met '/*' erin; een test bewaakt dat.
+    """
+    i, j = t.index("<style>"), t.index("</style>")
+    return t[:i] + re.sub(r"[ \t]*/\*.*?\*/[ \t]*\n?", "", t[i:j], flags=re.S) + t[j:]
+
+
 def render(payload: dict) -> str:
     """Vul het sjabloon. De payload als laatste, zodat zijn inhoud niet wordt vervangen."""
     payload = {**payload, "kaartfoto": payload.get("kaartfoto") or kaartfoto_tekst(),  # elke kaart (VA-71)
@@ -5028,7 +5042,7 @@ def render(payload: dict) -> str:
     lijst = pg["lijst"]
     naam = next(n for g in menu_voor(lijst) for d, n in g["items"] if d == lijst)
     band = band_html(payload.get("kaart"))
-    html = (TEMPLATE
+    html = (zonder_css_uitleg(TEMPLATE)
             .replace("__TITEL__", escape(pg["titel"]))
             .replace("__LABEL__", payload["gebied"])
             .replace("__PEILDATUM__", escape(payload["peildatum"]))
