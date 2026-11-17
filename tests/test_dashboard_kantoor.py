@@ -506,7 +506,7 @@ class EchteNederlandCijfers(unittest.TestCase):
         self.assertNotIn("dekking", kpi[0]["h"])  # Lumi: geen dekkingspercentage tegen de WFS
         self.assertEqual({c["k"]: c["n"] for c in self.payload["cats"]}, t["categorieen"])
         feiten = {f["k"]: f["val"] for f in self.payload["facts"]}
-        self.assertEqual(feiten["Panden op de werklijst"], bd.nl_getal(t["werklijst"]))
+        self.assertNotIn("Panden op de werklijst", feiten)  # Ayman 11-17: het totaal staat er niet meer
         self.assertEqual(feiten[f"Uit de {t['aantal_grote_gemeenten']} grootste gemeenten"],
                          bd.nl_getal(t["werklijst_25"]))
         self.assertEqual(feiten["Elders in Nederland"], bd.nl_getal(t["werklijst_overig"]))

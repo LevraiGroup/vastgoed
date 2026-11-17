@@ -1583,8 +1583,8 @@ def bouw_payload_landelijk(cfg: dict) -> dict:
     cats = [{"k": k, "name": CATEGORIE_NAAM[k], "n": per_cat.get(k, 0), "c": CATEGORIE_KLEUR[k]}
             for k in "ABCDE"]
 
+    # Ayman 11-17: "500 klinkt weinig". Werklijst in cijfers noemt het totaal niet meer, net als de band.
     facts = [
-        {"k": "Panden op de werklijst", "val": tal("werklijst")},
         {"k": f"Uit de {nl_getal(groot)} grootste gemeenten", "val": tal("werklijst_25")},
         {"k": f"Elders in {label}", "val": tal("werklijst_overig")},
         *lijst_feiten(lijst),
@@ -1610,7 +1610,7 @@ def bouw_payload_landelijk(cfg: dict) -> dict:
                               "n_rest": nl_getal(n - n_groot), "aantal": nl_getal(groot),
                               "n_ae": tal("a_e")}),
             "pagina": pagina("werklijst", f"Levrai · Pandenselectie — {label}", "Werklijst in cijfers",
-                             f"De {nl_getal(n)} panden van deze maand, verdeeld over het land",
+                             "De werklijst van deze maand, verdeeld over het land",
                              bron_pil(lijst, "Bron: PDOK BAG GeoPackage")),
             "bron": bron, "bron_regels": bron_regels(bron), "bron_reden": bron_reden,
             "peildatum": peildatum(bron), "peildatum_tip": peildatum_tip(bron, bron_reden),

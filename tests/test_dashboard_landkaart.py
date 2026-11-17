@@ -100,7 +100,7 @@ class Gebouwd(unittest.TestCase):
         p = payload_uit(html)
         self.assertEqual(list(k["trap"].values()), ["9.998.456", "6.568.913", "441.997", "263.319", "4"])
         self.assertEqual([x["v"] for x in p["kpi"]], list(k["trap"].values())[:4])
-        self.assertEqual(next(f["val"] for f in p["facts"] if f["k"] == "Panden op de werklijst"), k["trap"]["werklijst"])
+        self.assertNotIn("Panden op de werklijst", [f["k"] for f in p["facts"]])  # Ayman 11-17: geen totaal
         trap = html[html.index('<ol class="trap"'):html.index("</ol>", html.index('<ol class="trap"'))]
         # Ayman: de band noemt het aantal op de werklijst niet; het vijfde cijfer heet alleen "Werklijst".
         self.assertEqual(re.findall(r"<b>([^<]*)</b>", trap), list(k["trap"].values())[:4] + ["Werklijst"])

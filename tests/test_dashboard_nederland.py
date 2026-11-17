@@ -189,7 +189,7 @@ class PayloadLandelijk(unittest.TestCase):
                          "A–E vallen, en wat de 4 panden op de werklijst van deze maand kenmerkt.")
         self.assertIn("In de 25 grootste gemeenten", payload["velden"])
         self.assertEqual(payload["pagina"]["feiten.titel"], "Werklijst in cijfers")
-        self.assertEqual(payload["pagina"]["feiten.cap"], "De 4 panden van deze maand, verdeeld over het land")
+        self.assertEqual(payload["pagina"]["feiten.cap"], "De werklijst van deze maand, verdeeld over het land")
         self.assertEqual([lead["id"] for lead in payload["leads"]], [p["bag_pand_id"] for p in lijst])  # volgorde van de run
         self.assertEqual([lead["g"] for lead in payload["leads"]], ["Amsterdam", "Amsterdam", "Utrecht", "Baarn"])
         html = bd.render(payload)
