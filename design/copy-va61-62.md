@@ -65,3 +65,19 @@ Geen regel gebruikt het woord dat Nova op 2026-11-06 uitsloot, en geen regel is 
 | --- | --- | --- | --- |
 | knop, zichtbaar | Alle gegevens | Open pand | **gewijzigd:** een knop zegt wat er gebeurt, en het sluit aan bij "Open in BAG-viewer ↗" ernaast. Kort genoeg voor de voet op 375 px. |
 | knop, `aria-label` | Alle gegevens van {adres} | Open pand: alle gegevens van {adres} | **gewijzigd:** begint met de zichtbare tekst, zodat de naam de zichtbare tekst bevat (WCAG 2.5.3). Vervangt `PAND_TEKST.open` ("Open de gegevens van {adres}"), dat bij het oude kaartlabel hoorde. |
+
+## Energielabel in de pandweergave (VA-58, criterium 5), 2026-11-17
+
+Twee velden die het record alleen heeft als het energielabel aan staat
+(`ALLEEN_MET_ENERGIELABEL`). Zonder die velden is er geen rij. Met het veld maar zonder label
+(`None`) is de waarde `GEEN` ("geen").
+
+| Veld | Concept (Rex) | Goedgekeurd | Status |
+| --- | --- | --- | --- |
+| `energielabel` | Energielabel (EP-online) | Energielabel (EP-online) | ongewijzigd goedgekeurd. Tussen haakjes staat het register, zoals bij "X-coördinaat (RD)". Zo ziet Levrai dat de klasse uit het officiële register komt en geen schatting is. "Energielabel (EP-online): geen" zegt eerlijk dat het pand daar geen label heeft. |
+| `energielabel_registratiedatum` | Energielabel geregistreerd op | Registratiedatum energielabel | **gewijzigd:** zonder label is de waarde "geen", en dan leest het concept als "Energielabel geregistreerd op: geen". Een zelfstandig naamwoord past bij elke waarde ("Registratiedatum energielabel: 4 mrt 2021" of "geen"). Het sluit ook aan bij "Peildatum van de gegevens" en gebruikt het woord van RVO zelf. |
+
+In de code verandert alleen het tweede label: in `PAND_VELDEN` in `build_dashboard.py` en de
+drie keer dat `tests/test_dashboard_pand.py` het noemt (`test_energielabel_rijen`). Daarna
+`python build_dashboard.py` opnieuw draaien. Er is geen andere locale: het dashboard is alleen
+Nederlands.
