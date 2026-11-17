@@ -300,6 +300,12 @@ Twee stappen, beide met `ep_online.py`, en een map die een instelling is
     python ep_online.py ophalen      # het CSV-totaalbestand van de maand -> <map>/v<JJJJMMDD>_v4_csv.zip
     python ep_online.py koppel       # labels voor de snapshot van het doelgebied -> <map>/energielabel_<snapshot>.sqlite
 
+- **Op Railway** hoort de map op het volume, onder `/data` (daar hangt het volume `vastgoed-volume`),
+  bijvoorbeeld `/data/energielabel`: zet `bronnen.energielabel.map` op dat absolute pad, of geef
+  `--map /data/energielabel` mee. Buiten het volume is de map na een nieuwe deploy weg, en daarmee de
+  maand-zip (ongeveer 230 MB) en de labels per snapshot. `koppel` maakt zijn tijdelijke werkbestand in
+  dezelfde map. De standaardwaarde `data/energielabel` is voor de laptop.
+
 - **De sleutel** komt alleen uit de omgevingsvariabele `EP_ONLINE_API_KEY` (op Railway), gaat alleen
   mee in de `Authorization`-header van `GET <api_url>/Mutatiebestand/DownloadInfo?fileType=csv`, en
   wordt nergens geschreven of getoond. De tijdelijke downloadlink uit het antwoord ook niet. Zonder de
