@@ -48,8 +48,9 @@ class DrieStanden(unittest.TestCase):
     def test_stand_te_zien_met_meer_dan_kleur(self):
         js, css = blok(), bd.TEMPLATE
         self.assertIn('b.setAttribute("aria-pressed", String(aan));', js)
-        self.assertIn('(aan ? "★" : "☆")', js)       # bewaard: een volle ster
-        self.assertIn('.bw-knop.bw-weg[aria-pressed="true"]{background:var(--grid);border:1px dashed', css)
+        # Bewaard: een volle ster; Verborgen: een gestippeld oog (Lumi, knoppen-spec.md).
+        self.assertIn('const naam = soort === "bewaard" ? (aan ? "ster_vol" : "ster") : (aan ? "oog_uit" : "oog")', js)
+        self.assertIn('.bw-knop.bw-weg[aria-pressed="true"]{border:1px dashed var(--ink-2);', css)
         self.assertIn('T["terug." + soort]', js)       # de knop zegt hoe je het terugzet
         for k in ("bewaar", "bewaard", "verberg", "verborgen", "terug.bewaard", "terug.verborgen", "ongedaan"):
             self.assertTrue(bd.BEWAAR_TEKST[k])
@@ -229,11 +230,17 @@ class Toegankelijk(unittest.TestCase):
 
     def test_tekens_niet_voorgelezen(self):
         js = blok()
-        self.assertIn('const i = maak("span", null, s === "bewaard" ? "★" : "◌"); i.setAttribute("aria-hidden", "true");\n'
+        self.assertIn('const i = icoon(s === "bewaard" ? "ster_vol" : "oog_uit", "bw-label-ico");'
+                      '   // dezelfde iconen als de knop\n'
                       '        l.append(i, s === "verborgen" ? D["label.verborgen"].replace("{datum}", () => datum(stand[d.id]))'
                       ' : T["label." + s]);', js)
         self.assertNotIn('"★ "', js)
-        self.assertIn('const ico = maak("span", "bw-ico"); ico.setAttribute("aria-hidden", "true");', js)
+        self.assertIn('const ico = icoon(soort === "bewaard" ? "ster" : "oog", "bw-ico");', js)
+        # Elk icoon is een SVG die de schermlezer overslaat en die geen focus krijgt.
+        self.assertIn('s.setAttribute("aria-hidden", "true");', js)
+        self.assertIn('s.setAttribute("focusable", "false");', js)
+        for teken in ("★", "☆", "◌", "⊘"):
+            self.assertNotIn(teken, js)
 
     def test_toon_knop_zonder_aria_pressed(self):
         js = blok()
@@ -295,6 +302,45 @@ class FocusNaSluiten(unittest.TestCase):
         self.assertIn('<main class="inhoud" id="inhoud" tabindex="-1">', bd.TEMPLATE)
         self.assertIn("return {rij, ververs: werkRij, zichtbaar, aantalWeg, op: f => luisteraars.push(f), van, leeg, "
                       "ongedaanVoor, lijstDeel};", js)
+
+
+class GlazenDuo(unittest.TestCase):
+    """Lumi's variant A (knoppen-spec.md): één glazen strook, 44px doelen, iconen in SVG, --glans per thema."""
+
+    def css(self):
+        t = bd.TEMPLATE
+        i = t.index("/* ===================== BEWAREN EN VERBERGEN (VA-90)")
+        return t[i:t.index("/* ===================== einde BEWAREN EN VERBERGEN", i)]
+
+    def test_strook_en_doelen(self):
+        css = self.css()
+        self.assertIn(".bw-rij{display:flex;gap:0;", css)
+        self.assertIn("box-shadow:inset 0 1px 0 var(--glans)}", css)
+        self.assertRegex(css, r"\.bw-knop\{flex:1 1 0;[^}]*min-height:44px")   # gelijke helften, minstens 44px hoog
+        self.assertIn(".bw-knop:focus-visible{outline:2px solid var(--s1);outline-offset:2px;z-index:1}", css)
+        self.assertIn(".pand-bw .bw-rij{max-width:420px}", css)
+
+    def test_bewaard_is_het_glas_van_de_band(self):
+        css = self.css()
+        self.assertIn('.bw-knop.bw-bewaar[aria-pressed="true"]{background:var(--held);color:#fff;', css)
+        self.assertIn('.bw-knop.bw-bewaar[aria-pressed="true"] .bw-ico{color:var(--s4);', css)
+
+    def test_glans_per_thema(self):
+        t = bd.TEMPLATE
+        self.assertIn("--glans:rgba(255,255,255,.75);", t)
+        self.assertEqual(t.count("--glans:rgba(255,255,255,.06)"), 2)   # donker: systeem en de themaknop
+
+    def test_minder_beweging(self):
+        self.assertIn("@media (prefers-reduced-motion: reduce){ .bw-knop{transition:none} .bw-knop:active{transform:none} }",
+                      self.css())
+
+    def test_vier_iconen_en_niets_van_buiten(self):
+        js = blok()
+        self.assertIn('const SVG = "http://www.w3.org/2000/svg"', js)
+        for naam in ("ster:", "ster_vol:", "oog:", "oog_uit:"):
+            self.assertIn(naam, js)
+        self.assertEqual(re.findall(r"https?://[^\s\"']+", js), ["http://www.w3.org/2000/svg"])   # alleen de naamruimte
+        self.assertNotRegex(js, r"<use|xlink|url\(")
 
 
 class Kopij(unittest.TestCase):

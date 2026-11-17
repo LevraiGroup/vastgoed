@@ -1805,11 +1805,13 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     --held:linear-gradient(155deg,var(--brand) 0%,var(--brand) 35%,var(--brand-2) 100%);
     --gloed:color-mix(in srgb,var(--s1) 40%,transparent);
     --schaduw-hoog:0 1px 2px rgba(11,11,11,.05),0 28px 56px -28px color-mix(in srgb,var(--brand) 60%,transparent);
+    --glans:rgba(255,255,255,.75);   /* het glimlicht bovenin een glazen strook (Bewaar en Verberg, Lumi) */
   }
   @media (prefers-color-scheme: dark){
-    :root:where(:not([data-theme="light"])){--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9)}
+    :root:where(:not([data-theme="light"])){--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9);
+      --glans:rgba(255,255,255,.06)}
   }
-  :root[data-theme="dark"]{--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9)}
+  :root[data-theme="dark"]{--schaduw-hoog:0 1px 2px rgba(0,0,0,.5),0 30px 60px -30px rgba(0,0,0,.9);--glans:rgba(255,255,255,.06)}
 
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
@@ -2402,22 +2404,45 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
   }
   /* ===================== BEWAREN EN VERBERGEN (VA-90) =====================
      Op elke kaart en in 'Open pand': Bewaar en Verberg. De stand staat in de knop met meer dan kleur:
-     een ster (☆/★) en het woord, een stippelrand bij Verborgen, en aria-pressed. */
-  .bw-rij{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
-  .bw-knop{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:5px 12px 5px 10px;border-radius:9px;
-    border:1px solid var(--ring);background:var(--surface-2);color:var(--ink);font:inherit;font-size:12.5px;
-    font-weight:650;text-align:left;cursor:pointer}
-  .bw-knop .bw-ico{flex:none;width:1.1em;text-align:center;font-size:14px;line-height:1}
-  .bw-knop .bw-tk{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+     het woord, een icoon (ster leeg/vol, oog/gestippeld oog), de tweede regel, en aria-pressed.
+     Vorm: Lumi's "Glazen duo" (knoppen-spec.md, variant A): één glazen strook met twee gelijke helften.
+     Bewaard wordt het navy glas van de band met een gouden ster; Verborgen is gearceerd en gestippeld. */
+  .bw-rij{display:flex;gap:0;margin-top:4px;padding:3px;border-radius:13px;
+    background:linear-gradient(180deg,var(--surface-2),color-mix(in srgb,var(--s1) 5%,var(--surface-2)));
+    border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);box-shadow:inset 0 1px 0 var(--glans)}
+  .bw-knop{flex:1 1 0;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    min-height:44px;padding:6px 12px;border-radius:10px;border:1px solid transparent;background:transparent;
+    color:var(--ink);font:inherit;font-size:13px;font-weight:650;cursor:pointer;position:relative;
+    transition:background-color .15s,border-color .15s,box-shadow .15s,transform .08s}
+  .bw-knop .bw-ico{flex:none;width:18px;height:18px;color:var(--ink-2)}
+  .bw-knop .bw-tk{display:flex;flex-direction:column;line-height:1.2;min-width:0;text-align:left}
   .bw-knop .bw-terug{font-size:11px;font-weight:500;color:var(--ink-2)}
   .bw-knop .bw-terug:empty{display:none}
-  .bw-knop.bw-bewaar[aria-pressed="true"]{background:color-mix(in srgb,var(--s1) 12%,var(--surface-2));
-    border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
-  .bw-knop.bw-bewaar[aria-pressed="true"] .bw-ico{color:var(--s1)}
-  .bw-knop.bw-weg[aria-pressed="true"]{background:var(--grid);border:1px dashed var(--ink-2)}
-  .bw-knop[aria-disabled="true"]{cursor:not-allowed;opacity:.65}
-  @media (hover:hover){ .bw-knop:not([aria-disabled="true"]):hover{background:var(--grid)} }
-  .bw-knop:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .bw-knop+.bw-knop::before{content:"";position:absolute;left:-1px;top:10px;bottom:10px;width:1px;
+    background:color-mix(in srgb,var(--ink) 12%,transparent)}
+  .bw-knop[aria-pressed="true"]::before,.bw-knop[aria-pressed="true"]+.bw-knop::before{display:none}
+  @media (hover:hover){
+    .bw-knop:not([aria-disabled="true"]):hover{background:color-mix(in srgb,var(--s1) 9%,transparent)}
+    .bw-knop:not([aria-disabled="true"]):hover .bw-ico{color:var(--s1)} }
+  .bw-knop:focus-visible{outline:2px solid var(--s1);outline-offset:2px;z-index:1}
+  .bw-knop:not([aria-disabled="true"]):active{transform:translateY(1px);
+    background:color-mix(in srgb,var(--s1) 14%,transparent);
+    box-shadow:inset 0 1px 3px color-mix(in srgb,var(--ink) 18%,transparent)}
+  .bw-knop.bw-bewaar[aria-pressed="true"]{background:var(--held);color:#fff;
+    border-color:color-mix(in srgb,var(--s1) 70%,transparent);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 6px 16px -8px var(--gloed)}
+  .bw-knop.bw-bewaar[aria-pressed="true"] .bw-ico{color:var(--s4);
+    filter:drop-shadow(0 0 5px color-mix(in srgb,var(--s4) 55%,transparent))}
+  .bw-knop.bw-bewaar[aria-pressed="true"] .bw-terug{color:var(--nav-tekst)}
+  @media (hover:hover){ .bw-knop.bw-bewaar[aria-pressed="true"]:hover{background:var(--held);filter:brightness(1.12)} }
+  .bw-knop.bw-weg[aria-pressed="true"]{border:1px dashed var(--ink-2);color:var(--ink);
+    background:repeating-linear-gradient(135deg,var(--grid) 0 6px,
+      color-mix(in srgb,var(--grid) 55%,var(--surface-2)) 6px 12px)}
+  .bw-knop.bw-weg[aria-pressed="true"] .bw-ico{color:var(--ink)}
+  .bw-knop[aria-disabled="true"]{cursor:not-allowed;opacity:.55}
+  @media (prefers-reduced-motion: reduce){ .bw-knop{transition:none} .bw-knop:active{transform:none} }
+  .pand-bw .bw-rij{max-width:420px}
+  .bw-label .bw-label-ico{flex:none;width:12px;height:12px}
   .bw-label{display:inline-flex;align-self:flex-start;width:max-content;max-width:100%;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;
     color:var(--ink);background:color-mix(in srgb,var(--s1) 12%,var(--surface-2));border:1px solid var(--s1)}
   .bw-label.weg{background:var(--grid);border:1px dashed var(--ink-2)}
@@ -3044,9 +3069,24 @@ const BW = (() => {
     if (!schrijf()) { werkt = false; } overal(true);
   }
   const adres = d => d.detail ? d.detail.titel : d.a;
+  // Vier iconen, inline SVG (Lumi, knoppen-spec.md): geen lettertype, beeld of bestand erbij. Nooit voorgelezen.
+  const SVG = "http://www.w3.org/2000/svg", STER = "M12 3.2l2.6 5.5 6 .7-4.4 4.1 1.1 6L12 16.6l-5.3 2.9 1.1-6L3.4 9.4l6-.7z",
+    OOG = "M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z",
+    LIJN = ' fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"',
+    STREEP = '<path d="M4 20L20 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>';
+  const ICO = {
+    ster: '<path d="' + STER + '"' + LIJN + '/>',
+    ster_vol: '<path d="' + STER + '"' + LIJN.replace('fill="none"', 'fill="currentColor"') + '/>',
+    oog: '<path d="' + OOG + '"' + LIJN + '/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.8"/>' + STREEP,
+    oog_uit: '<path d="' + OOG + '"' + LIJN + ' stroke-dasharray="2.6 2.4"/>' + STREEP};
+  function icoon(naam, cls) {
+    const s = document.createElementNS(SVG, "svg");
+    s.setAttribute("class", cls); s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("aria-hidden", "true");
+    s.setAttribute("focusable", "false"); s.setAttribute("data-ico", naam); s.innerHTML = ICO[naam]; return s;
+  }
   function knop(d, soort) {
     const b = maak("button", "bw-knop bw-" + (soort === "bewaard" ? "bewaar" : "weg")); b.type = "button";
-    const ico = maak("span", "bw-ico"); ico.setAttribute("aria-hidden", "true");
+    const ico = icoon(soort === "bewaard" ? "ster" : "oog", "bw-ico");
     const tk = maak("span", "bw-tk"); tk.append(maak("span", "bw-nm"), maak("span", "bw-terug"));
     b.append(ico, tk);   // de naam staat in aria-label, per stand (werkRij)
     b.addEventListener("click", e => { e.stopPropagation(); druk(d, soort, b); });
@@ -3067,7 +3107,8 @@ const BW = (() => {
         b.setAttribute("aria-pressed", String(aan));
         b.setAttribute("aria-label", T["naam." + (aan ? soort : soort === "bewaard" ? "bewaar" : "verberg")].replace("{adres}", () => adres(d)));
         if (werkt) b.removeAttribute("aria-disabled"); else b.setAttribute("aria-disabled", "true");
-        b.querySelector(".bw-ico").textContent = soort === "bewaard" ? (aan ? "★" : "☆") : (aan ? "◌" : "⊘");
+        const naam = soort === "bewaard" ? (aan ? "ster_vol" : "ster") : (aan ? "oog_uit" : "oog"), ico = b.querySelector(".bw-ico");
+        if (ico.getAttribute("data-ico") !== naam) ico.replaceWith(icoon(naam, "bw-ico"));
         b.querySelector(".bw-nm").textContent = aan ? T["label." + soort] : T[soort === "bewaard" ? "bewaar" : "verberg"];
         b.querySelector(".bw-terug").textContent = aan ? T["terug." + soort] : ""; });
     }
@@ -3075,7 +3116,7 @@ const BW = (() => {
     if (card) { card.classList.toggle("bw-is-weg", s === "verborgen");
       const l = card.querySelector(".bw-label"); l.hidden = !s; l.className = "bw-label" + (s === "verborgen" ? " weg" : "");
       l.textContent = "";
-      if (s) { const i = maak("span", null, s === "bewaard" ? "★" : "◌"); i.setAttribute("aria-hidden", "true");
+      if (s) { const i = icoon(s === "bewaard" ? "ster_vol" : "oog_uit", "bw-label-ico");   // dezelfde iconen als de knop
         l.append(i, s === "verborgen" ? D["label.verborgen"].replace("{datum}", () => datum(stand[d.id])) : T["label." + s]); } }
   }
   // De statusregel boven de werklijst (en in 'Open pand'): role=status, dus voorgelezen zonder te onderbreken.
