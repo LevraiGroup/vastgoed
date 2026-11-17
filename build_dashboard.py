@@ -1061,8 +1061,11 @@ def met_planning(payload: dict, cfg: dict, vandaag: date | None = None) -> dict:
 # dit verhaal. Geen cijfer verandert: de kerncijfers, de band en zijn 500 stippen blijven hetzelfde.
 # Kopij: Ada, wacht op Lumi.
 SLOT_TEKST = {
-    "titel": "{n} panden staan achter het slot",
-    "titel.een": "1 pand staat achter het slot",
+    # Ayman: geen aantal naast de werklijst in beeld. De kop noemt het aantal niet; de schermlezer hoort het
+    # echte aantal wel (een visueel verborgen tekst), net als bij de band.
+    "titel": "De rest van je werklijst staat achter het slot",
+    "sr": "{n} panden staan achter het slot",
+    "sr.een": "1 pand staat achter het slot",
     "regel": "Zet de datakoppeling aan om alle panden van de werklijst te zien.",
     "telling.alle": "De {n} zichtbare panden",
     "telling": "{n} van de {totaal} zichtbare panden",
@@ -1092,7 +1095,8 @@ def met_slot(payload: dict, cfg: dict) -> dict:
     if n is None or totaal <= n:
         return payload
     op_slot = totaal - n
-    tekst = {"titel": (SLOT_TEKST["titel.een"] if op_slot == 1 else SLOT_TEKST["titel"].format(n=nl_getal(op_slot))),
+    tekst = {"titel": SLOT_TEKST["titel"],
+             "sr": (SLOT_TEKST["sr.een"] if op_slot == 1 else SLOT_TEKST["sr"].format(n=nl_getal(op_slot))),
              "regel": SLOT_TEKST["regel"]}
     filt = payload.get("filter")
     if filt and filt.get("tekst"):
@@ -1115,7 +1119,8 @@ def slot_html(s: dict | None) -> str:
     return ('\n        <!-- SLOT (VA-96) -->\n'
             f'        <div class="slot-blok" id="slotBlok"><div class="grid slot-schim" aria-hidden="true">{schim}</div>'
             f'<div class="slot-paneel"><span class="slot-icoon">{slot}</span>'
-            f'<p class="slot-tekst"><b>{escape(s["tekst"]["titel"])}.</b> {escape(s["tekst"]["regel"])}</p></div></div>'
+            f'<p class="slot-tekst"><b><span aria-hidden="true">{escape(s["tekst"]["titel"])}.</span>'
+            f'<span class="vh">{escape(s["tekst"]["sr"])}.</span></b> {escape(s["tekst"]["regel"])}</p></div></div>'
             '\n        <!-- einde SLOT -->')
 # --------------------------------------------------------------- einde slot op de werklijst (VA-96)
 
