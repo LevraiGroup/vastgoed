@@ -807,11 +807,13 @@ def gangbare_peildatum(top: list[dict]) -> str | None:
 
 # VA-97, Ayman: "verborgen betekent alleen verborgen voor een maand". Een verborgen pand komt na
 # werklijst.verberg_dagen dagen (config.yaml; 30 als het er niet staat) vanzelf terug op de werklijst,
-# gerekend vanaf het moment van verbergen ('sinds'). Kopij: Ada, wacht op Lumi (daarom niet in BEWAAR_TEKST,
-# dat letterlijk uit design/copy-va90.md komt). Het script vult alleen {adres} en {datum} in.
+# gerekend vanaf het moment van verbergen ('sinds'). Kopij: Lumi, copy-va97.md. Het script vult
+# alleen {adres} en {datum} in. {datum} is de korte datum van _nl() (dag, korte maand, jaar; harde spaties): Python geeft
+# MAANDEN en NBSP mee in PAYLOAD.bewaar, het script zet alleen dag, maand en jaar achter elkaar (VA-31).
 VERBERG_DAGEN = 30
 VERBERG_DUUR_TEKST = {
-    "status.verborgen": "{adres} is verborgen tot {datum}. Daarna staat het weer op de werklijst.",
+    # VA-6: een nieuwe maandrun kan de werklijst vervangen, dus geen belofte dat het terugkomt (Lumi).
+    "status.verborgen": "{adres} is verborgen tot {datum}. Staat het dan nog op je werklijst, dan zie je het weer.",
     "label.verborgen": "Verborgen tot {datum}",
 }
 
@@ -830,7 +832,8 @@ def lees_verberg_dagen(cfg: dict) -> tuple[int, list[str]]:
 
 def bewaar_blok(top: list[dict], dagen: int = VERBERG_DAGEN) -> dict:
     """PAYLOAD.bewaar: de teksten, de peildatum die een lead zonder eigen 'dp' heeft, en de verbergduur (VA-97)."""
-    return {"tekst": BEWAAR_TEKST, "dp": gangbare_peildatum(top), "dagen": dagen, "duur": VERBERG_DUUR_TEKST}
+    return {"tekst": BEWAAR_TEKST, "dp": gangbare_peildatum(top), "dagen": dagen, "duur": VERBERG_DUUR_TEKST,
+            "maanden": list(MAANDEN), "nbsp": NBSP}
 
 
 def met_duur_verborgen(payload: dict, cfg: dict) -> dict:
@@ -839,7 +842,8 @@ def met_duur_verborgen(payload: dict, cfg: dict) -> dict:
     if let:   # de build drukt het af, net als de waarschuwingen van de planning
         payload = {**payload, "planning_waarschuwingen": (payload.get("planning_waarschuwingen") or []) + let}
     bw = payload.get("bewaar") or bewaar_blok([])
-    return {**payload, "bewaar": {**bw, "dagen": dagen, "duur": VERBERG_DUUR_TEKST}}
+    return {**payload, "bewaar": {**bw, "dagen": dagen, "duur": VERBERG_DUUR_TEKST,
+                                  "maanden": list(MAANDEN), "nbsp": NBSP}}
 # --------------------------------------------------------------- einde bewaren en verbergen (VA-90)
 
 # --------------------------------------------------------------- planning (VA-86)
@@ -3001,6 +3005,7 @@ const BW = (() => {
   const T = PAYLOAD.bewaar.tekst, DP = PAYLOAD.bewaar.dp, SLEUTEL = "levrai-vastgoed-panden", VORM = 1;
   const PER_ID = new Map(LEADS.map(d => [d.id, d]));
   const D = PAYLOAD.bewaar.duur, DAG = 864e5, DAGEN = PAYLOAD.bewaar.dagen || 30;   // VA-97
+  const MND = PAYLOAD.bewaar.maanden, SP = PAYLOAD.bewaar.nbsp;   // het datumformaat van _nl() in Python
   let stand = {}, werkt = false, tonen = false, dlg = null;
   const luisteraars = [], rijen = new Map();   // per pand-ID de knoppenrij van zijn kaart
   function lees() {
@@ -3010,7 +3015,8 @@ const BW = (() => {
   }
   // VA-97: tot wanneer een verborgen pand verborgen blijft, en wat daarna weer op de werklijst komt.
   const tot = r => Date.parse(r.sinds) + DAGEN * DAG;
-  const datum = r => new Date(tot(r)).toLocaleDateString("nl-NL", {day: "numeric", month: "long", year: "numeric"});
+  // De korte datum van _nl(): dag, maand en jaar met harde spaties, in de eigen tijdzone. Geen tweede notatie (VA-31).
+  const datum = r => { const t = new Date(tot(r)); return t.getDate() + SP + MND[t.getMonth()] + SP + t.getFullYear(); };
   function verlopen() {   // true als er iets veranderde (dan is het ook opgeslagen)
     const nu = Date.now(); let anders = false;
     for (const id of Object.keys(stand)) { const r = stand[id];
