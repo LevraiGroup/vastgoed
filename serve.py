@@ -24,6 +24,10 @@ altijd door de bewaker in betaald.py (plafond 200 cent per ISO-week, prijzen in 
     VASTGOED_WEEKLIMIET_CENT  lager plafond in centen (standaard en maximaal 200)
     KVK_API_KEY, KADASTER_KOOPSOM_KEY   sleutels; welke variabele bij welke bron hoort, staat
                               in config.yaml (betaalde_bronnen.*.sleutel_variabele)
+Bewaarde en verborgen panden staan op de server (Ayman 11-17), via GET en POST /api/panden, alleen
+met een geldige sessie. Het bestand staat in VASTGOED_BEWAARD of anders in bewaard.json op het
+Railway-volume (RAILWAY_VOLUME_MOUNT_PATH); zie bewaard.py.
+
 De poort komt uit PORT (Railway zet die); lokaal is het 8000. De pipeline draait hier nooit.
 
     python serve.py            # http://localhost:8000/
@@ -48,6 +52,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import betaald
+import bewaard
 
 BASIS = Path(__file__).resolve().parent
 DESIGN = BASIS / "design"
@@ -55,6 +60,8 @@ LOGIN_SJABLOON = BASIS / "web" / "login.html"
 CONFIG = BASIS / "config.yaml"
 OUTPUT = BASIS / "output"
 PAD_OPZOEKEN = "/api/opzoeken"
+PAD_PANDEN = "/api/panden"
+MAX_PANDEN_VERZOEK = 2_000_000  # bytes; ruim genoeg om een volle lijst uit een browser over te zetten
 MAX_OPZOEKING = 1024  # bytes; {"bron": ..., "bag_pand_id": ...} is nooit groter
 STANDAARD_POORT = 8000
 
@@ -283,6 +290,9 @@ TE_VAAK = "Te veel mislukte pogingen vanaf dit netwerk. Over {minuten} kun je we
 NIET_INGELOGD = "Log eerst in. Er is niets opgevraagd."
 ANDERE_SITE = "Dit verzoek komt niet van het dashboard. Er is niets opgevraagd."
 ALLEEN_POST = "Opzoeken kan alleen met de knop op het dashboard. Er is niets opgevraagd."
+PANDEN_INLOG = "Log eerst in. Er is niets bewaard."
+PANDEN_ANDERE_SITE = "Dit verzoek komt niet van het dashboard. Er is niets bewaard."
+PANDEN_ONGELDIG = "Dit verzoek past niet bij de bewaarde panden. Er is niets bewaard."
 ONGELDIG_VERZOEK = "Het verzoek noemt alleen een bron en een bag_pand_id. Er is niets opgevraagd."
 
 
@@ -322,8 +332,9 @@ class Handler(SimpleHTTPRequestHandler):
     timeout = SOCKET_TIMEOUT_SECONDEN
 
     def __init__(self, *args, instellingen: Instellingen, sessies: Sessies, pogingen: Pogingen,
-                 bewaker: betaald.Bewaker, **kwargs):
+                 bewaker: betaald.Bewaker, opslag: bewaard.Opslag | None = None, **kwargs):
         self.instellingen = instellingen
+        self.opslag = opslag or bewaard.Opslag(None)
         self.sessies = sessies
         self.pogingen = pogingen
         self.bewaker = bewaker
@@ -461,6 +472,8 @@ class Handler(SimpleHTTPRequestHandler):
                                     kop_alleen, koppen=[("Allow", "POST")])
         if pad == "/uitloggen":  # alleen POST logt uit; een link of prefetch doet niets
             return self._doorsturen("/")
+        if pad == PAD_PANDEN:
+            return self._panden_lezen(kop_alleen)
         if pad == "/login":
             if self._ingelogd():
                 return self._doorsturen("/")
@@ -478,6 +491,8 @@ class Handler(SimpleHTTPRequestHandler):
         pad = self._pad()
         if pad == PAD_OPZOEKEN:
             return self._opzoeken()
+        if pad == PAD_PANDEN:
+            return self._panden_wijzigen()
         if pad not in ("/login", "/uitloggen"):
             return self._doorsturen("/login")
         if not self._zelfde_herkomst():
@@ -539,6 +554,48 @@ class Handler(SimpleHTTPRequestHandler):
         status, antwoord = self.bewaker.zoek(verzoek["bron"], verzoek["bag_pand_id"])
         self._stuur_json(status, antwoord)
 
+    # ---------------------------------------------------------------- bewaarde panden
+    def _panden_lezen(self, kop_alleen: bool):
+        if not self._ingelogd():
+            return self._stuur_json(HTTPStatus.UNAUTHORIZED, {"fout": PANDEN_INLOG}, kop_alleen)
+        if not self.opslag.aan:
+            return self._stuur_json(HTTPStatus.SERVICE_UNAVAILABLE, {"fout": "geen opslag"}, kop_alleen)
+        try:
+            panden = self.opslag.alles()
+        except Exception as fout:  # noqa: BLE001 - onleesbaar: zeggen, niet raden
+            print(f"LET OP: bewaarde panden niet te lezen ({type(fout).__name__}: {fout})", flush=True)
+            return self._stuur_json(HTTPStatus.SERVICE_UNAVAILABLE, {"fout": "opslag onleesbaar"}, kop_alleen)
+        self._stuur_json(HTTPStatus.OK, {"panden": panden}, kop_alleen)
+
+    def _panden_wijzigen(self):
+        if not self._ingelogd():
+            return self._stuur_json(HTTPStatus.UNAUTHORIZED, {"fout": PANDEN_INLOG})
+        if not self._zelfde_herkomst():
+            return self._stuur_json(HTTPStatus.FORBIDDEN, {"fout": PANDEN_ANDERE_SITE})
+        if not self.opslag.aan:
+            return self._stuur_json(HTTPStatus.SERVICE_UNAVAILABLE, {"fout": "geen opslag"})
+        try:
+            lengte = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            lengte = -1
+        if not 0 < lengte <= MAX_PANDEN_VERZOEK:
+            self.close_connection = True
+            return self._stuur_json(HTTPStatus.BAD_REQUEST, {"fout": PANDEN_ONGELDIG})
+        try:
+            verzoek = json.loads(self.rfile.read(lengte).decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            verzoek = None
+        if not isinstance(verzoek, dict) or set(verzoek) != {"wijzigingen"}:
+            return self._stuur_json(HTTPStatus.BAD_REQUEST, {"fout": PANDEN_ONGELDIG})
+        try:
+            panden = self.opslag.wijzig(verzoek["wijzigingen"])
+        except bewaard.Ongeldig:
+            return self._stuur_json(HTTPStatus.BAD_REQUEST, {"fout": PANDEN_ONGELDIG})
+        except Exception as fout:  # noqa: BLE001 - niet op schijf: zeggen, de browser zet het terug
+            print(f"LET OP: bewaarde panden niet te schrijven ({type(fout).__name__}: {fout})", flush=True)
+            return self._stuur_json(HTTPStatus.SERVICE_UNAVAILABLE, {"fout": "niet opgeslagen"})
+        self._stuur_json(HTTPStatus.OK, {"panden": panden})
+
     def _uitloggen(self):
         self.sessies.beeindig(lees_cookie(self.headers.get("Cookie")))
         self._doorsturen("/login", cookie=self._cookie("", 0))
@@ -563,13 +620,17 @@ def maak_server(poort: int, host: str = "0.0.0.0", map_: Path = DESIGN,
                         _getal(omgeving, VAR_BLOKKADE, STANDAARD_BLOKKADE_MIN) * 60, klok=klok)
     bewaker = betaald.Bewaker(omgeving, config, output, BASIS, klok, bronnen=bronnen,
                               log=log or functools.partial(print, flush=True))
+    pad, reden = bewaard.opslag_pad(omgeving, BASIS)
+    opslag = bewaard.Opslag(pad)
+    opslag.reden = reden
     handler = functools.partial(Handler, directory=str(map_), instellingen=instellingen,
-                                sessies=sessies, pogingen=pogingen, bewaker=bewaker)
+                                sessies=sessies, pogingen=pogingen, bewaker=bewaker, opslag=opslag)
     server = Server((host, poort), handler)
     server.instellingen = instellingen
     server.sessies = sessies
     server.pogingen = pogingen
     server.bewaker = bewaker
+    server.opslag = opslag
     return server
 
 
@@ -597,6 +658,9 @@ def main() -> int:
     print(f"Betaalde opzoekingen: plafond {bw.plafond} cent per ISO-week; grootboek "
           f"{bw.grootboek.pad or 'niet gezet'}; prijzen voor {', '.join(sorted(bw.prijzen)) or 'geen bron'}; "
           f"gekoppeld: {', '.join(sorted(bw.bronnen)) or 'geen'}.", flush=True)
+    op = server.opslag
+    print(f"Bewaarde panden: {op.pad if op.aan else 'in de browser'}"
+          f"{'' if op.aan else ' (' + op.reden + ')'}.", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

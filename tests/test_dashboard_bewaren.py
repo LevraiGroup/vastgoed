@@ -117,6 +117,10 @@ class Opslag(unittest.TestCase):
 
     def test_niets_gaat_de_pagina_uit(self):
         js = blok()
+        # Ayman 11-17 ("productieready"): bewaren en verbergen gaan naar de eigen server, en nergens anders heen.
+        self.assertEqual(re.findall(r"fetch\((\w+)", js), ["API", "API"])
+        self.assertIn('API = "/api/panden"', js)
+        js = js.replace("fetch(API", "")
         for weg in ("fetch(", "XMLHttpRequest", "sendBeacon", "WebSocket", "https://", "navigator.", "postMessage",
                     "document.cookie", "new Image"):
             self.assertNotIn(weg, js)

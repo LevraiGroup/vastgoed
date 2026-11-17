@@ -856,10 +856,24 @@ def lees_verberg_dagen(cfg: dict) -> tuple[int, list[str]]:
     return n, []
 
 
+# Ayman 11-17: "het moet wel productieready zijn". Bewaren en verbergen staan op de server (serve.py,
+# /api/panden), gedeeld door iedereen met de Levrai-inlog. Deze zinnen vervangen die over "alleen op dit
+# apparaat" zodra de server antwoordt; zonder server (een los bestand) blijven die van Lumi staan.
+# Woorden van de main session; wachten op Lumi.
+BEWAAR_SERVER_TEKST = {
+    "apparaat": "Wat je bewaart of verbergt, staat op de server: iedereen met de Levrai-inlog ziet het, op elk apparaat.",
+    "apparaat.kort": "Op de server, voor iedereen met de Levrai-inlog.",
+    "pagina.apparaat": "Deze lijst staat op de server. Iedereen met de Levrai-inlog ziet hem, op elk apparaat.",
+    "waar": "gedeeld via de server",
+    "waar.lokaal": "alleen op dit apparaat",
+    "fout": "Dat is niet opgeslagen: de server gaf geen antwoord. Probeer het zo nog eens.",
+}
+
+
 def bewaar_blok(top: list[dict], dagen: int = VERBERG_DAGEN) -> dict:
     """PAYLOAD.bewaar: de teksten, de peildatum die een lead zonder eigen 'dp' heeft, en de verbergduur (VA-97)."""
-    return {"tekst": BEWAAR_TEKST, "dp": gangbare_peildatum(top), "dagen": dagen, "duur": VERBERG_DUUR_TEKST,
-            "maanden": list(MAANDEN), "nbsp": NBSP}
+    return {"tekst": BEWAAR_TEKST, "server": BEWAAR_SERVER_TEKST, "dp": gangbare_peildatum(top), "dagen": dagen,
+            "duur": VERBERG_DUUR_TEKST, "maanden": list(MAANDEN), "nbsp": NBSP}
 
 
 def met_duur_verborgen(payload: dict, cfg: dict) -> dict:
@@ -868,7 +882,7 @@ def met_duur_verborgen(payload: dict, cfg: dict) -> dict:
     if let:   # de build drukt het af, net als de waarschuwingen van de planning
         payload = {**payload, "planning_waarschuwingen": (payload.get("planning_waarschuwingen") or []) + let}
     bw = payload.get("bewaar") or bewaar_blok([])
-    return {**payload, "bewaar": {**bw, "dagen": dagen, "duur": VERBERG_DUUR_TEKST,
+    return {**payload, "bewaar": {**bw, "server": BEWAAR_SERVER_TEKST, "dagen": dagen, "duur": VERBERG_DUUR_TEKST,
                                   "maanden": list(MAANDEN), "nbsp": NBSP}}
 
 
@@ -879,7 +893,7 @@ BEWAARD_EERST = 10   # zoveel nieuwste bewaarde panden staan er eerst; de rest a
 # Ayman 11-17: "bewaarde panden op een aparte speciale, coole, hightech pagina". De kop van die pagina is een
 # navy paneel met de tellingen; de woorden hieronder zijn van de main session en wachten op Lumi.
 BEWAARD_HELD_TEKST = {
-    "sys": "Jouw selectie · alleen op dit apparaat",
+    "sys": "Jouw selectie",
     "tel.n": "Bewaard",
     "tel.in": "In de werklijst",
     "tel.weg": "Niet meer in de werklijst",
@@ -908,7 +922,7 @@ def bewaard_html(lijst: str) -> str:
           <p class="kruimel">Levrai Vastgoed<span aria-hidden="true">/</span><b>{t["pagina.titel"]}</b></p>
           <span class="kop-meta" id="bwpMeta"></span>
         </div>
-        <p class="bwp-sys"><i class="bwp-puls" aria-hidden="true"></i>{h["sys"]}</p>
+        <p class="bwp-sys"><i class="bwp-puls" aria-hidden="true"></i>{h["sys"]} · <span id="bwpWaar">{escape(BEWAAR_SERVER_TEKST["waar.lokaal"])}</span></p>
         <div class="bwp-kopkern">
           <div class="bwp-embleem" aria-hidden="true"><span class="bwp-ring"></span>{STER_SVG}</div>
           <div>
@@ -3262,7 +3276,8 @@ const BW = (() => {
   const PER_ID = new Map(LEADS.map(d => [d.id, d]));
   const D = PAYLOAD.bewaar.duur, DAG = 864e5, DAGEN = PAYLOAD.bewaar.dagen || 30;   // VA-97
   const MND = PAYLOAD.bewaar.maanden, SP = PAYLOAD.bewaar.nbsp;   // het datumformaat van _nl() in Python
-  let stand = {}, werkt = false, tonen = false, dlg = null;
+  let stand = {}, werkt = false, tonen = false, dlg = null, server = false;
+  const S = PAYLOAD.bewaar.server || {}, API = "/api/panden";
   const luisteraars = [], alleLuisteraars = [], rijen = new Map();   // per pand-ID de knoppenrij van zijn kaart
   function lees() {
     try { const r = JSON.parse(localStorage.getItem(SLEUTEL) || "null");
@@ -3273,18 +3288,50 @@ const BW = (() => {
   const tot = r => Date.parse(r.sinds) + DAGEN * DAG;
   // De korte datum van _nl(): dag, maand en jaar met harde spaties, in de eigen tijdzone. Geen tweede notatie (VA-31).
   const datum = r => { const t = new Date(tot(r)); return t.getDate() + SP + MND[t.getMonth()] + SP + t.getFullYear(); };
-  function verlopen() {   // true als er iets veranderde (dan is het ook opgeslagen)
-    const nu = Date.now(); let anders = false;
+  function verlopen() {   // true als er iets veranderde (dan is het ook opgeslagen, ook op de server)
+    const nu = Date.now(), gewijzigd = [];
     for (const id of Object.keys(stand)) { const r = stand[id];
       if (!r || r.stand !== "verborgen") continue;
       const t = Date.parse(r.sinds);
-      if (!Number.isFinite(t) || t > nu) { r.sinds = new Date(nu).toISOString(); anders = true; }   // van vóór VA-97 of scheef
-      else if (tot(r) <= nu) { delete stand[id]; anders = true; } }
-    if (anders) schrijf();
-    return anders;
+      if (!Number.isFinite(t) || t > nu) { r.sinds = new Date(nu).toISOString(); gewijzigd.push(id); }   // van vóór VA-97 of scheef
+      else if (tot(r) <= nu) { delete stand[id]; gewijzigd.push(id); } }
+    if (gewijzigd.length) { schrijf(); stuur(gewijzigd.map(id => ({id, waarde: stand[id] || null}))); }
+    return gewijzigd.length > 0;
   }
+  // Op de server is localStorage alleen een kopie, zodat de pagina meteen staat; de server is de bron.
   function schrijf() {
-    try { localStorage.setItem(SLEUTEL, JSON.stringify({v: VORM, panden: stand})); return true; } catch (e) { return false; }
+    try { localStorage.setItem(SLEUTEL, JSON.stringify({v: VORM, panden: stand})); return true; } catch (e) { return server; }
+  }
+  // Ayman 11-17, "productieready": bewaren en verbergen op de server (serve.py, /api/panden), gedeeld door
+  // iedereen met de Levrai-inlog. Antwoordt de server niet (een los bestand, geen opslag), dan blijft het
+  // in deze browser zoals VA-90 het deed, en zeggen de zinnen dat.
+  function stuur(wijzigingen) {
+    if (!server || !wijzigingen.length || typeof fetch !== "function") return Promise.resolve(true);
+    return fetch(API, {method: "POST", credentials: "same-origin", cache: "no-store",
+      headers: {"Content-Type": "application/json"}, body: JSON.stringify({wijzigingen})})
+      .then(r => r.ok).catch(() => false);
+  }
+  // Na een mislukte schrijfactie: terug naar wat er stond, en zeggen dat het niet gelukt is.
+  function mislukt(id, oud) {
+    if (oud) stand[id] = oud; else delete stand[id];
+    schrijf(); overal(true);
+    [el("bwStatus"), el("bwBewaardStatus"), dlg && dlg.s].forEach(r => { if (r && r.isConnected) r.textContent = S.fout; });
+  }
+  function bewaarOpServer(id, oud) { stuur([{id, waarde: stand[id] || null}]).then(ok => { if (!ok) mislukt(id, oud); }); }
+  function haal() {
+    if (typeof fetch !== "function") return Promise.resolve(null);
+    return fetch(API, {credentials: "same-origin", cache: "no-store"})
+      .then(r => r.ok ? r.json() : null).then(j => j && j.panden && typeof j.panden === "object" ? j.panden : null)
+      .catch(() => null);
+  }
+  function vanServer(panden) {
+    const eerst = !server; server = true; werkt = true;
+    // De eerste keer: wat alleen nog in deze browser stond, gaat mee naar de server (niets raakt kwijt).
+    const alleenHier = eerst ? Object.keys(stand).filter(id => !(id in panden) && /^[0-9]{16}$/.test(id)) : [];
+    alleenHier.forEach(id => { panden[id] = stand[id]; });
+    stand = panden; schrijf();
+    if (alleenHier.length) stuur(alleenHier.map(id => ({id, waarde: stand[id]})));
+    verlopen(); overal(true);
   }
   try { const k = SLEUTEL + "-proef"; localStorage.setItem(k, "1"); localStorage.removeItem(k); werkt = true; } catch (e) { werkt = false; }
   if (werkt) lees();
@@ -3298,17 +3345,21 @@ const BW = (() => {
     const oud = stand[d.id] || null, nu = van(d.id) === s ? "" : s;
     if (nu) stand[d.id] = gegevens(d, nu); else delete stand[d.id];
     if (!schrijf()) { if (oud) stand[d.id] = oud; else delete stand[d.id]; werkt = false; overal(false); return null; }
+    bewaarOpServer(d.id, oud);
     overal(nu === "verborgen" || (oud && oud.stand === "verborgen")); return {oud, nu};   // alleen verbergen raakt de lijst
   }
   function herstel(d, oud) {   // Ongedaan maken: precies de stand van daarvoor, ook als die 'bewaard' was
+    const was = stand[d.id] || null;
     if (oud) stand[d.id] = oud; else delete stand[d.id];
-    if (!schrijf()) { werkt = false; } overal(true);
+    if (!schrijf()) { werkt = false; } else bewaarOpServer(d.id, was);
+    overal(true);
   }
   function nietMeerBewaard(id) {   // VA-91: niet meer bewaren vanaf Bewaarde panden, ook voor een pand dat niet meer in de data staat
     const oud = stand[id] || null;
     if (!oud) return null;
     delete stand[id];
     if (!schrijf()) { stand[id] = oud; werkt = false; overal(false); return null; }
+    bewaarOpServer(id, oud);
     overal(false); return oud;
   }
   const adres = d => d.detail ? d.detail.titel : d.a;
@@ -3341,7 +3392,7 @@ const BW = (() => {
     const r = maak("div", inPand ? "bw-rij-pand" : "bw-rij"), k = maak("div", "bw-rij");
     k.append(knop(d, "bewaard"), knop(d, "verborgen"));
     if (!inPand) { rijen.set(d.id, k); werkRij(d); return k; }
-    r.className = "pand-bw"; r.append(k, maak("p", "bw-apparaat", werkt ? T["apparaat.kort"] : T.geen_opslag));
+    r.className = "pand-bw"; r.append(k, maak("p", "bw-apparaat", server ? S["apparaat.kort"] : werkt ? T["apparaat.kort"] : T.geen_opslag));
     const s = maak("div", "bw-status"); s.id = "pandBwStatus"; s.setAttribute("role", "status"); r.append(s);
     dlg = {d, r: k, s}; werkRij(d); return r;
   }
@@ -3407,7 +3458,7 @@ const BW = (() => {
     if (!balk) return;
     const n = aantalWeg(), aantal = el("bwAantal"), toon = el("bwToon");
     if (n === 0) tonen = false;   // niets verborgen: geen telling en geen knop
-    el("bwApparaat").textContent = werkt ? T.apparaat : T.geen_opslag;
+    el("bwApparaat").textContent = server ? S.apparaat : werkt ? T.apparaat : T.geen_opslag;
     aantal.hidden = toon.hidden = n === 0;
     aantal.textContent = n === 1 ? T["aantal.een"] : T.aantal.replace("{n}", nl(n));
     // Geen aria-pressed: het label zegt al wat de knop doet (Lumi §4); de rand via de klasse.
@@ -3442,14 +3493,18 @@ const BW = (() => {
   function overal(lijst) { rijen.forEach((k, id) => { const d = PER_ID.get(id); if (d) werkRij(d); }); if (dlg) werkRij(dlg.d); werkBalk(); if (lijst) luisteraars.forEach(f => f());
     alleLuisteraars.forEach(f => f()); }   // VA-91: Bewaarde panden en de telling in het menu volgen elke verandering
   if (balk) el("bwToon").addEventListener("click", () => { tonen = !tonen; overal(true); });
-  addEventListener("storage", e => { if (e.key === SLEUTEL) { lees(); overal(true); } });   // een ander tabblad van dit dashboard
+  addEventListener("storage", e => { if (e.key === SLEUTEL && !server) { lees(); overal(true); } });   // een ander tabblad van dit dashboard
   // VA-97: een tabblad dat dagen openstaat, laat een verlopen pand terugkomen zodra je er weer naar kijkt.
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && werkt && verlopen()) overal(true); });
+  // Op de server: terug in beeld haalt de lijst opnieuw op, zodat wat op een ander apparaat bewaard is er ook staat.
+  document.addEventListener("visibilitychange", () => { if (document.hidden) return;
+    if (server) haal().then(p => { if (p) { stand = p; schrijf(); verlopen(); overal(true); } });
+    else if (werkt && verlopen()) overal(true); });
+  haal().then(p => { if (p) vanServer(p); });
   werkBalk();
   // VA-91: wat de pagina Bewaarde panden nodig heeft. bewaarde(): [id, opgeslagen object] van elk bewaard pand.
   const bewaarde = () => Object.keys(stand).filter(id => stand[id] && stand[id].stand === "bewaard").map(id => [id, stand[id]]);
   return {rij, ververs: werkRij, zichtbaar, aantalWeg, op: f => luisteraars.push(f), van, leeg, ongedaanVoor, lijstDeel,
-    naSluiten, bewaarde, weg: nietMeerBewaard, herstelId: (id, oud) => herstel({id}, oud), status, werkt: () => werkt, opAlles: f => alleLuisteraars.push(f),
+    naSluiten, bewaarde, weg: nietMeerBewaard, opServer: () => server, herstelId: (id, oud) => herstel({id}, oud), status, werkt: () => werkt, opAlles: f => alleLuisteraars.push(f),
     icoon};   // VA-105: dezelfde SVG-iconen op de pagina Bewaarde panden
 })();
 /* ============================ einde BEWAREN EN VERBERGEN ============================ */
@@ -3485,11 +3540,14 @@ const BWP_REKEN = (() => {
 const BWP = (() => {
   const sec = document.getElementById("bewaard");
   if (!sec) return null;   // een bouw zonder dit deel (een stad)
-  const T = PAYLOAD.bewaar.tekst, R = BWP_REKEN, $ = id => document.getElementById(id);
+  const T = PAYLOAD.bewaar.tekst, S = PAYLOAD.bewaar.server || {}, R = BWP_REKEN, $ = id => document.getElementById(id);
+  const waar = $("bwpWaar");
   const lijst = $("bwpLijst"), leeg = $("bwpLeeg"), meer = $("bwpMeer"), meta = $("bwpMeta"), app = $("bwpApparaat");
   const regel = $("bwBewaardStatus"), menuN = $("bwpMenuN"), menuSr = $("bwpMenuSr"), wl = $("werklijst");
   const EERST = +sec.querySelector(".bwp").dataset.eerst || 10;
-  const PER = new Map(LEADS.map(d => [String(d.id), d]));   // wat in de huidige werklijst te zien is (met het slot: de eerste n)
+  // Elk pand van de werklijst van deze maand, ook achter het slot (VA-96): een pand dat al bewaard is, opent
+  // hier gewoon (Ayman 11-17, "waarom kan ik niet klikken"). Bewaren kan alleen wat zichtbaar is.
+  const PER = new Map(ALLE_LEADS.map(d => [String(d.id), d]));
   const gebouwd = new Map();   // per pand-ID {k: de opgeslagen gegevens als tekst, li}: een rij die niet verandert, blijft hangen
   let alles = false;
   const vul = (t, w) => t.replace(/\{(\w+)\}/g, (x, k) => k in w ? w[k] : x);
@@ -3544,7 +3602,8 @@ const BWP = (() => {
     menuSr.textContent = n ? vul(T["pagina.menu.n.sr"], {n: nl(n)}) : "";
     meta.textContent = !n ? "" : m ? (n === 1 ? T["pagina.meta.weg.een"] : vul(T["pagina.meta.weg"], {n: nl(n), m: nl(m)}))
       : n === 1 ? T["pagina.meta.een"] : vul(T["pagina.meta"], {n: nl(n)});
-    app.hidden = !werkt;
+    app.hidden = !werkt; app.textContent = BW.opServer() ? S["pagina.apparaat"] : T["pagina.apparaat"];
+    if (waar) waar.textContent = BW.opServer() ? S.waar : S["waar.lokaal"];
     leeg.hidden = werkt && n > 0;
     leeg.querySelector("p").textContent = werkt ? T["pagina.leeg"] : T["pagina.geen_opslag"];
     if (n <= EERST) alles = false;
@@ -5248,7 +5307,8 @@ def render(payload: dict) -> str:
         html = html.replace("__KOP_" + plek.upper().replace(".", "_") + "__", escape(tekst))
     # De waarschuwingen van de planning zijn voor wie bouwt, niet voor de pagina.
     payload = {k: v for k, v in payload.items() if k != "planning_waarschuwingen"}
-    return html.replace("__PAYLOAD__", json.dumps(payload, ensure_ascii=False))
+    # Compact (geen spaties na , en :): 68 KB minder bij 500 panden, zodat de pagina onder 1 MB blijft (VA-39 crit. 5).
+    return html.replace("__PAYLOAD__", json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
 
 
 def main() -> int:

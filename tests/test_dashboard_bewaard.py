@@ -216,7 +216,8 @@ class OpenOfNietMeerInDeData(unittest.TestCase):
 
     def test_in_de_data_opent_het_pand(self):
         js = pagina_js()
-        self.assertIn("const PER = new Map(LEADS.map(d => [String(d.id), d]));", js)
+        # Ayman 11-17: ook een bewaard pand achter het slot (VA-96) opent hier.
+        self.assertIn("const PER = new Map(ALLE_LEADS.map(d => [String(d.id), d]));", js)
         self.assertIn('o.addEventListener("click", () => openPand(d, o));', js)
         self.assertIn('o.setAttribute("aria-label", PAND_TEKST.openLabel(d.detail.titel));', js)
         self.assertIn('pandVanBewaard = !!(opener && opener.closest && opener.closest("#bewaard"));', bd.TEMPLATE)
