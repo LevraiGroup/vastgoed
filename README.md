@@ -163,6 +163,56 @@ Alle grenswaarden en scoregewichten staan ook in `config.yaml` en zijn configure
 zoals de briefing vereist. Bestandsnamen en dashboard-titel volgen automatisch het
 gekozen gebied.
 
+## Nachtelijke controle van de werklijst (VA-75)
+
+```bash
+python werklijst_controle.py    # nieuwste output/werklijst_nederland_<JJJJ-MM>.csv tegen de PDOK BAG WFS
+```
+
+Vraagt voor elk pand van de werklijst bij de PDOK BAG WFS (`bron.wfs_url`, open, geen sleutel)
+de huidige pandstatus en de verblijfsobjecten met hun status op: één verzoek per pand, met
+OGC Filter XML, één pand tegelijk. De controle **toont alleen**: hij wijzigt geen score, de
+werklijst niet, de mastervoorraad niet en `panden_*.json` niet.
+
+Vergeleken wordt met de waarden waaruit de werklijst is gebouwd: `pandstatus` en `vbo_ids` uit de
+werklijst, en de status per verblijfsobject uit de snapshot die in de kolom `bron` staat
+(`data/bag_nl_<datum>.sqlite`). Die statussen worden één keer per maand uit de snapshot gelezen
+(enkele minuten) en bewaard in `data/controle/basis_nederland_<JJJJ-MM>.json`; daarna is de
+snapshot voor de controle niet meer nodig. Is er geen snapshot en geen bewaarde basis, dan worden
+de statussen van verblijfsobjecten niet vergeleken en zegt de controle dat (`LET OP:`).
+
+Het resultaat is `output/controle/wijzigingen_nederland_<JJJJ-MM>.csv` (gecommit, `;`, UTF-8 met
+BOM), één bestand per werklijstmaand, één rij per verschil:
+
+| Kolom | Betekenis |
+| --- | --- |
+| `bag_pand_id` | het pand |
+| `soort` | vaste soort, zie hieronder |
+| `wijziging` | wat er veranderd is, in gewone tekst |
+| `vbo_id` | het verblijfsobject, bij een wijziging van een verblijfsobject |
+| `waarde_werklijst` | de waarde waaruit de werklijst is gebouwd |
+| `waarde_nu` | de waarde vannacht bij PDOK |
+| `eerst_gezien` | de datum (Nederlandse tijd) van de nacht waarin dit verschil het eerst gezien is |
+
+Soorten: `pand_gesloopt`, `pand_buiten_gebruik`, `pand_niet_gevonden`, `pandstatus` (een andere
+pandstatus), `vbo_erbij`, `vbo_weg`, `vbo_status`, en `niet_gecontroleerd`. Let op: de WFS bevat
+geen panden met de status "Pand gesloopt" (0 op 2026-11-17); een gesloopt pand verdwijnt uit de
+WFS en verschijnt dus als `pand_niet_gevonden`.
+
+Een verschil dat een eerdere nacht al gezien is, houdt zijn `eerst_gezien`; is het pand weer zoals
+in de werklijst, dan verdwijnt de rij. Een andere waarde nu (bijvoorbeeld eerst buiten gebruik, dan
+weg) is een nieuw verschil met een nieuwe datum. Een pand waarvan het verzoek ook na de herhaling
+met wachttijd mislukt, krijgt die nacht een rij `niet_gecontroleerd` (datum = die nacht) en houdt
+zijn eerder geziene verschillen. Mislukken `nachtcontrole.stop_na_mislukt` panden achter elkaar,
+dan worden de overige niet meer gevraagd en ook `niet_gecontroleerd`. Lukt geen enkel pand (PDOK
+plat), dan schrijft de controle niets, blijft het vorige bestand staan en is de exitcode 1.
+
+De uitkomst van de laatste controle (tijdstip, panden gecontroleerd en niet gecontroleerd,
+verschillen per soort, aantal verzoeken) staat in `data/controle_werklijst.json`, voor de
+nachtelijke run (VA-74). Instellingen staan in `config.yaml` onder `nachtcontrole`; alle paden
+zijn ook als argument te geven (`--werklijst`, `--uitvoer`, `--resultaat`, `--basis`,
+`--snapshots`).
+
 ## Dedup-register: een geleverd pand komt nooit terug
 
 Elke werklijstrun legt zijn panden vast in `register/geleverde_panden.csv`, buiten `output/`

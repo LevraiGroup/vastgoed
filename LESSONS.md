@@ -179,3 +179,7 @@ struck through with the reason, never deleted.
 - **Testing "no uncaught error" with a script blocked: check `pageerror` is empty, not that the
   console is empty.** Chrome always logs `Failed to load resource` for the blocked request.
   *(2026-11-08, Vera, VA-48; landed on `main` with VA-106)*
+- **The BAG WFS holds no "Pand gesloopt" and no ingetrokken VBO's (0 hits each, 2026-11-17): a demolished pand
+  simply disappears, so "niet gevonden" is the gesloopt signal. One GetFeature with `typeNames=bag:pand,bag:verblijfsobject`
+  and `filter=(…)(…)` returns the pand and its VBO's in one request, but only as GML: its JSON output is two
+  concatenated collections, and `count` caps the total of both queries (`numberMatched="unknown"` when cut).** *(2026-11-17, Rex, VA-75)*
