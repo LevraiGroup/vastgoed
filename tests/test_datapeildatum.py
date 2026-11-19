@@ -25,6 +25,13 @@ if str(PROJECT) not in sys.path:
 import selectie  # noqa: E402
 from snapshots import Snapshot, SnapshotFout  # noqa: E402
 
+def delft_basis(cfg: dict) -> dict:
+    """De Delft-basis (VA-2) is de run zonder energielabels (VA-101 crit. 2): een Delft-snapshot heeft geen labelbestand."""
+    cfg["bronnen"]["energielabel"]["actief"] = False
+    cfg["bronnen"]["energielabel"]["telt_mee"] = False
+    return cfg
+
+
 VBO_DELFT = PROJECT / "data" / "vbo_delft.json"
 # Een label zonder verrijkingsbestand in data/, zodat laad_verrijking() niets vindt.
 TESTLABEL = "VA4 testgebied"
@@ -51,7 +58,7 @@ class TestPeildatumUitSnapshot(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.map = Path(self._tmp.name)
-        self.cfg = selectie.load_config()
+        self.cfg = delft_basis(selectie.load_config())
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -100,7 +107,7 @@ class TestPeildatumUitSnapshot(unittest.TestCase):
 class TestDelftAugustus(unittest.TestCase):
 
     def test_alle_delftse_panden_hebben_peildatum_4_augustus(self):
-        cfg = selectie.load_config()
+        cfg = delft_basis(selectie.load_config())
         panden = selectie.verwerk(["Delft"], cfg, "Delft", snapshot="vbo_delft.json")
         self.assertEqual({p["datapeildatum"] for p in panden}, {"2026-08-04"})
 

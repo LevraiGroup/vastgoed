@@ -335,7 +335,7 @@ scoresignaal. Draai `python verrijk.py` om ze op te halen (schrijft
 |---|---|---|---|---|
 | Buiten gebruik / leegstaand | +4 | BAG-status | **gratis, in data** | **actief** — 2 panden in Delft |
 | In verbouwing | +2 | BAG-status | **gratis, in data** | **actief** — 328 panden in Delft |
-| Slecht/ontbrekend energielabel | +2 | RVO EP-online (maandbestand) | gratis, sleutel in Railway | label wordt gekoppeld (VA-58); telt nog niet mee (VA-101) |
+| Slecht/ontbrekend energielabel | +2 | RVO EP-online (maandbestand) | gratis, sleutel in Railway | **actief** — label per pand sinds de snapshot van november; de +2 telt vanaf de werklijst van december (`telt_mee_vanaf`) |
 
 Belangrijke ontwerpkeuze: **leegstand is een kans, geen uitsluiting.** Een pand "buiten
 gebruik" wordt daarom niet meer uitgesloten maar krijgt juist punten. Buiten gebruik
@@ -344,17 +344,22 @@ kans, het tweede kan al in ontwikkeling zijn.
 
 EP-online-contract (zie module-docstring): `https://public.ep-online.nl/api/v5`, header
 `Authorization`, endpoints `/PandEnergielabel/Adres` en `/AdresseerbaarObject/{bag-id}`.
-De module staat standaard **uit** (`bronnen.energielabel.actief: false`); zonder sleutel
-blijft het signaal inactief en verandert de score niet.
+Het signaal staat **aan** (`bronnen.energielabel.actief: true`, `telt_mee: true`), met
+`telt_mee_vanaf: "2026-12"`: de geleverde werklijst van november blijft zoals hij is (Ayman,
+2026-11-19), en vanaf de snapshot van december telt de +2 mee.
 
 ### Energielabel per pand (VA-58)
 
 Twee stappen, beide met `ep_online.py`, en een map die een instelling is
 (`bronnen.energielabel.map`, standaard `data/energielabel`, of `--map`):
 
-    python ep_online.py ophalen      # het CSV-totaalbestand van de maand -> <map>/v<JJJJMMDD>_v4_csv.zip
+    railway run -- python ep_online.py ophalen   # het CSV-totaalbestand van de maand -> <map>/v<JJJJMMDD>_v4_csv.zip
     python ep_online.py koppel       # labels voor de snapshot van het doelgebied -> <map>/energielabel_<snapshot>.sqlite
 
+- **De sleutel staat alleen in Railway.** De berekening draait op de laptop, dus `ophalen` loopt via
+  `railway run` (Railway CLI, gekoppeld aan de dienst `vastgoed`): die zet `EP_ONLINE_API_KEY` alleen in
+  de omgeving van dat ene commando. `koppel` heeft geen sleutel nodig. Eerste koppeling (2026-11-19):
+  3.467.008 van de 6.568.913 panden hebben een label (52,8%), 73 minuten.
 - **Op Railway** hoort de map op het volume, onder `/data` (daar hangt het volume `vastgoed-volume`),
   bijvoorbeeld `/data/energielabel`: zet `bronnen.energielabel.map` op dat absolute pad, of geef
   `--map /data/energielabel` mee. Buiten het volume is de map na een nieuwe deploy weg, en daarmee de
@@ -367,11 +372,13 @@ Twee stappen, beide met `ep_online.py`, en een map die een instelling is
   variabele stopt `ophalen` met exitcode 1.
 - **Compleet of niet:** de zip komt binnen als `.deel` en krijgt pas zijn naam na de bytecontrole, de
   zipcontrole en de kolomcontrole. Een bestaand bestand wordt nooit overschreven.
-- **Kolomcontrole (fail closed):** de kopregel moet precies de kolommen hebben uit RVO's *Handleiding
-  EP-online.nl Opvragen van bestanden* (januari 2025, bijlage 2), `KOLOMMEN` in `ep_online.py`.
-  Hoofdletters en spaties tellen niet. Een ontbrekende of onbekende kolom stopt het commando met een
-  melding die haar noemt; er wordt dan niets gepubliceerd. Het echte bestand is nog niet gezien: het
-  eerste wordt op Railway gelezen (criterium 7).
+- **Kolomcontrole (fail closed):** de kopregel moet precies de kolommen hebben van het echte
+  totaalbestand (`KOLOMMEN` in `ep_online.py`, gelezen uit `v20261101_v4_csv.zip` op 2026-11-19). Die
+  wijken af van RVO's *Handleiding EP-online.nl Opvragen van bestanden* (januari 2025): het bestand
+  noemt ze `Energieklasse`, `BAGVerblijfsobjectID`, `Registratiedatum`, zonder `Pand_`. Boven de kopregel
+  staan `PublicatieDatum` en `LaatstVerwerkteMutatievolgnummer`; die worden overgeslagen en bewaard in de
+  meta. Hoofdletters en spaties tellen niet. Een ontbrekende of onbekende kolom stopt het commando met
+  een melding die haar noemt; er wordt dan niets gepubliceerd.
 - **De regel per pand:** het **beste** label van zijn verblijfsobjecten (A+++++ het best, G het
   slechtst), met de registratiedatum van dat label; heeft een verblijfsobject twee registraties, dan
   telt de nieuwste. Een pand zonder verblijfsobject met een labelklasse heeft **geen label**. Regels

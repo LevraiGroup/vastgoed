@@ -15,6 +15,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import selectie  # noqa: E402
 import snapshots  # noqa: E402
 
+def delft_basis(cfg: dict) -> dict:
+    """De Delft-basis (VA-2) is de run zonder energielabels (VA-101 crit. 2): een Delft-snapshot heeft geen labelbestand."""
+    cfg["bronnen"]["energielabel"]["actief"] = False
+    cfg["bronnen"]["energielabel"]["telt_mee"] = False
+    return cfg
+
+
 AUGUSTUS = selectie.DATA / "vbo_delft.json"
 
 
@@ -42,7 +49,7 @@ class Gelijk(unittest.TestCase):
         return snap, snapshots.Snapshot("Delft", js, "2026-08-04", 1, "meta", "json")
 
     def vergelijk(self, rijen):
-        cfg = selectie.load_config()
+        cfg = delft_basis(selectie.load_config())
         with tempfile.TemporaryDirectory() as tmp:
             sq, js = self.snapshots_van(rijen, Path(tmp))
             via_json = selectie.verwerk("Delft", cfg, gekozen=[js])
@@ -76,7 +83,7 @@ class Gelijk(unittest.TestCase):
             r["gebruiksdoel"] = "winkelfunctie"
         rijswijk = [r for r in rijswijk if r["pandidentificatie"]][:4] + [
             dict(rijswijk[0], identificatie="0603010000777777", pandidentificatie="05031000000999999")]
-        cfg = selectie.load_config()
+        cfg = delft_basis(selectie.load_config())
         with tempfile.TemporaryDirectory() as tmp:
             map_ = Path(tmp)
             sq_d = snapshots.schrijf_sqlite("Delft", "delft", iter(delft), map_, datetime(2026, 8, 4, 12))
@@ -109,7 +116,7 @@ class DelftAugustusViaSqlite(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
-        cfg = selectie.load_config()
+        cfg = delft_basis(selectie.load_config())
         with open(AUGUSTUS, encoding="utf-8") as fh:
             rijen = json.load(fh)
         sq = snapshots.schrijf_sqlite("Delft", "delft", iter(rijen), Path(cls.tmp.name),

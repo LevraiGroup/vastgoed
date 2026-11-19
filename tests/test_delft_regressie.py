@@ -29,6 +29,13 @@ if str(PROJECT) not in sys.path:
 
 import selectie  # noqa: E402
 
+def delft_basis(cfg: dict) -> dict:
+    """De Delft-basis (VA-2) is de run zonder energielabels (VA-101 crit. 2): een Delft-snapshot heeft geen labelbestand."""
+    cfg["bronnen"]["energielabel"]["actief"] = False
+    cfg["bronnen"]["energielabel"]["telt_mee"] = False
+    return cfg
+
+
 AUGUSTUS_SNAPSHOT = "vbo_delft.json"  # ongedateerd bestand, opgehaald 2026-08-04
 VBO_DELFT = PROJECT / "data" / AUGUSTUS_SNAPSHOT
 MASTER_CSV = PROJECT / "output" / "mastervoorraad_delft.csv"
@@ -87,7 +94,7 @@ class TestDelftCijfers(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.voor = momentopname()
-        cls.cfg = selectie.load_config()
+        cls.cfg = delft_basis(selectie.load_config())
         cls.panden = selectie.verwerk(
             ["Delft"], cls.cfg, "Delft", snapshot=AUGUSTUS_SNAPSHOT
         )

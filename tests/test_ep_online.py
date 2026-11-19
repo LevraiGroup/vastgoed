@@ -53,9 +53,9 @@ REGELS = [
 def csv_tekst(kolommen=ep_online.KOLOMMEN, regels=REGELS, extra: str = "", voorregel: str = "") -> str:
     def regel(r):
         w = {k: "" for k in kolommen}
-        w.update({"Pand_bagverblijfsobjectid": r["vbo"], "Pand_bagpandid": r["pand"],
-                  "Pand_energieklasse": r["klasse"], "Pand_registratiedatum": r["datum"],
-                  "Pand_bagligplaatsid": r.get("ligplaats", ""), "Pand_gebouwklasse": "W"})
+        w.update({"BAGVerblijfsobjectID": r["vbo"], "BAGPandIDs": r["pand"],
+                  "Energieklasse": r["klasse"], "Registratiedatum": r["datum"],
+                  "BAGLigplaatsID": r.get("ligplaats", ""), "Gebouwklasse": "W"})
         return ";".join(w[k] for k in kolommen if k in w)
     rijen = ([voorregel] if voorregel else []) + [";".join(kolommen)] + [regel(r) for r in regels]
     return "\n".join(rijen) + "\n" + extra
@@ -106,12 +106,20 @@ class KolomControle(unittest.TestCase):
         r = ep_online.controleer_zip(maak_zip(self.map / ZIPNAAM, csv_tekst(voorregel="Mutatievolgnummer;123")))
         self.assertEqual(r["kopregel_vooraf"], "Mutatievolgnummer;123")
 
+    def test_twee_regels_voor_de_kop_zoals_het_echte_bestand(self):
+        # Het echte totaalbestand van 2026-11-01 (gelezen 2026-11-19) begint met deze twee regels.
+        voor = "PublicatieDatum;01-11-2026\nLaatstVerwerkteMutatievolgnummer;20248879"
+        r = ep_online.controleer_zip(maak_zip(self.map / ZIPNAAM, csv_tekst(voorregel=voor)))
+        self.assertEqual(r["kolommen"], len(ep_online.KOLOMMEN))
+        self.assertEqual(r["kopregel_vooraf"],
+                         "PublicatieDatum;01-11-2026 | LaatstVerwerkteMutatievolgnummer;20248879")
+
     def test_ontbrekende_en_onbekende_kolom_stoppen(self):
-        kolommen = [k for k in ep_online.KOLOMMEN if k != "Pand_energieklasse"] + ["Pand_nieuw_veld"]
+        kolommen = [k for k in ep_online.KOLOMMEN if k != "Energieklasse"] + ["Pand_nieuw_veld"]
         with self.assertRaises(ep_online.EpFout) as ctx:
             ep_online.controleer_zip(maak_zip(self.map / ZIPNAAM, csv_tekst(kolommen)))
         melding = str(ctx.exception)
-        self.assertIn("ontbrekende kolommen: Pand_energieklasse", melding)
+        self.assertIn("ontbrekende kolommen: Energieklasse", melding)
         self.assertIn("onbekende kolommen: Pand_nieuw_veld", melding)
         self.assertIn("niets gepubliceerd", melding)
 
@@ -124,8 +132,8 @@ class KolomControle(unittest.TestCase):
         self.assertEqual(alle_bestanden(self.map / "labels") if (self.map / "labels").exists() else [], [])
 
     def test_hoofdletters_en_spaties_tellen_niet(self):
-        kolommen = [k.upper() if k.startswith("Pand_e") else k for k in ep_online.KOLOMMEN]
-        kolommen[-1] = "Energie  Index met EMG forfaitair "
+        kolommen = [k.upper() if k.startswith("Energie") else k for k in ep_online.KOLOMMEN]
+        kolommen[-1] = "  BerekendeEnergieverbruik "
         ep_online.controleer_zip(maak_zip(self.map / ZIPNAAM, csv_tekst(kolommen)))
 
     def test_zip_met_twee_csvs_stopt(self):

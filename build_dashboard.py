@@ -259,8 +259,8 @@ def kantoor_landelijk(bron: list[dict] | None, totalen: dict | None, aantal_lead
                      "werklijst_elders": t.get("werklijst_overig"),
                      "aantal_groot": t.get("aantal_grote_gemeenten"),
                      "landelijk": True},
-        # Verrijking draait (nog) niet landelijk: hoeveel panden verrijkt zijn, is onbekend.
-        "verrijking": {"panden": t.get("a_e"), "actief": actieve_bronnen(cfg), "verrijkt": None},
+        # Landelijk: de panden A-E met een gekoppeld energielabel (nederland.py); None in een oudere run.
+        "verrijking": {"panden": t.get("a_e"), "actief": actieve_bronnen(cfg), "verrijkt": t.get("verrijkt")},
         "controle": {"totaal": aantal_leads, "te_controleren": aantal_leads, "gecontroleerd": None,
                      "landelijk": True},
     }

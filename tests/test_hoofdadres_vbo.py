@@ -23,6 +23,13 @@ if str(PROJECT) not in sys.path:
 import selectie  # noqa: E402
 import snapshots  # noqa: E402
 
+def delft_basis(cfg: dict) -> dict:
+    """De Delft-basis (VA-2) is de run zonder energielabels (VA-101 crit. 2): een Delft-snapshot heeft geen labelbestand."""
+    cfg["bronnen"]["energielabel"]["actief"] = False
+    cfg["bronnen"]["energielabel"]["telt_mee"] = False
+    return cfg
+
+
 PAND = "0503100000026198"
 VELDEN = ("postcode", "huisnummer", "huisletter", "x", "y", "woonplaats", "gemeentecode")
 KOLOMMEN = {**snapshots.KOLOMMEN_STANDAARD, "gemeentecode": "gemeentecode"}
@@ -45,7 +52,7 @@ def verwacht(rij: dict) -> dict:
 class HoofdadresVbo(unittest.TestCase):
     def beide_routes(self, rijen: list[dict]) -> dict:
         """Het pand langs de JSON-route en de SQLite-route; ze moeten gelijk zijn."""
-        cfg = selectie.load_config()
+        cfg = delft_basis(selectie.load_config())
         with tempfile.TemporaryDirectory() as tmp:
             map_ = Path(tmp)
             sq = snapshots.schrijf_sqlite("Delft", "delft", iter(rijen), map_, datetime(2026, 8, 4, 12),
@@ -104,7 +111,7 @@ class DelftAugustus(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.cfg = selectie.load_config()
+        cls.cfg = delft_basis(selectie.load_config())
         cls.panden = selectie.verwerk(["Delft"], cls.cfg, "Delft", snapshot="vbo_delft.json")
         with open(AUGUSTUS, encoding="utf-8") as fh:
             cls.rijen = [r for r in json.load(fh) if r.get("pandidentificatie") == PAND]

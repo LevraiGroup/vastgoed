@@ -29,6 +29,13 @@ if str(PROJECT) not in sys.path:
 import register  # noqa: E402
 import selectie  # noqa: E402
 
+def delft_basis(cfg: dict) -> dict:
+    """De Delft-basis (VA-2) is de run zonder energielabels (VA-101 crit. 2): een Delft-snapshot heeft geen labelbestand."""
+    cfg["bronnen"]["energielabel"]["actief"] = False
+    cfg["bronnen"]["energielabel"]["telt_mee"] = False
+    return cfg
+
+
 VBO_DELFT = PROJECT / "data" / "vbo_delft.json"
 ECHT_REGISTER = PROJECT / "register" / "geleverde_panden.csv"
 
@@ -42,7 +49,7 @@ def pand(i: int, score: int, gemeente: str = "0503") -> dict:
 
 
 def cfg_met(**drempels) -> dict:
-    cfg = copy.deepcopy(selectie.load_config())
+    cfg = copy.deepcopy(delft_basis(selectie.load_config()))
     cfg["drempels"].update(drempels)
     return cfg
 
@@ -256,7 +263,7 @@ class TestDelftMaanden(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.cfg = selectie.load_config()
+        cls.cfg = delft_basis(selectie.load_config())
         cls.cfg["doelgebied"]["nederland"] = False
         with contextlib.redirect_stdout(io.StringIO()):
             cls.panden = selectie.verwerk(["Delft"], cls.cfg, "Delft", snapshot="vbo_delft.json")

@@ -455,6 +455,9 @@ def delft_config():
     """De gecommitte config.yaml, maar met Delft gekozen (VA-39: de gecommitte kiest Nederland)."""
     c = selectie.load_config()
     c["doelgebied"]["nederland"] = False
+    # De augustusbasis van Delft is de run zonder labels (VA-101 crit. 2); het label staat aan voor Nederland.
+    c["bronnen"]["energielabel"]["actief"] = False
+    c["bronnen"]["energielabel"]["telt_mee"] = False
     return c
 
 
@@ -568,6 +571,17 @@ class KantoorLandelijk(unittest.TestCase):
         self.assertTrue(tk["controle"]["uitleg"].startswith(
             "Controle zet de 500 panden van de werklijst klaar voor je visuele controle."))
         self.assertEqual(tk["verrijking"]["bel"], "Geen extra bron actief")  # ongewijzigd
+
+    def test_energielabel_landelijk_geteld(self):
+        # 2026-11-19: met het label aan telt de landelijke run de panden A-E met een label ("verrijkt").
+        c = cfg(energielabel=True)
+        k = bd.kantoor_landelijk(None, dict(self.T, verrijkt=1234), 500, c)
+        self.assertEqual(k["verrijking"]["verrijkt"], 1234)
+        self.assertEqual(k["tekst"]["verrijking"]["s"], "werkt")
+        self.assertEqual(k["tekst"]["verrijking"]["bel"], "Energielabel bij 1.234 panden")
+        # Een oudere run zonder telling verzint geen getal.
+        k = bd.kantoor_landelijk(None, self.T, 500, c)
+        self.assertIsNone(k["verrijking"]["verrijkt"])
 
     def test_zonder_totalen_onbekend(self):
         k = bd.kantoor_landelijk(None, None, None, cfg())

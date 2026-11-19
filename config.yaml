@@ -156,8 +156,9 @@ bronnen:
   energielabel:                 # RVO EP-online — GRATIS data, wel persoonlijke API-key
     # VA-58: python ep_online.py ophalen haalt het maandbestand met de sleutel uit de omgevingsvariabele
     # EP_ONLINE_API_KEY (alleen op Railway); python ep_online.py koppel zet de labels per snapshot in 'map'.
-    actief: false               # true = elk pand krijgt zijn label; zonder labelbestand stopt de run dan
-    telt_mee: false             # true = het label telt mee in de score (VA-101). Uit: geen score verschuift
+    actief: true                # true = elk pand krijgt zijn label; zonder labelbestand stopt de run dan
+    telt_mee: true              # true = het label telt mee in de score (VA-101, Ayman 2026-11-19). Uit: geen score verschuift
+    telt_mee_vanaf: "2026-12"   # JJJJ-MM: pas vanaf de snapshot van deze maand telt de +2; de geleverde lijst van november blijft (Ayman 2026-11-19). Leeg = meteen
     map: "data/energielabel"    # maand-zip en energielabel_<snapshot>.sqlite; relatief aan deze map, of absoluut. Op Railway: /data/energielabel (README)
     api_url: "https://public.ep-online.nl/api/v5"
     api_key: ""                 # alleen voor verrijk.py per adres; blijft leeg in git. De bulk gebruikt EP_ONLINE_API_KEY

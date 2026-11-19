@@ -244,6 +244,23 @@ def _sig_verbouwing(pand: dict, cfg: dict) -> tuple[str, bool, str, int]:
     return "niet", False, "geen verbouwing", punten
 
 
+_MAANDEN = ("januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september",
+            "oktober", "november", "december")
+
+
+def telt_mee_vanaf(cfg: dict) -> str:
+    """bronnen.energielabel.telt_mee_vanaf als 'JJJJ-MM', of '' als het label meteen meetelt."""
+    w = cfg["bronnen"]["energielabel"].get("telt_mee_vanaf") or ""
+    w = str(w).strip()
+    if w and not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", w):
+        raise ValueError(f"config.yaml bronnen.energielabel.telt_mee_vanaf moet JJJJ-MM zijn, niet {w!r}.")
+    return w
+
+
+def _maandnaam(jjjj_mm: str) -> str:
+    return f"{_MAANDEN[int(jjjj_mm[5:7]) - 1]} {jjjj_mm[:4]}"
+
+
 def _sig_energielabel(pand: dict, cfg: dict) -> tuple[str, bool, str, int]:
     """RVO EP-online: label E/F/G of ontbrekend = slechte/verouderde staat.
 
@@ -260,6 +277,12 @@ def _sig_energielabel(pand: dict, cfg: dict) -> tuple[str, bool, str, int]:
     label = pand.get("energielabel")
     if not cfg["bronnen"]["energielabel"]["telt_mee"]:
         return "inactief", False, f"energielabel {label or 'geen'}; telt nog niet mee in de score", punten
+    vanaf = telt_mee_vanaf(cfg)
+    if vanaf and (pand.get("datapeildatum") or "")[:7] < vanaf:
+        # Ayman 2026-11-19: de geleverde werklijst van november blijft zoals hij is; het label telt
+        # mee vanaf de snapshot van 'telt_mee_vanaf' (JJJJ-MM).
+        return ("inactief", False,
+                f"energielabel {label or 'geen'}; telt mee vanaf {_maandnaam(vanaf)}", punten)
     slecht = {str(x).upper() for x in cfg["bronnen"]["energielabel"]["slechte_labels"]}
     if st == "geen":
         return "behaald", True, "geen energielabel geregistreerd", punten
@@ -525,6 +548,7 @@ def verwerk_pand(pand: dict, cfg: dict, verrijking: dict, kort: str, datapeildat
         pand.update(v)  # energielabel/koopsom/kvk-velden voor scoring
     if labels is not None:
         pand.update(labels.voor(pand["bag_pand_id"]))  # VA-58: label en registratiedatum van de snapshot
+    pand["datapeildatum"] = datapeildatum  # vóór het scoren: telt_mee_vanaf kijkt naar de maand
     pand["uitsluitredenen"] = uitsluiten(pand, cfg)
     pand["uitgesloten"] = bool(pand["uitsluitredenen"])
     pand["categorieen"] = categoriseer(pand, cfg)

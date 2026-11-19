@@ -34,6 +34,13 @@ if str(PROJECT) not in sys.path:
 import selectie  # noqa: E402
 from snapshots import Snapshot  # noqa: E402
 
+def delft_basis(cfg: dict) -> dict:
+    """De Delft-basis (VA-2) is de run zonder energielabels (VA-101 crit. 2): een Delft-snapshot heeft geen labelbestand."""
+    cfg["bronnen"]["energielabel"]["actief"] = False
+    cfg["bronnen"]["energielabel"]["telt_mee"] = False
+    return cfg
+
+
 AUGUSTUS_SNAPSHOT = "vbo_delft.json"
 VBO_DELFT = PROJECT / "data" / AUGUSTUS_SNAPSHOT
 MASTER_CSV = PROJECT / "output" / "mastervoorraad_delft.csv"
@@ -52,7 +59,7 @@ def pand(pand_id: str, score: int, cats=("A",), uitgesloten: bool = False) -> di
 
 
 def cfg_met(**drempels) -> dict:
-    cfg = copy.deepcopy(selectie.load_config())
+    cfg = copy.deepcopy(delft_basis(selectie.load_config()))
     cfg["drempels"].update(drempels)
     return cfg
 
@@ -244,7 +251,7 @@ class TestWerklijstDelft(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.cfg = selectie.load_config()
+        cls.cfg = delft_basis(selectie.load_config())
         with contextlib.redirect_stdout(io.StringIO()):
             cls.panden = selectie.verwerk(["Delft"], cls.cfg, "Delft", snapshot=AUGUSTUS_SNAPSHOT)
 

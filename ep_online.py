@@ -63,25 +63,24 @@ SLEUTEL_VAR = "EP_ONLINE_API_KEY"
 BLOK = 1 << 20
 NAAM_RE = re.compile(r"v(\d{8})_v\d+_csv\.zip")  # het totaalbestand, zoals op ep-online.nl/PublicData
 
-# De velden van het totaalbestand, in de volgorde van RVO's "Handleiding EP-online.nl Opvragen van
-# bestanden" (januari 2025), bijlage 2 "Verklaring velden totaalbestand". De laatste staat daar zo,
-# met spaties; of de CSV hem zo noemt, is pas bij het eerste echte bestand te zien (criterium 7).
+# De velden van het totaalbestand, precies zoals de kopregel van het echte bestand ze noemt
+# (v20261101_v4_csv.zip, gelezen op 2026-11-19). Dat wijkt af van RVO's "Handleiding EP-online.nl
+# Opvragen van bestanden" (januari 2025, bijlage 2), die namen als Pand_energieklasse gaf; het bestand
+# zelf telt. Boven de kopregel staan PublicatieDatum en LaatstVerwerkteMutatievolgnummer.
+VOORAF_MAX = 5  # regels vóór de kopregel die worden overgeslagen; daarna geldt de kolomcontrole
 KOLOMMEN = (
-    "Pand_opnamedatum", "Pand_opnametype", "Pand_status", "Pand_berekeningstype",
-    "Pand_energieprestatieindex", "Pand_energieklasse", "Pand_energielabel_is_prive",
-    "Pand_is_op_basis_van_referentie_gebouw", "Pand_gebouwklasse", "Meting_geldig_tot",
-    "Pand_registratiedatum", "Pand_postcode", "Pand_huisnummer", "Pand_huisletter",
-    "Pand_huisnummertoevoeging", "Pand_detailaanduiding", "Pand_bagverblijfsobjectid",
-    "Pand_bagligplaatsid", "Pand_bagstandplaatsid", "Pand_bagpandid", "Pand_gebouwtype",
-    "Pand_gebouwsubtype", "Pand_projectnaam", "Pand_projectobject", "Pand_SBIcode",
-    "Pand_gebruiksoppervlakte_thermische_zone", "Pand_energiebehoefte", "Pand_eis_energiebehoefte",
-    "Pand_primaire_fossiele_energie", "Pand_eis_primaire_fossiele_energie",
-    "Pand_primaire_fossiele_energie_EMG_Forfaitair", "Pand_aandeel_hernieuwbare_energie",
-    "Pand_eis_aandeel_hernieuwbare_energie", "Pand_aandeel_hernieuwbare_energie_EMG_forfaitair",
-    "Pand_temperatuuroverschrijding", "Pand_eis_temperatuuroverschrijding", "Pand_warmtebehoefte",
-    "Energie Index met EMG forfaitair",
+    "Registratiedatum", "Opnamedatum", "GeldigTot", "Certificaathouder", "SoortOpname", "Status",
+    "Berekeningstype", "OpBasisVanReferentiegebouw", "Gebouwklasse", "Gebouwtype", "Gebouwsubtype",
+    "SBICode", "Postcode", "Huisnummer", "Huisletter", "Huisnummertoevoeging", "Detailaanduiding",
+    "BAGVerblijfsobjectID", "BAGLigplaatsID", "BAGStandplaatsID", "BAGPandIDs", "Projectnaam",
+    "Projectobject", "Bouwjaar", "GebruiksoppervlakteThermischeZone", "Compactheid", "Energieklasse",
+    "EnergieIndex", "EnergieIndexEMGForfaitair", "Energiebehoefte", "PrimaireFossieleEnergie",
+    "PrimaireFossieleEnergieEMGForfaitair", "AandeelHernieuwbareEnergie",
+    "AandeelHernieuwbareEnergieEMGForfaitair", "Temperatuuroverschrijding", "Warmtebehoefte",
+    "EisEnergiebehoefte", "EisPrimaireFossieleEnergie", "EisAandeelHernieuwbareEnergie",
+    "EisTemperatuuroverschrijding", "BerekendeCO2Emissie", "BerekendeEnergieverbruik",
 )
-VBO, LABEL, DATUM = "Pand_bagverblijfsobjectid", "Pand_energieklasse", "Pand_registratiedatum"
+VBO, LABEL, DATUM = "BAGVerblijfsobjectID", "Energieklasse", "Registratiedatum"
 VBO_RE = re.compile(r"\d{16}")
 VOORBEELDEN = 5  # zoveel misvormde regels worden met regelnummer en reden gemeld
 
@@ -136,12 +135,15 @@ class Csv:
         self._fh = io.TextIOWrapper(self._zf.open(lid), encoding="utf-8-sig", newline="")
         try:
             eerste = self._fh.readline()
-            self.kopregel_vooraf = ""
+            vooraf: list[str] = []
             regel = 1
-            if not re.search(r"pand_", eerste, re.IGNORECASE):
-                # Een regel vóór de kopregel (het totaalbestand kent een laatst verwerkt mutatievolgnummer
-                # en een aanmaakdatum, handleiding par. 3.1). Hoogstens één; die wordt bewaard in de meta.
-                self.kopregel_vooraf, eerste, regel = eerste.strip(), self._fh.readline(), 2
+            # Regels vóór de kopregel: het totaalbestand kent een laatst verwerkt mutatievolgnummer en een
+            # aanmaakdatum (handleiding par. 3.1), elk op een eigen regel; het echte bestand van 2026-11-01
+            # had er twee: PublicatieDatum en LaatstVerwerkteMutatievolgnummer (2026-11-19). Hoogstens VOORAF_MAX; ze gaan in de meta.
+            while eerste and _norm(VBO) not in _norm(eerste) and len(vooraf) < VOORAF_MAX:
+                vooraf.append(eerste.strip())
+                eerste, regel = self._fh.readline(), regel + 1
+            self.kopregel_vooraf = " | ".join(vooraf)
             self.scheiding = ";" if eerste.count(";") >= eerste.count(",") else ","
             self.kop = next(csv.reader([eerste], delimiter=self.scheiding))
         except UnicodeDecodeError:

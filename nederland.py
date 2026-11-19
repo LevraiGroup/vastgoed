@@ -183,6 +183,8 @@ def draai(cfg: dict, keuze: str | None, kolommen: list[str], rij, uit: Path, dat
             if not p["categorieen"]:
                 continue
             tel["a_e"] += 1
+            if p.get("energielabel"):
+                tel["met_energielabel"] += 1  # Verrijking op het dashboard: panden A-E met een gekoppeld label
             master.execute("INSERT INTO m VALUES (?, ?, ?)",
                            (p["leadscore"], p["bag_pand_id"], json.dumps(rij_nl(p), ensure_ascii=False)))
             proef.voeg_toe(p)
@@ -229,7 +231,9 @@ def draai(cfg: dict, keuze: str | None, kolommen: list[str], rij, uit: Path, dat
                "geschikt": tel["geschikt_groot"] + tel["geschikt_overig"],
                "geschikt_25": tel["geschikt_groot"], "geschikt_overig": tel["geschikt_overig"],
                "werklijst": len(lijst), "werklijst_25": uit_groot, "werklijst_overig": len(lijst) - uit_groot,
-               "drempel": score_min, "maand": maand, "aantal_grote_gemeenten": n_groot}
+               "drempel": score_min, "maand": maand, "aantal_grote_gemeenten": n_groot,
+               # None als het label uit staat: dan is er niets verrijkt, en geen 0 die iets suggereert
+               "verrijkt": tel["met_energielabel"] if cfg["bronnen"]["energielabel"]["actief"] else None}
     with open(data / f"panden_{SLUG}.json", "w", encoding="utf-8") as fh:
         json.dump({"gebied": NAAM, "totalen": totalen, "werklijst": lijst, "proef": proef.lijst()},
                   fh, ensure_ascii=False)

@@ -189,3 +189,9 @@ struck through with the reason, never deleted.
   simply disappears, so "niet gevonden" is the gesloopt signal. One GetFeature with `typeNames=bag:pand,bag:verblijfsobject`
   and `filter=(…)(…)` returns the pand and its VBO's in one request, but only as GML: its JSON output is two
   concatenated collections, and `count` caps the total of both queries (`numberMatched="unknown"` when cut).** *(2026-11-17, Rex, VA-75)*
+- **EP-online's real monthly CSV does not match RVO's own handbook (January 2025).** The columns are
+  `Energieklasse`, `BAGVerblijfsobjectID`, `Registratiedatum` (no `Pand_` prefix, 42 columns), and two lines
+  (`PublicatieDatum`, `LaatstVerwerkteMutatievolgnummer`) sit above the header. The fail-closed column check
+  caught it on the first real file; build a reader against the file, not the documentation. And a key that
+  lives only in Railway reaches a laptop command through `railway run -- <cmd>`, without ever being written
+  down. Linking 6,6 million panden took 73 minutes. *(2026-11-19, VA-58/VA-101)*
