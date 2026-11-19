@@ -3282,11 +3282,8 @@ function kvkUitkomst(uit, j, ok) {
       if (a.onvolledig) uit.appendChild(maak("p", null, `KVK noemt er ${n}; hier staan de eerste ${a.vestigingen.length}.`));
     });
   }
-  const stand = [];
-  if (j && j.onthouden) stand.push(KVK_T.onthouden);
-  else if (j && typeof j.kosten_cent === "number" && j.kosten_cent > 0) stand.push(`Kosten: ${euro(j.kosten_cent)}.`);
-  if (j && typeof j.resterend_cent === "number") stand.push(`Nog ${euro(j.resterend_cent)} over deze week.`);
-  if (stand.length) uit.appendChild(maak("p", "kvk-stand", stand.join(" ")));
+  // Ayman 11-19: geen kosten of restbudget na een opzoeking; alleen een foutmelding als de €2 op is
+  // (die komt als j.fout van betaald.py, hierboven).
 }
 function kvkSectie(d) {
   const sec = maak("section", "pand-kvk"); sec.setAttribute("aria-label", KVK_T.kop || "KVK");
@@ -6087,7 +6084,6 @@ KVK_TEKST = {
                   "die deze week al gelukt is, kost dan niets.",
     "nul": "geen bedrijf ingeschreven",
     "test": "Let op: dit is de testomgeving van KVK, met verzonnen bedrijven.",
-    "onthouden": "Deze week al opgezocht, dus dit kostte niets.",
 }
 
 
