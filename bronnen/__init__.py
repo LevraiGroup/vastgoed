@@ -4,7 +4,8 @@ Levrai Group - externe verrijkingsbronnen.
 Actieve module(s):
   - energielabel : RVO EP-online          -> slecht_of_ontbrekend_energielabel (+2)
 
-Geparkeerd (zie TOEKOMSTVERBETERINGEN.md): KVK-leegstand en Kadaster-koopsom.
+Betaald, per pand via de knop en alleen door betaald.py (nooit in bulk): kvk (VA-55/56).
+Geparkeerd (zie TOEKOMSTVERBETERINGEN.md): Kadaster-koopsom.
 
 Contract per module:
   NAAM: str

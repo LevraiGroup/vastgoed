@@ -581,7 +581,7 @@ class Sleutels(Opzet):
         self.assertEqual((status, antwoord["fout"]), (503, "Nepbron is nog niet gekoppeld. Er is niets opgevraagd."))
 
     def test_in_deze_story_is_niets_gekoppeld(self):
-        self.assertEqual(betaald.GEKOPPELD, {})
+        self.assertEqual(set(betaald.GEKOPPELD), {"kvk"})  # VA-56; Kadaster wacht op VA-59
 
 
 # --------------------------------------------------------------------- de deploy van vandaag

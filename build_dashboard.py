@@ -26,6 +26,7 @@ import cbs_gemeenten
 import kaart_nl
 import nederland
 import snapshots
+from bronnen import kvk as kvk_bron
 from gebieden import resolve, slug
 from selectie import load_config, naar_100
 
@@ -748,6 +749,7 @@ def maak_leads(top: list[dict], landelijk: bool) -> tuple[list[dict], list[list]
             "sig": sig,
             "ob": ob,
             "detail": pand_kort(p, waarden),  # VA-61/62: alle velden, luchtfoto en kaartlinks
+            "kvk": kvk_bron.aantal_bevragingen(p),  # VA-56: zoveel KVK-calls kost de knop; de server telt hetzelfde
         }
         if landelijk:
             lead["g"] = gemeente_naam(p.get("gemeente"))  # waarop het gemeentefilter kiest
@@ -2407,6 +2409,20 @@ TEMPLATE = r"""<!-- @dsCard group="Levrai VASTGOED" name="Pandenselectie dashboa
     border-radius:9px;padding:7px 11px;background:var(--surface-2)}
   .pand-links a:hover{text-decoration:underline}
   .pand-geenlocatie{margin:0 0 16px;font-size:13px;color:var(--ink-2)}
+  .pand-kvk{margin:0 0 16px;padding:12px 14px;border:1px solid var(--ring);border-radius:12px;background:var(--surface-2)}
+  .pand-kvk h3{margin:0 0 4px;font-size:14px}
+  .pand-kvk>p{margin:0 0 10px;font-size:12.5px;color:var(--ink-2)}
+  .pand-kvk button{font:inherit;font-size:13px;font-weight:600;color:#fff;background:var(--s1);border:0;
+    border-radius:9px;padding:8px 13px;cursor:pointer}
+  .pand-kvk button:disabled{opacity:.6;cursor:default}
+  .pand-kvk button:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .pand-kvk .kvk-uit{margin-top:10px;font-size:13px}
+  .pand-kvk .kvk-uit:empty{display:none}
+  .pand-kvk .kvk-uit p{margin:0}
+  .pand-kvk .kvk-adres{margin:8px 0 2px !important;font-weight:600}
+  .pand-kvk ul{margin:0;padding-left:18px}
+  .pand-kvk .kvk-fout{color:var(--crit)}
+  .pand-kvk .kvk-stand{margin-top:8px !important;font-size:12.5px;color:var(--ink-2)}
   .pand-velden{display:grid;grid-template-columns:minmax(150px,220px) minmax(0,1fr);gap:0;margin:0}
   .pand-velden dt,.pand-velden dd{padding:8px 0;border-bottom:1px solid var(--grid);font-size:13.5px;margin:0}
   .pand-velden dt{color:var(--ink-2);padding-right:12px}
@@ -3240,6 +3256,61 @@ const PAND_TEKST = {
   maps: "Open in Google Maps", sv: "Open in Street View", bag: "Open in BAG-viewer",
   open: "Open pand", openLabel: a => `Open pand: alle gegevens van ${a}`,
 };
+/* KVK per pand (VA-56): één klik = één POST /api/opzoeken. De server (betaald.py) telt de kosten tegen de €2 per
+   week en weigert vóór de call als het niet past. Een uitkomst blijft in deze pagina staan, zodat het venster
+   opnieuw openen niets opnieuw vraagt. */
+const KVK = PAYLOAD.kvk || {}, KVK_T = KVK.tekst || {}, KVK_UIT = new Map();
+const euro = c => "€" + (c / 100).toFixed(2).replace(".", ",");
+const adressenTekst = n => `${n} ${n === 1 ? "adres" : "adressen"}`;
+function kvkUitkomst(uit, j, ok) {
+  uit.textContent = "";
+  if (!ok) {
+    uit.appendChild(maak("p", "kvk-fout", (j && j.fout) || KVK_T.geenServer));
+  } else {
+    const r = j.resultaat || {};
+    if (r.omgeving === "test") uit.appendChild(maak("p", "kvk-fout", KVK_T.test));
+    (r.adressen || []).forEach(a => {
+      const n = a.aantal;
+      uit.appendChild(maak("p", "kvk-adres", a.fout ? a.adres
+        : `${a.adres}: ${n === 0 ? KVK_T.nul : n + (n === 1 ? " vestiging" : " vestigingen")}`));
+      if (a.fout) { uit.appendChild(maak("p", "kvk-fout", a.fout)); return; }
+      if (!a.vestigingen || !a.vestigingen.length) return;
+      const ul = maak("ul");
+      a.vestigingen.forEach(v => ul.appendChild(maak("li", null,
+        `${v.naam || "(zonder naam)"} · KVK ${v.kvkNummer}${v.type ? " · " + v.type : ""}`)));
+      uit.appendChild(ul);
+      if (a.onvolledig) uit.appendChild(maak("p", null, `KVK noemt er ${n}; hier staan de eerste ${a.vestigingen.length}.`));
+    });
+  }
+  const stand = [];
+  if (j && j.onthouden) stand.push(KVK_T.onthouden);
+  else if (j && typeof j.kosten_cent === "number" && j.kosten_cent > 0) stand.push(`Kosten: ${euro(j.kosten_cent)}.`);
+  if (j && typeof j.resterend_cent === "number") stand.push(`Nog ${euro(j.resterend_cent)} over deze week.`);
+  if (stand.length) uit.appendChild(maak("p", "kvk-stand", stand.join(" ")));
+}
+function kvkSectie(d) {
+  const sec = maak("section", "pand-kvk"); sec.setAttribute("aria-label", KVK_T.kop || "KVK");
+  sec.append(maak("h3", null, KVK_T.kop), maak("p", null, KVK_T.uitleg));
+  const uit = maak("div", "kvk-uit"); uit.setAttribute("aria-live", "polite");
+  const n = d.kvk || 0, prijs = KVK.prijs;
+  if (!n || !prijs) { uit.appendChild(maak("p", null, KVK_T.geenAdres)); sec.appendChild(uit); return sec; }
+  const kost = euro(n * prijs);
+  const knop = maak("button", null, `${KVK_T.knop} · ${kost}`); knop.type = "button";
+  knop.setAttribute("aria-label", `${KVK_T.knop}: ${adressenTekst(n)}, kost ${kost}`);
+  sec.append(knop, maak("p", "kvk-stand", `${adressenTekst(n)} × ${euro(prijs)} = ${kost}`), uit);
+  const eerder = KVK_UIT.get(d.id); if (eerder) kvkUitkomst(uit, eerder, true);
+  knop.addEventListener("click", () => {
+    if (knop.disabled) return;
+    knop.disabled = true; uit.textContent = ""; uit.appendChild(maak("p", null, KVK_T.bezig));
+    const af = (j, ok) => { if (ok) KVK_UIT.set(d.id, j); if (sec.isConnected) kvkUitkomst(uit, j, ok); knop.disabled = false; };
+    if (typeof fetch !== "function") return af(null, false);
+    fetch("/api/opzoeken", {method: "POST", credentials: "same-origin", cache: "no-store",
+      headers: {"Content-Type": "application/json"}, body: JSON.stringify({bron: "kvk", bag_pand_id: d.id})})
+      .then(r => r.json().catch(() => null).then(j => af(j, r.ok && !!j)))
+      .catch(() => af(null, false));
+  });
+  return sec;
+}
 const VELDEN = PAYLOAD.velden || [], WAARDEN = PAYLOAD.waarden || [], PLEK = PAYLOAD.plek || {};
 const locatie = p => { if (!p) return null; const zet = s => s.replace("{b}", p.b).replace("{ll}", p.ll);
   return {foto: zet(PLEK.foto), maps: zet(PLEK.maps), streetview: zet(PLEK.streetview)}; };
@@ -3270,6 +3341,7 @@ function openPand(d, opener) {
   if (loc) { link(loc.maps, PAND_TEKST.maps); link(loc.streetview, PAND_TEKST.sv); }
   link(BAG + d.id, PAND_TEKST.bag);
   romp.appendChild(links);
+  romp.appendChild(kvkSectie(d));   // VA-56: de KVK-knop, met de prijs vóór de klik
   const dl = maak("dl", "pand-velden");
   det.w.forEach((nr, i) => {
     const v = WAARDEN[nr];
@@ -6002,10 +6074,40 @@ def zonder_css_uitleg(t: str) -> str:
     return t[:i] + re.sub(r"[ \t]*/\*.*?\*/[ \t]*\n?", "", t[i:j], flags=re.S) + t[j:]
 
 
+# VA-56: de KVK-knop in het pandvenster. Ayman 11-19: "bij elke pand een knop ... als je erop klikt gaat er
+# een bevraging uit". De prijs komt uit config.yaml (betaalde_bronnen.kvk), net als in betaald.py; het
+# weekplafond van 200 cent staat in betaald.py. Concept van Rex; Lumi mag herschrijven.
+KVK_TEKST = {
+    "kop": "KVK: welke bedrijven zitten hier",
+    "uitleg": "Een klik vraagt KVK op voor elk adres van dit pand. Dat kost geld en telt mee in de €2 per week "
+              "voor alle betaalde opzoekingen samen.",
+    "knop": "Zoek op bij KVK",
+    "bezig": "KVK wordt opgevraagd…",
+    "geenAdres": "Dit pand heeft geen adres dat KVK kan opzoeken. Er is niets opgevraagd.",
+    "geenServer": "Het dashboard kreeg geen antwoord van de server. Probeer het zo opnieuw; een opzoeking "
+                  "die deze week al gelukt is, kost dan niets.",
+    "nul": "geen bedrijf ingeschreven",
+    "test": "Let op: dit is de testomgeving van KVK, met verzonnen bedrijven.",
+    "onthouden": "Deze week al opgezocht, dus dit kostte niets.",
+}
+
+
+def kvk_blok() -> dict:
+    """Prijs per bevraging en de teksten voor de KVK-knop. Geen geldige prijs: geen knop (prijs null)."""
+    try:
+        cent = load_config()["betaalde_bronnen"]["kvk"]["prijs_cent"]
+    except Exception:  # noqa: BLE001 - zonder prijs geen knop; betaald.py weigert dan ook
+        cent = None
+    if isinstance(cent, bool) or not isinstance(cent, int) or cent < 1:
+        cent = None
+    return {"prijs": cent, "tekst": KVK_TEKST}
+
+
 def render(payload: dict) -> str:
     """Vul het sjabloon. De payload als laatste, zodat zijn inhoud niet wordt vervangen."""
     payload = {**payload, "kaartfoto": payload.get("kaartfoto") or kaartfoto_tekst(),  # elke kaart (VA-71)
-               "bewaar": payload.get("bewaar") or bewaar_blok([])}  # elke kaart en elk pand (VA-90)
+               "bewaar": payload.get("bewaar") or bewaar_blok([]),  # elke kaart en elk pand (VA-90)
+               "kvk": payload.get("kvk") or kvk_blok()}  # de KVK-knop per pand (VA-56)
     tip = payload["peildatum_tip"]
     # Zonder 'pagina' (een payload van vóór VA-39, of een test) de teksten van een gebied als Delft.
     pg = payload.get("pagina") or pagina(

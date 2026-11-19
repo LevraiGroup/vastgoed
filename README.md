@@ -106,7 +106,9 @@ Railway-variabelen, die Ayman zet; er staat nooit een waarde in git:
 | `VASTGOED_POGINGEN` | mislukte inlogs per adres voordat het dichtgaat | 5 |
 | `VASTGOED_VENSTER_MIN` | binnen hoeveel minuten die mislukte inlogs tellen | 15 |
 | `VASTGOED_BLOKKADE_MIN` | hoeveel minuten een adres daarna dicht is | 15 |
-| `VASTGOED_GROOTBOEK` | pad naar het weekgrootboek van betaalde opzoekingen (VA-54), op een Railway-volume; nooit binnen de app-map, want die wordt bij elke deploy vervangen | geen: zonder dit pad wordt elke betaalde opzoeking geweigerd |
+| `VASTGOED_GROOTBOEK` | pad naar het weekgrootboek van betaalde opzoekingen (VA-54), op een Railway-volume; nooit binnen de app-map, want die wordt bij elke deploy vervangen | `grootboek_betaald.json` in `RAILWAY_VOLUME_MOUNT_PATH` (VA-56); zonder beide wordt elke betaalde opzoeking geweigerd |
+| `KVK_API_KEY` | sleutel voor de KVK-knop per pand (VA-56); 2 cent per adres, binnen de €2 per week | geen: zonder sleutel zegt de knop dat KVK niet is ingesteld |
+| `KVK_BASIS` | `https://api.kvk.nl/api/v2` voor echte gegevens | leeg = de gratis testomgeving van KVK (verzonnen bedrijven) |
 | `VASTGOED_WEEKLIMIET_CENT` | lager weekplafond voor alle betaalde bronnen samen, in centen; hoger dan 200 wordt genegeerd | 200 |
 | `KVK_API_KEY` | sleutel van KVK (naam staat in `config.yaml`, `betaalde_bronnen`) | geen: dan is KVK "niet ingesteld" |
 | `KADASTER_KOOPSOM_KEY` | sleutel van Kadaster Koopsom (idem) | geen: dan is Kadaster "niet ingesteld" |

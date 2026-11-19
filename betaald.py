@@ -33,6 +33,8 @@ from typing import Callable
 
 PLAFOND_CENT = 200  # Ayman, 2026-11-13: "at most €2 in total per week". Nooit hoger.
 VAR_GROOTBOEK = "VASTGOED_GROOTBOEK"
+VAR_VOLUME = "RAILWAY_VOLUME_MOUNT_PATH"  # zet Railway zelf zodra er een volume aan de dienst hangt
+GROOTBOEK_BESTAND = "grootboek_betaald.json"
 VAR_WEEKLIMIET = "VASTGOED_WEEKLIMIET_CENT"
 GROOTBOEK_VERSIE = 1
 
@@ -202,9 +204,13 @@ class Bron:
     zoek: Callable[[dict, str], object]
 
 
-# Geen enkele bron is in deze story gekoppeld (VA-54: geen live betaalde call). VA-56 en VA-59
-# voegen hier KVK en Kadaster toe; tot dan is elke betaalde opzoeking "nog niet gekoppeld".
-GEKOPPELD: dict[str, Bron] = {}
+# KVK is gekoppeld sinds VA-56 (Ayman 11-19: account en Railway-variabelen staan). Kadaster volgt met
+# VA-59; tot dan is die opzoeking "nog niet gekoppeld".
+from bronnen import kvk as _kvk  # noqa: E402
+
+GEKOPPELD: dict[str, Bron] = {
+    "kvk": Bron(aantal=_kvk.aantal_bevragingen, zoek=_kvk.zoek_voor_bewaker),
+}
 
 
 # ------------------------------------------------------------------------------ grootboek
@@ -325,12 +331,18 @@ class Grootboek:
 
 def grootboek_pad(omgeving: dict[str, str], verboden: Path) -> tuple[Path | None, str]:
     """
-    Het pad uit VASTGOED_GROOTBOEK, of None met de reden. Een pad binnen de app-map (`verboden`)
-    telt niet: die wordt bij elke deploy vervangen, en design/ wordt geserveerd.
+    Het pad uit VASTGOED_GROOTBOEK, anders grootboek_betaald.json in het Railway-volume
+    (RAILWAY_VOLUME_MOUNT_PATH, dat Railway zelf zet; zelfde volume als bewaard.py), of None met de reden.
+    Een pad binnen de app-map (`verboden`) telt niet: die wordt bij elke deploy vervangen, en design/
+    wordt geserveerd.
     """
     ruw = omgeving.get(VAR_GROOTBOEK, "").strip()
     if not ruw:
-        return None, f"{VAR_GROOTBOEK} niet gezet; elke betaalde opzoeking wordt geweigerd"
+        volume = omgeving.get(VAR_VOLUME, "").strip()
+        if not volume:
+            return None, (f"{VAR_GROOTBOEK} niet gezet en geen {VAR_VOLUME}; "
+                          "elke betaalde opzoeking wordt geweigerd")
+        ruw = str(Path(volume) / GROOTBOEK_BESTAND)
     pad = Path(ruw).resolve()
     if pad == verboden.resolve() or verboden.resolve() in pad.parents:
         return None, (f"{VAR_GROOTBOEK} wijst in de app-map, die bij elke deploy wordt vervangen; "
@@ -361,6 +373,9 @@ class Bewaker:
         self._output_map = output_map
         self._panden: dict[str, dict] | None = None
         self._panden_slot = threading.Lock()
+        # Geslaagde opzoekingen van deze week, per (bron, pand): nog eens klikken kost niets (Ayman 11-13:
+        # alleen bevragingen tellen). Alleen in het geheugen; na een herstart wordt het weer opgevraagd.
+        self._onthouden: dict[tuple[str, str], tuple[str, object]] = {}
 
     def _pand(self, pand_id: str) -> dict | None:
         with self._panden_slot:
@@ -406,6 +421,15 @@ class Bewaker:
             raise Weigering(422, GEEN_ADRES.format(naam=prijs.naam), f"aantal bevragingen {aantal!r}")
         kosten = aantal * prijs.cent
 
+        eerder = self._onthouden.get((bron, pand_id))
+        if eerder is not None:
+            week_nu, _ = self.grootboek._week()
+            if eerder[0] == week_nu:
+                with self.grootboek._slot:
+                    uitgegeven = self.grootboek.totaal(self.grootboek._lees_of_weiger(), week_nu)
+                return 200, {"bron": bron, "bag_pand_id": pand_id, "resultaat": eerder[1], "kosten_cent": 0,
+                             "onthouden": True, "resterend_cent": max(0, self.plafond - uitgegeven), "week": week_nu}
+
         post_id, week, resterend = self.grootboek.reserveer(bron, pand_id, prijs.naam, kosten)
         self._log(f"BETAALD: {bron} {pand_id} {aantal} x {prijs.cent} = {kosten} cent gereserveerd; "
                   f"{week} nog {resterend} van {self.plafond}")
@@ -427,6 +451,9 @@ class Bewaker:
                          "resterend_cent": resterend, "week": week}
         finally:
             self.grootboek.klaar(bron, pand_id)
+        if not any(isinstance(a, dict) and a.get("fout") for a in
+                   (resultaat.get("adressen", []) if isinstance(resultaat, dict) else [])):
+            self._onthouden[(bron, pand_id)] = (week, resultaat)
         return 200, {"bron": bron, "bag_pand_id": pand_id, "resultaat": resultaat,
                      "kosten_cent": kosten, "resterend_cent": resterend, "week": week}
 
