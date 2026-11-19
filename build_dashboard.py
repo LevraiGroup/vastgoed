@@ -6079,8 +6079,7 @@ def zonder_css_uitleg(t: str) -> str:
 # weekplafond van 200 cent staat in betaald.py. Concept van Rex; Lumi mag herschrijven.
 KVK_TEKST = {
     "kop": "KVK: welke bedrijven zitten hier",
-    "uitleg": "Een klik vraagt KVK op voor elk adres van dit pand. Dat kost geld en telt mee in de €2 per week "
-              "voor alle betaalde opzoekingen samen.",
+    "uitleg": "Een klik vraagt KVK op voor elk adres van dit pand.",  # Ayman 11-19: zin over kosten weg
     "knop": "Zoek op bij KVK",
     "bezig": "KVK wordt opgevraagd…",
     "geenAdres": "Dit pand heeft geen adres dat KVK kan opzoeken. Er is niets opgevraagd.",
